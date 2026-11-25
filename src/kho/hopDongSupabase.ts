@@ -11,6 +11,7 @@ import type { BanCaiHopDong, TuyChonHopDong } from './hopDong'
 import { thanhCong } from './ketQua'
 import { taoKhoSupabase } from './khoSupabase'
 import { THONG_BAO, chuanHoaEmail } from '../luat/taiKhoan'
+import type { TrangThaiTask } from '../luat/task'
 
 /** Cờ do vitest.supabase.config.ts đặt: chỉ lệnh riêng mới chạy test trên Supabase thật. */
 export const CO_CHAY_TEST_SUPABASE = 'CHAY_TEST_SUPABASE'
@@ -163,6 +164,18 @@ export function taoBoBanCaiSupabase(cauHinh: CauHinhTestSupabase): BoBanCaiSupab
         if (error) throw new Error(`Không đặt được vai PM cho ${email}: ${error.message}`)
         if (!data || data.length === 0) throw new Error(`Không có hồ sơ nào với email ${email}`)
       },
+      async datTrangThaiTask(taskId: string, trangThai: TrangThaiTask) {
+        // Như chủ dự án sửa tay trong SQL Editor: khoá service không có người gọi (auth.uid() rỗng)
+        // nên trigger task_truoc_khi_sua cho đổi cột trạng thái thẳng, không đụng dấu vết hay bộ đếm
+        // Trả lại. Client của ứng dụng không làm được việc này (không có quyền cột).
+        const { data, error } = await service
+          .from('task')
+          .update({ trang_thai: trangThai })
+          .eq('id', taskId)
+          .select('id')
+        if (error) throw new Error(`Không đặt được trạng thái ${trangThai} cho Task ${taskId}: ${error.message}`)
+        if (!data || data.length === 0) throw new Error(`Không có Task nào với mã ${taskId}`)
+      },
     }
   }
 
@@ -175,9 +188,11 @@ export function taoBoBanCaiSupabase(cauHinh: CauHinhTestSupabase): BoBanCaiSupab
       // Giờ do máy chủ đặt; Supabase Auth không phân biệt mã sai, đã dùng hay hết hạn.
       dongHoCuaKho: true,
       gopLoiMaDatLai: true,
-      // Bản Supabase chưa có Task (bảng, phân quyền từng dòng, hàm): ticket 10. Các ca Task bị bỏ
-      // qua và báo "CHƯA KIỂM" cho tới khi ticket 10 cài xong và bỏ dòng này.
-      coTask: false,
+      // Task trên Supabase đã có (ticket 10: migration lát 2 và khoSupabaseTask.ts); các ca Task chạy
+      // trên Supabase thật khi chủ dự án chạy lệnh riêng, và vẫn "CHƯA KIỂM" trong `npm test`.
+      coTask: true,
+      // Dựng Task ở trạng thái bất kỳ nhờ khoá service (xem `datTrangThaiTask` ở trên).
+      coDatTrangThaiTask: true,
     },
   }
 }

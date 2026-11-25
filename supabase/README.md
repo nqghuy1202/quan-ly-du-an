@@ -1,4 +1,4 @@
-# Supabase cho lát 1 (ticket 06)
+# Supabase cho lát 1 và lát 2 (ticket 06, ticket 10)
 
 Bản cài Supabase của Kho dữ liệu: `src/kho/khoSupabase.ts`. Ứng dụng chọn bản cài theo biến môi
 trường (`src/kho/cauHinh.ts`, `src/kho/chonKho.ts`):
@@ -13,28 +13,65 @@ trường (`src/kho/cauHinh.ts`, `src/kho/chonKho.ts`):
 - Bất kỳ biến `VITE_*` nào chứa khoá service (`service_role`, `sb_secret_...`): ứng dụng từ chối
   chạy. Khoá service không bao giờ được xuống trình duyệt.
 
-## Task chưa có trên Supabase (ticket 07 → ticket 10)
+## Task trên Supabase (ticket 10)
 
-Ticket 07 thêm các lệnh Task vào Kho dữ liệu (`taoTask`, `danhSachTask`, `layTask`) và cài cho bản
-bộ nhớ. Bản Supabase **chưa có** bảng, phân quyền từng dòng hay hàm nào cho Task: ba lệnh đó chỉ trả
-`LOI_HE_THONG` ("Máy chủ chưa hỗ trợ Task…"), chưa đăng nhập thì `CHUA_DANG_NHAP`. Bộ test hợp đồng
-và bảng ca dùng chung phần Task bị bỏ qua cho bản Supabase (`coTask: false` trong
-`src/kho/hopDongSupabase.ts`) và báo "CHƯA KIỂM". Ticket 10 viết migration, cài các lệnh và bỏ
-`coTask: false`.
+Migration `migrations/20261125000200_lat_2_task.sql` (chạy SAU lát 1; bản xuống
+`down/20261125000200_lat_2_task.down.sql`, chạy TRƯỚC bản xuống của lát 1) tạo bảng `task` và cài
+phía cơ sở dữ liệu cùng bộ luật với `src/luat/task.ts`. Các lệnh Task của Kho dữ liệu cho bản
+Supabase (`src/kho/khoSupabaseTask.ts`): `taoTask`, `danhSachTask`, `layTask`, `suaTask`,
+`doiNguoiTask`, `danhSachTaskNguoiDangGiu`, `viecCuaToi`, `choToiDuyet`. Lệnh repo GitHub vẫn chưa có
+(ticket 17).
+
+Cơ sở dữ liệu ép (không tin trình duyệt):
+
+- **Đọc**: ai thấy Dự án thì thấy mọi Task của nó (PM thấy mọi Dự án). Người ngoài Dự án không thấy dòng nào.
+- **Ghi** (tạo, sửa, đổi người): chỉ PM hoặc Support của chính Dự án. Thành viên (kể cả Người thực
+  hiện, Người kiểm tra) không ghi được. Không có quyền xoá Task.
+- **Người**: Người thực hiện và Người kiểm tra bắt buộc, khác nhau, người được chọn phải đang ở
+  trong Dự án (kiểm lúc tạo và lúc đổi người, chỉ với người mới được chọn; gỡ người khỏi Dự án
+  không đổi Task, người cũ hiện "đã rời dự án" cho đến khi được giao lại).
+- **Tiêu đề** 1 đến 200 ký tự, không chỉ khoảng trắng. **Hạn** kiểu `date` (một ngày, không giờ).
+- **Dự án Lưu trữ**: không tạo, không sửa Task. **Task Hoàn thành hoặc Huỷ**: không sửa, không đổi người.
+- **Dấu vết** do trigger đặt theo `auth.uid()` và `now()`: client không gửi được, cũng không có quyền cột.
+- **Trạng thái và số lần bị Trả lại**: Task mới luôn là Mới, 0 lần Trả lại. Client không có quyền
+  cột trên hai cột này và trigger chặn thêm một lớp; chúng chỉ đổi qua hàm chuyển trạng thái của
+  **ticket 14**. Hợp đồng cho hàm đó (đã ghi ở đầu file migration): `security definer`, tự kiểm
+  ma trận và quyền, rồi gọi `perform set_config('rieng.dang_chuyen_trang_thai', 'co', true)` trước khi
+  update hai cột; trigger thấy cờ thì cho đổi, vẫn chặn Dự án Lưu trữ và Task đã chốt, vẫn đặt dấu vết.
+- **Không có `auth.uid()`** (chủ dự án sửa tay trong SQL Editor, hoặc khoá service như bộ test dùng
+  để dựng Task ở trạng thái bất kỳ): được đổi trạng thái thẳng, dấu vết giữ nguyên, không bị khoá
+  Task đã chốt hay Dự án Lưu trữ; vẫn không đổi được mã, Dự án, người tạo, ngày tạo và vẫn phải
+  qua kiểm tra người.
+- Xoá tài khoản còn giữ Task bị chặn (khoá ngoại `on delete restrict`): giao lại Task trước.
+
+Khác bản bộ nhớ (do Supabase quyết):
+
+- Giờ do máy chủ đặt: `bayGio` bị bỏ qua (như phần Dự án). Mã Task là uuid.
+- Tên hiển thị của người ghi trên Task đọc qua hàm `ten_nguoi_cua_task` (chỉ cho Task của Dự án người
+  gọi thấy), vì người đã rời Dự án hay PM ngoài Dự án có thể không đọc thẳng được hồ sơ.
+- Danh sách Task đọc từng trang 500 dòng: máy chủ PostgREST phải cho ít nhất 500 dòng một lần gọi
+  (mặc định của Supabase là 1000; đừng hạ *Max rows* dưới 500).
+- Hai người dùng sửa cùng lúc: bản cài đọc rồi mới ghi, nên nếu Task vừa bị chốt giữa hai bước thì
+  trigger ném `TASK_DA_CHOT` (đã ánh xạ về mã của Kho); cửa sổ này rất nhỏ, không có khoá lạc quan.
 
 ## Cổng chưa kiểm (phải kiểm tay)
 
 `npm test` không có mạng, không có DB, nên **không kiểm**:
 
-- File migration `migrations/20261125000100_lat_1_ho_so_du_an.sql` và bản xuống
-  `down/20261125000100_lat_1_ho_so_du_an.down.sql`: bảng, ràng buộc, trigger, hàm.
-- Phân quyền từng dòng (RLS) và quyền cột.
+- File migration `migrations/20261125000100_lat_1_ho_so_du_an.sql` và
+  `migrations/20261125000200_lat_2_task.sql`, cùng hai bản xuống trong `down/`: bảng, ràng buộc,
+  trigger, hàm. Cổng chỉ kiểm cấu trúc file lát 2 bằng cách đọc chữ (`src/kho/khoSupabaseTask.test.ts`:
+  có bật RLS, không mở quyền cột trạng thái cho client, bản xuống bỏ đủ đối tượng), không chạy SQL.
+- Phân quyền từng dòng (RLS) và quyền cột, kể cả của bảng `task`.
+- Mọi lệnh Task của bản Supabase có gọi mạng (bộ test hợp đồng và bảng ca phần Task: chỉ chạy bằng
+  lệnh riêng ở mục cuối; trong `npm test` mang tên "CHƯA KIỂM").
 - Supabase Auth thật: đăng ký, xác nhận email, đăng nhập, đặt lại mật khẩu, thư gửi đi và mẫu thư.
 - Mọi lệnh của bản Supabase có gọi mạng.
 
-Cổng **có kiểm** (`src/kho/cauHinh.test.ts`): chọn bản cài theo cấu hình, từ chối khoá service
-(bằng khoá giả), các lệnh của bản Supabase bị chặn ở ranh giới mà không gọi mạng, và bộ test trên
-Supabase thật tự bỏ qua đúng (báo "CHƯA KIỂM", không báo đạt).
+Cổng **có kiểm** (`src/kho/cauHinh.test.ts`, `src/kho/khoSupabaseTask.test.ts`): chọn bản cài theo
+cấu hình, từ chối khoá service (bằng khoá giả), các lệnh của bản Supabase (kể cả mọi lệnh Task) bị
+chặn ở ranh giới mà không gọi mạng, bộ test trên Supabase thật tự bỏ qua đúng (báo "CHƯA KIỂM",
+không báo đạt), và cấu trúc file migration lát 2 như nói ở trên.
 
 Người duyệt: đọc kỹ SQL, rồi chạy tay bộ test hợp đồng và bảng ca dùng chung trên Supabase thật
 (mục cuối).
@@ -52,6 +89,10 @@ Người duyệt: đọc kỹ SQL, rồi chạy tay bộ test hợp đồng và 
    hoặc `supabase db push` / `supabase migration up`. Kiểm: Table Editor có ba bảng `ho_so`,
    `du_an`, `nguoi_trong_du_an`, cả ba hiện "RLS enabled".
    Gỡ lại (xoá hết dữ liệu lát 1): chạy `down/20261125000100_lat_1_ho_so_du_an.down.sql`.
+4b. **Áp migration lát 2** `migrations/20261125000200_lat_2_task.sql` (sau lát 1): dán vào SQL Editor
+   và chạy, hoặc `supabase db push`. Kiểm: Table Editor có thêm bảng `task`, hiện "RLS enabled".
+   Gỡ lại (xoá hết Task): `down/20261125000200_lat_2_task.down.sql`; nếu cần gỡ cả lát 1 thì chạy
+   bản xuống lát 2 TRƯỚC.
 5. **Đặt PM đầu tiên** (một lần, sau khi tự đăng ký và xác nhận email trên ứng dụng), trong SQL
    Editor:
 
@@ -73,6 +114,41 @@ Người duyệt: đọc kỹ SQL, rồi chạy tay bộ test hợp đồng và 
      bằng phiên của họ phải lỗi `KHONG_CO_QUYEN`).
    - Không ghi thẳng được cột trạng thái của Dự án (`update du_an set trang_thai = ...` lỗi quyền
      cột); chỉ đổi qua `luu_tru_du_an` / `mo_lai_du_an`.
+   - **Task** (lát 2), mỗi mục thử trực tiếp bằng REST/SQL (bỏ qua Kho) với phiên của đúng người đó
+     (cách giả phiên trong SQL Editor: mục "Giả người gọi trong SQL Editor" bên dưới):
+     - Người ngoài Dự án: `select * from task` không thấy dòng nào của Dự án đó; `insert` và `update`
+       đều bị từ chối hoặc không đụng dòng nào.
+     - Thành viên trong Dự án (kể cả Người thực hiện hay Người kiểm tra của Task): `insert` lỗi
+       `KHONG_CO_QUYEN`, `update task set tieu_de = ...` không đổi dòng nào.
+     - Support ở Dự án khác (hoặc không ở Dự án nào): không tạo, không sửa Task của Dự án này.
+     - PM hoặc Support của Dự án đổi `trang_thai` hoặc `so_lan_tra_lai` trực tiếp: lỗi quyền cột
+       (`permission denied`). Gửi kèm `tao_boi`, `tao_luc`, `sua_boi`, `sua_luc` hay `id` khi tạo: cũng
+       lỗi quyền cột (client không có quyền cột này); dấu vết luôn là người gọi và giờ máy chủ.
+     - Tạo Task với `nguoi_kiem_tra_id` = `nguoi_thuc_hien_id`: `TRUNG_NGUOI`. Chọn người không ở
+       trong Dự án (hoặc không tồn tại ở bảng `ho_so`): `NGUOI_NGOAI_DU_AN`. Bỏ trống một người: `THIEU_NGUOI`.
+     - Tiêu đề rỗng, chỉ khoảng trắng hay quá 200 ký tự: lỗi ràng buộc `task_tieu_de_hop_le`.
+     - Task Hoàn thành hoặc Huỷ (dựng bằng SQL Editor: `update task set trang_thai = 'HOAN_THANH' where id = ...`):
+       `update` bằng phiên PM lỗi `TASK_DA_CHOT`. Dự án Lưu trữ: tạo hay sửa Task lỗi `DU_AN_DA_LUU_TRU`.
+     - Gỡ một Người thực hiện khỏi Dự án: Task của họ giữ nguyên (họ vẫn là Người thực hiện); giao lại
+       cho người trong Dự án thì được, giao cho người đã gỡ thì `NGUOI_NGOAI_DU_AN`.
+     - `delete from task` bằng phiên bất kỳ: bị từ chối (không có quyền xoá).
+     - Không có đường nào để client tự bật cờ `rieng.dang_chuyen_trang_thai`: gọi
+       `/rest/v1/rpc/set_config` phải ra 404, và hàm `rieng.*` không mở cho `authenticated`.
+
+## Giả người gọi trong SQL Editor (để thử Task bằng tay)
+
+SQL Editor chạy bằng vai `postgres` (bỏ qua phân quyền từng dòng). Muốn thử như một người dùng cụ
+thể, trong MỘT lần chạy:
+
+```sql
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<uuid của người đó, lấy ở ho_so.id>","role":"authenticated"}', true);
+-- Các lệnh thử, ví dụ:
+select * from public.task;
+update public.task set trang_thai = 'HOAN_THANH' where id = '<uuid Task>';  -- phải lỗi quyền cột
+rollback;
+```
 
 ## Lệnh chạy bộ test trên Supabase thật
 
@@ -112,6 +188,9 @@ mấy chỗ đã biết:
   (vd. 60 giây), chờ quá hạn rồi nhập mã, phải bị từ chối.
 - `gopLoiMaDatLai`: Supabase Auth trả cùng một lỗi cho mã sai, đã dùng hay hết hạn, nên Kho trả
   `MA_KHONG_HOP_LE` với thông báo gộp cho cả ba.
+- `coTask` và `coDatTrangThaiTask` bật: các ca Task và dòng Task của bảng ca chạy (Task ở trạng
+  thái bất kỳ được dựng bằng khoá service đổi cột `trang_thai`, như chủ dự án sửa tay). Đây là phần
+  quan trọng nhất của lát 2 phải chạy tay và đạt hết.
 - `khoChuaCoPM: false`: Supabase thật đã có PM, nên hai ca "PM cuối cùng" bị bỏ qua; kiểm tay
   bằng SQL Editor trên project chỉ có một PM: `update ho_so set vai = 'SUPPORT' where vai = 'PM'`
   phải lỗi `PHAI_CON_PM`.
