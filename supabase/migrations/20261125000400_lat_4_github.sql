@@ -113,8 +113,9 @@ as $$
   )
 $$;
 
--- Người gọi có thấy Task này không (ai thấy Dự án thì thấy mọi Task của nó).
-create function rieng.duoc_xem_task(p_task_id uuid) returns boolean
+-- Người gọi có thấy Task này không (ai thấy Dự án thì thấy mọi Task của nó). Lát 3 đã khai hàm này
+-- (bản giống hệt), nên dùng `create or replace` để áp lát 4 sau lát 3 không lỗi.
+create or replace function rieng.duoc_xem_task(p_task_id uuid) returns boolean
 language sql stable security definer set search_path = ''
 as $$
   select exists (

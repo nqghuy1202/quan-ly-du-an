@@ -18,7 +18,8 @@ drop table if exists public.repo_du_an;
 drop function if exists rieng.repo_du_an_truoc_khi_them();
 drop function if exists rieng.repo_du_an_truoc_khi_go();
 drop function if exists rieng.ghi_dau_vet_task(uuid);
-drop function if exists rieng.duoc_xem_task(uuid);
+-- rieng.duoc_xem_task do lát 3 khai (lát 4 chỉ `create or replace`) và policy của bảng lịch sử vẫn dùng nó:
+-- không gỡ ở đây, bản xuống của lát 3 gỡ.
 drop function if exists rieng.la_ten_repo_hop_le(text);
 
 -- Trả hàm trigger của Task về bản của lát 2 (không còn nhánh rieng.dang_ghi_lien_ket).

@@ -51,12 +51,6 @@ secret, không đụng Supabase thật). **Kiểm** là cách biết bước đ�
   4. `migrations/20261125000400_lat_4_github.sql`: bảng `repo_du_an` và `lien_ket_task`.
 - Tuỳ chọn: nếu đã liên kết Supabase CLI với project, `supabase db push` áp các file trong
   `migrations/` theo thứ tự tên. Thư mục `down/` nằm ngoài `migrations/` nên CLI không tự áp.
-- **Lỗi đã biết ở lát 4 (cần sửa ở migration, ghi lại ở đây cho đến khi sửa xong):** lát 3 và lát 4
-  cùng khai `create function rieng.duoc_xem_task(uuid)` (hai bản giống hệt nhau). Chạy lát 4 sau lát 3
-  sẽ lỗi `function "duoc_xem_task" already exists`. Cách vượt tạm khi chạy tay: trong lát 4, đổi đúng
-  câu lệnh đó thành `create or replace function rieng.duoc_xem_task(...)` rồi chạy. Khi **gỡ**, bản
-  xuống của lát 4 có dòng `drop function if exists rieng.duoc_xem_task(uuid)` sẽ lỗi vì policy của
-  bảng lịch sử (lát 3) còn dùng hàm này: bỏ dòng đó khi lát 3 còn đang áp.
 - **Kiểm:** sau mỗi file không có lỗi; Table Editor hiện đủ các bảng nêu trên và **mọi bảng đều hiện
   "RLS enabled"**. Gỡ lại (xoá dữ liệu của lát tương ứng): chạy file trong `down/` theo thứ tự
   **ngược**: lát 4, lát 3, lát 2, lát 1.
