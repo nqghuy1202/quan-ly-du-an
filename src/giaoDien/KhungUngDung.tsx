@@ -18,8 +18,9 @@ import { ManDuAn } from './ManDuAn'
 import { ManHoSo } from './ManHoSo'
 import { ManNguoiDung } from './ManNguoiDung'
 import { TrangDuAnCuaToi } from './TrangDuAnCuaToi'
+import { TrangViecCaNhan } from './TrangViecCaNhan'
 
-type Trang = 'duAn' | 'tatCaDuAn' | 'hoSo' | 'nguoiDung'
+type Trang = 'duAn' | 'viecCuaToi' | 'choToiDuyet' | 'tatCaDuAn' | 'hoSo' | 'nguoiDung'
 
 interface Props {
   phien: Phien
@@ -99,6 +100,8 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   let noiDung: ReactNode
   if (trangHien === 'duAn') {
     noiDung = <TrangDuAnCuaToi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
+  } else if (trangHien === 'viecCuaToi' || trangHien === 'choToiDuyet') {
+    noiDung = <TrangViecCaNhan key={trangHien} loai={trangHien} phien={phien} onHetPhien={onHetPhien} />
   } else if (trangHien === 'tatCaDuAn') {
     noiDung = <ManDuAn phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'hoSo') {
@@ -128,6 +131,18 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
                 variant={trangHien === 'duAn' ? 'secondary' : 'ghost'}
                 aria-current={trangHien === 'duAn' ? 'page' : undefined}
                 onClick={() => setTrang('duAn')}
+              />
+              <Button
+                label="Việc của tôi"
+                variant={trangHien === 'viecCuaToi' ? 'secondary' : 'ghost'}
+                aria-current={trangHien === 'viecCuaToi' ? 'page' : undefined}
+                onClick={() => setTrang('viecCuaToi')}
+              />
+              <Button
+                label="Chờ tôi duyệt"
+                variant={trangHien === 'choToiDuyet' ? 'secondary' : 'ghost'}
+                aria-current={trangHien === 'choToiDuyet' ? 'page' : undefined}
+                onClick={() => setTrang('choToiDuyet')}
               />
               {thayTatCaDuAn && (
                 <Button
