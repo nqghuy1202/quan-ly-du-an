@@ -22,7 +22,20 @@ export const THONG_BAO = {
   tenQuaDai: 'Tên hiển thị tối đa 100 ký tự.',
   githubSai:
     'GitHub username chỉ gồm chữ, số và dấu gạch ngang đơn, không bắt đầu hay kết thúc bằng dấu gạch ngang, tối đa 39 ký tự.',
+  maTrong: 'Hãy nhập mã đặt lại trong thư.',
+  /** Trả cho mọi yêu cầu gửi lại thư xác nhận, dù email có tài khoản hay không. */
+  daGuiLaiThuXacNhan:
+    'Nếu email này đã đăng ký và chưa xác nhận, một thư xác nhận mới đã được gửi tới hộp thư. Hãy mở thư và bấm đường dẫn trong đó.',
+  /** Trả cho mọi lần xác nhận email, dù đã xác nhận rồi hay email không tồn tại. */
+  daXacNhanEmail: 'Nếu đường dẫn xác nhận hợp lệ, email đã được xác nhận. Bạn có thể đăng nhập.',
+  /** Trả cho mọi yêu cầu đặt lại mật khẩu, dù email có tài khoản hay không. */
+  daGuiMaDatLai:
+    'Nếu email này có tài khoản, một mã đặt lại mật khẩu đã được gửi tới hộp thư. Hãy nhập mã đó để đặt mật khẩu mới.',
+  daDatLaiMatKhau: 'Đã đặt mật khẩu mới. Hãy đăng nhập bằng mật khẩu mới.',
 } as const
+
+/** Thời hạn mặc định của mã đặt lại mật khẩu: 1 giờ (tính bằng mili giây). */
+export const THOI_HAN_MA_DAT_LAI_MAC_DINH_MS = 60 * 60 * 1000
 
 /** Định dạng username của GitHub: 1–39 ký tự chữ/số, gạch ngang đơn, không ở đầu hay cuối. */
 const GITHUB_USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i
@@ -61,9 +74,21 @@ export const suaHoSoSchema = z.object({
   githubUsername: githubUsername.optional(),
 })
 
+/** Gửi lại thư xác nhận và yêu cầu đặt lại mật khẩu: chỉ cần email đúng định dạng. */
+export const emailSchema = z.object({ email })
+
+/** Đặt mật khẩu mới bằng mã đặt lại trong thư. */
+export const datLaiMatKhauSchema = z.object({
+  email,
+  ma: chuoi(THONG_BAO.maTrong).trim().min(1, { error: THONG_BAO.maTrong }),
+  matKhauMoi: chuoi(THONG_BAO.matKhauNgan).min(DO_DAI_MAT_KHAU_TOI_THIEU, { error: THONG_BAO.matKhauNgan }),
+})
+
 export type DangKyDauVao = z.input<typeof dangKySchema>
 export type DangNhapDauVao = z.input<typeof dangNhapSchema>
 export type SuaHoSoDauVao = z.input<typeof suaHoSoSchema>
+export type EmailDauVao = z.input<typeof emailSchema>
+export type DatLaiMatKhauDauVao = z.input<typeof datLaiMatKhauSchema>
 
 export type KiemTra<T> = { ok: true; giaTri: T } | { ok: false; loiTheoO: Record<string, string> }
 
@@ -87,4 +112,21 @@ export function chuanHoaEmail(email: string): string {
 /** Chỉ chủ hồ sơ được sửa hồ sơ của mình (đổi vai là việc khác, ở ticket 03). */
 export function duocSuaHoSo(nguoiGoiId: string, chuHoSoId: string): boolean {
   return nguoiGoiId === chuHoSoId
+}
+
+/** Thời điểm mã đặt lại cấp lúc `capLuc` hết hạn, với thời hạn `thoiHanMs`. */
+export function hetHanLuc(capLuc: Date, thoiHanMs: number): Date {
+  return new Date(capLuc.getTime() + thoiHanMs)
+}
+
+export type TinhTrangMaDatLai = 'HOP_LE' | 'DA_DUNG' | 'HET_HAN'
+
+/**
+ * Mã đặt lại còn dùng được không, theo đồng hồ truyền vào. Mã đã dùng thì luôn là `DA_DUNG`;
+ * tới đúng thời điểm hết hạn là đã hết hạn.
+ */
+export function tinhTrangMaDatLai(ma: { daDung: boolean; hetHanLuc: Date }, bayGio: Date): TinhTrangMaDatLai {
+  if (ma.daDung) return 'DA_DUNG'
+  if (bayGio.getTime() >= ma.hetHanLuc.getTime()) return 'HET_HAN'
+  return 'HOP_LE'
 }

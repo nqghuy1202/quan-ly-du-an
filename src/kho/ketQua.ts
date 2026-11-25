@@ -7,6 +7,10 @@ export type MaLoi =
   | 'KHONG_HOP_LE'
   | 'EMAIL_DA_DUNG'
   | 'SAI_THONG_TIN_DANG_NHAP'
+  | 'EMAIL_CHUA_XAC_NHAN'
+  | 'MA_KHONG_HOP_LE'
+  | 'MA_DA_DUNG'
+  | 'MA_HET_HAN'
 
 export interface LoiKho {
   ma: MaLoi
@@ -35,4 +39,8 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   KHONG_HOP_LE: 'Dữ liệu chưa hợp lệ. Hãy kiểm tra các ô được đánh dấu.',
   EMAIL_DA_DUNG: 'Email này đã được dùng để đăng ký.',
   SAI_THONG_TIN_DANG_NHAP: 'Email hoặc mật khẩu không đúng.',
+  EMAIL_CHUA_XAC_NHAN: 'Email của bạn chưa được xác nhận. Hãy bấm đường dẫn trong thư xác nhận, hoặc gửi lại thư.',
+  MA_KHONG_HOP_LE: 'Mã đặt lại không đúng. Hãy kiểm tra email và mã trong thư.',
+  MA_DA_DUNG: 'Mã đặt lại này đã được dùng. Hãy yêu cầu mã mới.',
+  MA_HET_HAN: 'Mã đặt lại đã hết hạn. Hãy yêu cầu mã mới.',
 }

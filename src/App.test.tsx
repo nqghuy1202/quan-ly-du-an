@@ -2,21 +2,33 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from './App'
-import { thatBai, thanhCong } from './kho/ketQua'
+import { THONG_BAO_MAC_DINH, thatBai, thanhCong } from './kho/ketQua'
 import type { KhoDuLieu } from './kho/khoDuLieu'
-import { taoKhoBoNho } from './kho/khoBoNho'
+import { taoKhoBoNho, type KhoBoNho } from './kho/khoBoNho'
 import { THONG_BAO } from './luat/taiKhoan'
 
 const MAT_KHAU = 'matkhau-123'
 const CAU_MAN_TRONG = /bạn chưa ở dự án nào, hãy nhờ PM hoặc Support thêm bạn/i
+const LUC = new Date('2026-03-01T08:00:00+07:00')
 
-function dungApp(kho: KhoDuLieu = taoKhoBoNho()) {
+/**
+ * Dựng ứng dụng với bản bộ nhớ `goc` (kèm hộp thư mô phỏng của nó). `kho` là Kho mà ứng dụng
+ * dùng, mặc định chính là `goc`; test bọc `goc` để giả lỗi hoặc đang tải.
+ */
+function dungApp(goc: KhoBoNho = taoKhoBoNho(), kho: KhoDuLieu = goc) {
   const user = userEvent.setup()
-  const { container } = render(<App kho={kho} />)
+  const { container } = render(<App kho={kho} moPhong={goc.moPhong} dongHo={() => LUC} />)
   // Astryx gắn vùng thông báo (live region, role="alert") thẳng vào body, ngoài vùng render;
   // tìm cảnh báo trong vùng của ứng dụng để chỉ lấy Banner lỗi trên màn.
   const ungDung = within(container)
-  return { user, kho, ungDung }
+  return { user, kho: goc, ungDung }
+}
+
+/** Đăng ký thẳng qua Kho và xác nhận email (bước mô phỏng), để vào thẳng phần sau đăng nhập. */
+async function dangKyDaXacNhan(kho: KhoBoNho, email: string, tenHienThi: string) {
+  const kq = await kho.dangKy({ email, matKhau: MAT_KHAU, tenHienThi })
+  if (!kq.ok) throw new Error(kq.loi.thongBao)
+  await kho.moPhong.xacNhanEmail(email)
 }
 
 async function dangNhapQuaGiaoDien(user: ReturnType<typeof userEvent.setup>, email: string, matKhau = MAT_KHAU) {
@@ -38,13 +50,27 @@ describe('màn đăng nhập và đăng ký', () => {
     expect(screen.getByLabelText('Tên hiển thị')).toBeInTheDocument()
   })
 
-  it('đăng ký hợp lệ thì vào khung ứng dụng, thấy tên, vai Thành viên và màn trống', async () => {
-    const { user } = dungApp()
+  it('đăng ký hợp lệ thì sang màn chờ xác nhận; xác nhận xong đăng nhập vào khung, thấy tên, vai và màn trống', async () => {
+    const { user, ungDung } = dungApp()
     await user.click(screen.getByRole('button', { name: 'Chưa có tài khoản? Đăng ký' }))
-    await user.type(screen.getByLabelText('Email'), 'an@vi-du.vn')
+    await user.type(screen.getByLabelText('Email'), 'An@Vi-Du.vn')
     await user.type(screen.getByLabelText('Mật khẩu'), MAT_KHAU)
     await user.type(screen.getByLabelText('Tên hiển thị'), 'An Nguyễn')
     await user.click(screen.getByRole('button', { name: 'Đăng ký' }))
+
+    // Chưa vào khung: phải xác nhận email trước.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Xác nhận email' })).toBeInTheDocument()
+    expect(ungDung.getByText(/an@vi-du\.vn/)).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Tài khoản đang đăng nhập' })).not.toBeInTheDocument()
+
+    // Bước mô phỏng thay cho bấm đường dẫn trong thư.
+    await user.click(screen.getByRole('button', { name: 'Xác nhận email (mô phỏng)' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
+    expect(ungDung.getByText(THONG_BAO.daXacNhanEmail)).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveValue('an@vi-du.vn')
+
+    await user.type(screen.getByLabelText('Mật khẩu'), MAT_KHAU)
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
     expect(vungTaiKhoan().getByText('An Nguyễn')).toBeInTheDocument()
@@ -84,7 +110,7 @@ describe('màn đăng nhập và đăng ký', () => {
 
   it('sai mật khẩu và email chưa đăng ký hiện cùng một thông báo chung', async () => {
     const { user, kho, ungDung } = dungApp()
-    await kho.dangKy({ email: 'ha@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Hà' })
+    await dangKyDaXacNhan(kho, 'ha@vi-du.vn', 'Hà')
 
     await dangNhapQuaGiaoDien(user, 'ha@vi-du.vn', 'sai-mat-khau')
     const thongBaoSaiMatKhau = (await ungDung.findByRole('alert')).textContent
@@ -101,7 +127,7 @@ describe('màn đăng nhập và đăng ký', () => {
 describe('khung ứng dụng', () => {
   it('đăng nhập thì thấy tên và vai; đăng xuất thì về màn đăng nhập', async () => {
     const { user, kho } = dungApp()
-    await kho.dangKy({ email: 'dung@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Dũng' })
+    await dangKyDaXacNhan(kho, 'dung@vi-du.vn', 'Dũng')
     await dangNhapQuaGiaoDien(user, 'dung@vi-du.vn')
 
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
@@ -116,8 +142,8 @@ describe('khung ứng dụng', () => {
   it('hiện trạng thái đang tải khi hồ sơ chưa về', async () => {
     const goc = taoKhoBoNho()
     const kho: KhoDuLieu = { ...goc, layHoSoCuaToi: () => new Promise(() => {}) }
-    const { user } = dungApp(kho)
-    await goc.dangKy({ email: 'e@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'E' })
+    const { user } = dungApp(goc, kho)
+    await dangKyDaXacNhan(goc, 'e@vi-du.vn', 'E')
     await dangNhapQuaGiaoDien(user, 'e@vi-du.vn')
     expect(await screen.findByRole('progressbar', { name: 'Đang tải hồ sơ…' })).toBeInTheDocument()
   })
@@ -132,8 +158,8 @@ describe('khung ứng dụng', () => {
         return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnCuaToi(phien)
       },
     }
-    const { user, ungDung } = dungApp(kho)
-    await goc.dangKy({ email: 'g@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'G' })
+    const { user, ungDung } = dungApp(goc, kho)
+    await dangKyDaXacNhan(goc, 'g@vi-du.vn', 'G')
     await dangNhapQuaGiaoDien(user, 'g@vi-du.vn')
 
     expect(await ungDung.findByRole('alert')).toHaveTextContent('Không tải được danh sách Dự án.')
@@ -144,8 +170,8 @@ describe('khung ứng dụng', () => {
   it('đang tải danh sách Dự án thì hiện trạng thái đang tải', async () => {
     const goc = taoKhoBoNho()
     const kho: KhoDuLieu = { ...goc, danhSachDuAnCuaToi: () => new Promise(() => {}) }
-    const { user } = dungApp(kho)
-    await goc.dangKy({ email: 'h@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'H' })
+    const { user } = dungApp(goc, kho)
+    await dangKyDaXacNhan(goc, 'h@vi-du.vn', 'H')
     await dangNhapQuaGiaoDien(user, 'h@vi-du.vn')
     expect(await screen.findByRole('progressbar', { name: 'Đang tải danh sách Dự án…' })).toBeInTheDocument()
   })
@@ -153,8 +179,8 @@ describe('khung ứng dụng', () => {
   it('phiên hết hạn giữa chừng thì quay về màn đăng nhập', async () => {
     const goc = taoKhoBoNho()
     const kho: KhoDuLieu = { ...goc, danhSachDuAnCuaToi: async () => thatBai('CHUA_DANG_NHAP') }
-    const { user } = dungApp(kho)
-    await goc.dangKy({ email: 'i@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'I' })
+    const { user } = dungApp(goc, kho)
+    await dangKyDaXacNhan(goc, 'i@vi-du.vn', 'I')
     await dangNhapQuaGiaoDien(user, 'i@vi-du.vn')
     expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
   })
@@ -163,7 +189,7 @@ describe('khung ứng dụng', () => {
 describe('màn hồ sơ', () => {
   async function moHoSo() {
     const ctx = dungApp()
-    await ctx.kho.dangKy({ email: 'lan@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Lan' })
+    await dangKyDaXacNhan(ctx.kho, 'lan@vi-du.vn', 'Lan')
     await dangNhapQuaGiaoDien(ctx.user, 'lan@vi-du.vn')
     await ctx.user.click(await screen.findByRole('button', { name: 'Hồ sơ' }))
     await screen.findByRole('heading', { level: 2, name: 'Hồ sơ của tôi' })
@@ -205,12 +231,95 @@ describe('màn hồ sơ', () => {
   })
 })
 
+describe('xác nhận email trên giao diện', () => {
+  it('đăng nhập khi chưa xác nhận thì bị từ chối, hiện cách gửi lại thư; gửi lại xong về màn chờ xác nhận', async () => {
+    const { user, kho, ungDung } = dungApp()
+    await kho.dangKy({ email: 'xuan@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Xuân' })
+
+    await dangNhapQuaGiaoDien(user, 'xuan@vi-du.vn')
+    const canhBao = await ungDung.findByRole('alert')
+    expect(canhBao).toHaveTextContent(THONG_BAO_MAC_DINH.EMAIL_CHUA_XAC_NHAN)
+    expect(screen.queryByRole('group', { name: 'Tài khoản đang đăng nhập' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Gửi lại thư xác nhận' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Gửi lại thư xác nhận' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveValue('xuan@vi-du.vn')
+
+    await user.click(screen.getByRole('button', { name: 'Gửi lại thư' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Xác nhận email' })).toBeInTheDocument()
+    expect(ungDung.getByText(THONG_BAO.daGuiLaiThuXacNhan)).toBeInTheDocument()
+    expect(kho.moPhong.thuGuiToi('xuan@vi-du.vn').filter((t) => t.loai === 'XAC_NHAN_EMAIL')).toHaveLength(2)
+  })
+
+  it('đăng nhập sai mật khẩu khi chưa xác nhận không hiện cách gửi lại thư (không lộ gì)', async () => {
+    const { user, kho, ungDung } = dungApp()
+    await kho.dangKy({ email: 'yen@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Yến' })
+    await dangNhapQuaGiaoDien(user, 'yen@vi-du.vn', 'sai-mat-khau')
+    const canhBao = await ungDung.findByRole('alert')
+    expect(canhBao).toHaveTextContent('Email hoặc mật khẩu không đúng.')
+    expect(screen.queryByRole('button', { name: 'Gửi lại thư xác nhận' })).not.toBeInTheDocument()
+  })
+})
+
+describe('quên mật khẩu trên giao diện', () => {
+  async function yeuCauMa(user: ReturnType<typeof userEvent.setup>, email: string) {
+    await user.click(screen.getByRole('button', { name: 'Quên mật khẩu?' }))
+    await screen.findByRole('heading', { level: 1, name: 'Quên mật khẩu' })
+    await user.clear(screen.getByLabelText('Email'))
+    await user.type(screen.getByLabelText('Email'), email)
+    await user.click(screen.getByRole('button', { name: 'Gửi mã đặt lại' }))
+    await screen.findByRole('heading', { level: 1, name: 'Đặt mật khẩu mới' })
+  }
+
+  it('yêu cầu đặt lại hiện cùng một thông báo dù email có tài khoản hay không', async () => {
+    const { user, kho, ungDung } = dungApp()
+    await dangKyDaXacNhan(kho, 'quynh@vi-du.vn', 'Quỳnh')
+
+    await yeuCauMa(user, 'quynh@vi-du.vn')
+    expect(ungDung.getByText(THONG_BAO.daGuiMaDatLai)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Về đăng nhập' }))
+    await yeuCauMa(user, 'khong-co-ai@vi-du.vn')
+    expect(ungDung.getByText(THONG_BAO.daGuiMaDatLai)).toBeInTheDocument()
+  })
+
+  it('đặt mật khẩu mới bằng mã trong thư: mật khẩu mới vào được, mật khẩu cũ thì không', async () => {
+    const { user, kho, ungDung } = dungApp()
+    await dangKyDaXacNhan(kho, 'phat@vi-du.vn', 'Phát')
+    await yeuCauMa(user, 'phat@vi-du.vn')
+
+    // Bản chạy thử hiện mã trong thư mô phỏng ngay trên màn.
+    const thu = kho.moPhong.thuGuiToi('phat@vi-du.vn').find((t) => t.loai === 'DAT_LAI_MAT_KHAU')
+    if (!thu || thu.loai !== 'DAT_LAI_MAT_KHAU') throw new Error('không có thư đặt lại')
+    expect(ungDung.getByText(new RegExp(`Mã trong thư mới nhất: ${thu.ma}`))).toBeInTheDocument()
+
+    expect(screen.getByLabelText('Email')).toHaveValue('phat@vi-du.vn')
+    await user.type(screen.getByLabelText('Mã đặt lại'), thu.ma)
+    await user.type(screen.getByLabelText('Mật khẩu mới'), 'mat-khau-moi-2')
+    await user.click(screen.getByRole('button', { name: 'Đặt mật khẩu mới' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
+    expect(ungDung.getByText(THONG_BAO.daDatLaiMatKhau)).toBeInTheDocument()
+
+    // Mật khẩu cũ không còn dùng được.
+    await user.type(screen.getByLabelText('Mật khẩu'), MAT_KHAU)
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+    expect(await ungDung.findByRole('alert')).toHaveTextContent('Email hoặc mật khẩu không đúng.')
+
+    await user.clear(screen.getByLabelText('Mật khẩu'))
+    await user.type(screen.getByLabelText('Mật khẩu'), 'mat-khau-moi-2')
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+    await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
+    expect(vungTaiKhoan().getByText('Phát')).toBeInTheDocument()
+  })
+})
+
 describe('điều hướng bằng phím', () => {
   it('đi qua và dùng được mọi điều khiển bằng Tab, Enter', async () => {
     const { user, kho } = dungApp()
-    await kho.dangKy({ email: 'k@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Khánh' })
+    await dangKyDaXacNhan(kho, 'k@vi-du.vn', 'Khánh')
 
-    // Màn đăng nhập: Email → Mật khẩu → Đăng nhập → Đăng ký.
+    // Màn đăng nhập: Email → Mật khẩu → Đăng nhập → Đăng ký → Quên mật khẩu.
     await user.tab()
     expect(screen.getByLabelText('Email')).toHaveFocus()
     await user.keyboard('k@vi-du.vn')
@@ -221,8 +330,11 @@ describe('điều hướng bằng phím', () => {
     expect(screen.getByRole('button', { name: 'Đăng nhập' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Chưa có tài khoản? Đăng ký' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Quên mật khẩu?' })).toHaveFocus()
 
     // Quay lại nút Đăng nhập và bấm bằng Enter.
+    await user.tab({ shift: true })
     await user.tab({ shift: true })
     expect(screen.getByRole('button', { name: 'Đăng nhập' })).toHaveFocus()
     await user.keyboard('{Enter}')
@@ -257,7 +369,7 @@ describe('điều hướng bằng phím', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
   })
 
-  it('đăng ký đi được bằng phím: Enter trong ô cuối gửi biểu mẫu', async () => {
+  it('đăng ký, xác nhận và đăng nhập đi được bằng phím: Enter trong ô cuối gửi biểu mẫu', async () => {
     const { user } = dungApp()
     await user.tab()
     await user.tab()
@@ -274,6 +386,14 @@ describe('điều hướng bằng phím', () => {
     await user.tab()
     expect(screen.getByLabelText('Tên hiển thị')).toHaveFocus()
     await user.keyboard('Người Mới{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Xác nhận email' })
+
+    screen.getByRole('button', { name: 'Xác nhận email (mô phỏng)' }).focus()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })
+
+    screen.getByLabelText('Mật khẩu').focus()
+    await user.keyboard(`${MAT_KHAU}{Enter}`)
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
     expect(vungTaiKhoan().getByText('Người Mới')).toBeInTheDocument()
   })

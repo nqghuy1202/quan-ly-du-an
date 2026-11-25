@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
 import { Card } from '@astryxdesign/core/Card'
@@ -10,10 +10,20 @@ import { TextInput } from '@astryxdesign/core/TextInput'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { LoiKho } from '../kho/ketQua'
 import type { Phien } from '../kho/khoDuLieu'
+import type { MoPhongThu } from '../kho/khoBoNho'
 import { DO_DAI_MAT_KHAU_TOI_THIEU } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
+import { trangThaiO } from './trangThaiO'
+import { ManChoXacNhan, ManDatLaiMatKhau, ManGuiLaiThuXacNhan, ManQuenMatKhau } from './ManEmailVaMatKhau'
 
-type CheDo = 'dangNhap' | 'dangKy'
+/** Màn đang hiện cho người chưa có phiên, kèm dữ liệu chuyển giữa các màn. */
+type Man =
+  | { loai: 'dangNhap'; email: string; thongBao: string | null }
+  | { loai: 'dangKy' }
+  | { loai: 'choXacNhan'; email: string; thongBao: string | null }
+  | { loai: 'guiLai'; email: string }
+  | { loai: 'quenMatKhau'; email: string }
+  | { loai: 'datLai'; email: string; thongBao: string | null }
 
 /**
  * Bề rộng tối đa của biểu mẫu, tính theo cỡ chữ gốc (`rem`), không dùng `px` rời:
@@ -23,32 +33,108 @@ const DO_RONG_BIEU_MAU = '30rem'
 
 interface Props {
   onDaDangNhap: (phien: Phien) => void
+  /** Hộp thư mô phỏng của bản bộ nhớ; null khi Kho gửi thư thật. */
+  moPhong: MoPhongThu | null
+  /** Đồng hồ cho hạn của mã đặt lại mật khẩu. */
+  dongHo: () => Date
 }
 
-/** Màn đăng nhập và đăng ký cho người chưa có phiên. */
-export function ManXacThuc({ onDaDangNhap }: Props) {
-  const [cheDo, setCheDo] = useState<CheDo>('dangNhap')
+/** Các màn cho người chưa có phiên: đăng nhập, đăng ký, xác nhận email, quên và đặt lại mật khẩu. */
+export function ManXacThuc({ onDaDangNhap, moPhong, dongHo }: Props) {
+  const [man, setMan] = useState<Man>({ loai: 'dangNhap', email: '', thongBao: null })
+  const veDangNhap = (email = '', thongBao: string | null = null) => setMan({ loai: 'dangNhap', email, thongBao })
+
+  let noiDung: ReactNode = null
+  switch (man.loai) {
+    case 'dangNhap':
+      noiDung = (
+        <FormDangNhap
+          emailBanDau={man.email}
+          thongBao={man.thongBao}
+          onDaDangNhap={onDaDangNhap}
+          onDangKy={() => setMan({ loai: 'dangKy' })}
+          onQuenMatKhau={(email) => setMan({ loai: 'quenMatKhau', email })}
+          onGuiLaiThu={(email) => setMan({ loai: 'guiLai', email })}
+        />
+      )
+      break
+    case 'dangKy':
+      noiDung = (
+        <FormDangKy
+          onDaDangKy={(email) => setMan({ loai: 'choXacNhan', email, thongBao: null })}
+          onDangNhap={() => veDangNhap()}
+        />
+      )
+      break
+    case 'choXacNhan':
+      noiDung = (
+        <ManChoXacNhan
+          email={man.email}
+          thongBao={man.thongBao}
+          moPhong={moPhong}
+          onGuiLai={(email) => setMan({ loai: 'guiLai', email })}
+          onDaXacNhan={(thongBao) => veDangNhap(man.email, thongBao)}
+          onVeDangNhap={() => veDangNhap(man.email)}
+        />
+      )
+      break
+    case 'guiLai':
+      noiDung = (
+        <ManGuiLaiThuXacNhan
+          emailBanDau={man.email}
+          onDaGui={(email, thongBao) => setMan({ loai: 'choXacNhan', email, thongBao })}
+          onVeDangNhap={() => veDangNhap(man.email)}
+        />
+      )
+      break
+    case 'quenMatKhau':
+      noiDung = (
+        <ManQuenMatKhau
+          emailBanDau={man.email}
+          dongHo={dongHo}
+          onDaGui={(email, thongBao) => setMan({ loai: 'datLai', email, thongBao })}
+          onDaCoMa={(email) => setMan({ loai: 'datLai', email, thongBao: null })}
+          onVeDangNhap={() => veDangNhap(man.email)}
+        />
+      )
+      break
+    case 'datLai':
+      noiDung = (
+        <ManDatLaiMatKhau
+          emailBanDau={man.email}
+          thongBao={man.thongBao}
+          moPhong={moPhong}
+          dongHo={dongHo}
+          onDaDatLai={(email, thongBao) => veDangNhap(email, thongBao)}
+          onYeuCauMaMoi={(email) => setMan({ loai: 'quenMatKhau', email })}
+          onVeDangNhap={() => veDangNhap(man.email)}
+        />
+      )
+      break
+  }
+
   return (
     <Center padding={6}>
       <Card width="100%" maxWidth={DO_RONG_BIEU_MAU}>
-        {cheDo === 'dangNhap' ? (
-          <FormDangNhap onDaDangNhap={onDaDangNhap} onChuyen={() => setCheDo('dangKy')} />
-        ) : (
-          <FormDangKy onDaDangNhap={onDaDangNhap} onChuyen={() => setCheDo('dangNhap')} />
-        )}
+        {noiDung}
       </Card>
     </Center>
   )
 }
 
-function trangThaiO(loi: LoiKho | null, o: string) {
-  const thongBao = loi?.loiTheoO?.[o]
-  return thongBao ? { type: 'error' as const, message: thongBao } : undefined
+interface PropsDangNhap {
+  emailBanDau: string
+  /** Thông báo thành công từ màn trước (đã xác nhận email, đã đặt mật khẩu mới). */
+  thongBao: string | null
+  onDaDangNhap: (phien: Phien) => void
+  onDangKy: () => void
+  onQuenMatKhau: (email: string) => void
+  onGuiLaiThu: (email: string) => void
 }
 
-function FormDangNhap({ onDaDangNhap, onChuyen }: Props & { onChuyen: () => void }) {
+function FormDangNhap({ emailBanDau, thongBao, onDaDangNhap, onDangKy, onQuenMatKhau, onGuiLaiThu }: PropsDangNhap) {
   const kho = useKho()
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(emailBanDau)
   const [matKhau, setMatKhau] = useState('')
   const [loi, setLoi] = useState<LoiKho | null>(null)
   const [dangGui, setDangGui] = useState(false)
@@ -69,7 +155,19 @@ function FormDangNhap({ onDaDangNhap, onChuyen }: Props & { onChuyen: () => void
         <Heading level={1}>Đăng nhập</Heading>
         <Text color="secondary">Quản lý dự án cho PM và Support.</Text>
       </VStack>
-      {loi && <Banner status="error" title={loi.thongBao} role="alert" />}
+      {thongBao && !loi && <Banner status="success" title={thongBao} role="status" />}
+      {loi && (
+        <Banner
+          status="error"
+          title={loi.thongBao}
+          role="alert"
+          endContent={
+            loi.ma === 'EMAIL_CHUA_XAC_NHAN' ? (
+              <Button label="Gửi lại thư xác nhận" variant="secondary" onClick={() => onGuiLaiThu(email)} />
+            ) : undefined
+          }
+        />
+      )}
       <FormLayout>
         <TextInput
           label="Email"
@@ -90,13 +188,20 @@ function FormDangNhap({ onDaDangNhap, onChuyen }: Props & { onChuyen: () => void
       </FormLayout>
       <VStack gap={2}>
         <Button label="Đăng nhập" variant="primary" isLoading={dangGui} onClick={gui} />
-        <Button label="Chưa có tài khoản? Đăng ký" variant="ghost" onClick={onChuyen} />
+        <Button label="Chưa có tài khoản? Đăng ký" variant="ghost" onClick={onDangKy} />
+        <Button label="Quên mật khẩu?" variant="ghost" onClick={() => onQuenMatKhau(email)} />
       </VStack>
     </VStack>
   )
 }
 
-function FormDangKy({ onDaDangNhap, onChuyen }: Props & { onChuyen: () => void }) {
+interface PropsDangKy {
+  /** Đăng ký xong: email đã chuẩn hoá, chờ xác nhận. */
+  onDaDangKy: (email: string) => void
+  onDangNhap: () => void
+}
+
+function FormDangKy({ onDaDangKy, onDangNhap }: PropsDangKy) {
   const kho = useKho()
   const [email, setEmail] = useState('')
   const [matKhau, setMatKhau] = useState('')
@@ -109,16 +214,10 @@ function FormDangKy({ onDaDangNhap, onChuyen }: Props & { onChuyen: () => void }
     setDangGui(true)
     setLoi(null)
     const kq = await kho.dangKy({ email, matKhau, tenHienThi })
-    if (!kq.ok) {
-      setDangGui(false)
-      setLoi(kq.loi)
-      return
-    }
-    // Ticket 01: đăng ký xong đăng nhập được ngay (xác nhận email thêm ở ticket 02).
-    const phien = await kho.dangNhap({ email, matKhau })
     setDangGui(false)
-    if (phien.ok) onDaDangNhap(phien.giaTri)
-    else setLoi(phien.loi)
+    // Đăng ký xong phải xác nhận email trước khi đăng nhập được.
+    if (kq.ok) onDaDangKy(kq.giaTri.email)
+    else setLoi(kq.loi)
   }
 
   return (
@@ -159,7 +258,7 @@ function FormDangKy({ onDaDangNhap, onChuyen }: Props & { onChuyen: () => void }
       </FormLayout>
       <VStack gap={2}>
         <Button label="Đăng ký" variant="primary" isLoading={dangGui} onClick={gui} />
-        <Button label="Đã có tài khoản? Đăng nhập" variant="ghost" onClick={onChuyen} />
+        <Button label="Đã có tài khoản? Đăng nhập" variant="ghost" onClick={onDangNhap} />
       </VStack>
     </VStack>
   )
