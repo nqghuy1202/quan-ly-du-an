@@ -6,7 +6,21 @@
 // tuỳ chọn `pmBanDau` (tạo sẵn một PM khi dựng Kho) hoặc `chuDuAn.datVaiPM` (đặt PM cho một tài
 // khoản có sẵn). Cả hai chỉ dành cho dev và test, không phải đường dùng thật của ứng dụng.
 import { thanhCong, thatBai, type KetQua } from './ketQua'
-import type { DuAnTomTat, HoSo, KhoDuLieu, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
+import type { DuAn, DuAnTomTat, HoSo, KhoDuLieu, NguoiDauVet, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
+import {
+  dauVetMoi,
+  dauVetSauSua,
+  duocQuanLyDuAn,
+  duocTaoDuAn,
+  kiemGhiDuAn,
+  kiemMoLaiDuAn,
+  kiemTraDuAn,
+  type DauVet,
+  type LocDuAnDauVao,
+  type SuaDuAnDauVao,
+  type TaoDuAnDauVao,
+  type TrangThaiDuAn,
+} from '../luat/duAn'
 import {
   THOI_HAN_MA_DAT_LAI_MAC_DINH_MS,
   THONG_BAO,
@@ -104,18 +118,61 @@ interface TaiKhoan {
   maDatLai: MaDatLai | null
 }
 
+/** Dự án như kho lưu: dấu vết ghi id người, tên hiển thị tra lúc đọc. */
+interface BanGhiDuAn {
+  id: string
+  ten: string
+  moTa: string
+  trangThai: TrangThaiDuAn
+  dauVet: DauVet<string>
+}
+
 export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   const thoiHanMaDatLaiMs = tuyChon.thoiHanMaDatLaiMs ?? THOI_HAN_MA_DAT_LAI_MAC_DINH_MS
   const taiKhoanTheoId = new Map<string, TaiKhoan>()
   const idTheoEmail = new Map<string, string>()
   const phienDangMo = new Map<string, string>() // maPhien -> nguoiDungId
   const hopThu: ThuMoPhong[] = []
+  const duAnTheoId = new Map<string, BanGhiDuAn>()
   let demNguoiDung = 0
   let demPhien = 0
   let demMa = 0
+  let demDuAn = 0
 
   const banSao = (hoSo: HoSo): HoSo => ({ ...hoSo })
   const tomTat = ({ id, email, tenHienThi, vai }: HoSo): NguoiDungTomTat => ({ id, email, tenHienThi, vai })
+
+  function nguoiDauVet(id: string): NguoiDauVet {
+    return { id, tenHienThi: taiKhoanTheoId.get(id)?.hoSo.tenHienThi ?? '' }
+  }
+
+  /** Bản sao trả ra ngoài: ngày là đối tượng mới, người kèm tên hiển thị hiện tại. */
+  function docDuAn(banGhi: BanGhiDuAn): DuAn {
+    const { taoBoi, taoLuc, suaBoi, suaLuc } = banGhi.dauVet
+    return {
+      id: banGhi.id,
+      ten: banGhi.ten,
+      moTa: banGhi.moTa,
+      trangThai: banGhi.trangThai,
+      dauVet: {
+        taoBoi: nguoiDauVet(taoBoi),
+        taoLuc: new Date(taoLuc.getTime()),
+        suaBoi: suaBoi === null ? null : nguoiDauVet(suaBoi),
+        suaLuc: suaLuc === null ? null : new Date(suaLuc.getTime()),
+      },
+    }
+  }
+
+  /** Người gọi đã đăng nhập, có quyền quản lý Dự án, và Dự án `duAnId` tồn tại. */
+  function xacThucDuAn(phien: Phien | null, duAnId: string): KetQua<{ taiKhoan: TaiKhoan; duAn: BanGhiDuAn }> {
+    const xt = xacThuc(phien)
+    if (!xt.ok) return xt
+    // Kiểm quyền trước: người không có quyền không biết được Dự án có tồn tại hay không.
+    if (!duocQuanLyDuAn(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
+    const duAn = duAnTheoId.get(duAnId)
+    if (!duAn) return thatBai('KHONG_TIM_THAY')
+    return thanhCong({ taiKhoan: xt.giaTri, duAn })
+  }
 
   /** Tạo tài khoản mới với dữ liệu đã kiểm; trả hồ sơ gốc (không phải bản sao). */
   function taoTaiKhoan(email: string, matKhau: string, tenHienThi: string, vai: VaiHeThong, daXacNhan: boolean): HoSo {
@@ -306,6 +363,80 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (lyDo) return thatBai(lyDo)
       dich.hoSo.vai = kt.giaTri.vai
       return thanhCong(tomTat(dich.hoSo))
+    },
+
+    async taoDuAn(phien: Phien | null, dauVao: TaoDuAnDauVao, bayGio: Date) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      if (!duocTaoDuAn(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
+      const kt = kiemTraDuAn.tao(dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      demDuAn += 1
+      const banGhi: BanGhiDuAn = {
+        id: `du-an-${demDuAn}`,
+        ten: kt.giaTri.ten,
+        moTa: kt.giaTri.moTa,
+        trangThai: 'HOAT_DONG',
+        dauVet: dauVetMoi(xt.giaTri.hoSo.id, bayGio),
+      }
+      duAnTheoId.set(banGhi.id, banGhi)
+      return thanhCong(docDuAn(banGhi))
+    },
+
+    async danhSachDuAn(phien: Phien | null, loc: LocDuAnDauVao = {}) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      if (!duocQuanLyDuAn(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
+      const kt = kiemTraDuAn.loc(loc)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const trangThai = kt.giaTri.trangThai
+      return thanhCong(
+        [...duAnTheoId.values()]
+          .filter((duAn) => trangThai === undefined || duAn.trangThai === trangThai)
+          .map(docDuAn),
+      )
+    },
+
+    async layDuAn(phien: Phien | null, duAnId: string) {
+      const xt = xacThucDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      return thanhCong(docDuAn(xt.giaTri.duAn))
+    },
+
+    async suaDuAn(phien: Phien | null, duAnId: string, dauVao: SuaDuAnDauVao, bayGio: Date) {
+      const xt = xacThucDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn } = xt.giaTri
+      const lyDo = kiemGhiDuAn({ vaiNguoiGoi: taiKhoan.hoSo.vai, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraDuAn.sua(dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      if (kt.giaTri.ten !== undefined) duAn.ten = kt.giaTri.ten
+      if (kt.giaTri.moTa !== undefined) duAn.moTa = kt.giaTri.moTa
+      duAn.dauVet = dauVetSauSua(duAn.dauVet, taiKhoan.hoSo.id, bayGio)
+      return thanhCong(docDuAn(duAn))
+    },
+
+    async luuTruDuAn(phien: Phien | null, duAnId: string, bayGio: Date) {
+      const xt = xacThucDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn } = xt.giaTri
+      const lyDo = kiemGhiDuAn({ vaiNguoiGoi: taiKhoan.hoSo.vai, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      duAn.trangThai = 'LUU_TRU'
+      duAn.dauVet = dauVetSauSua(duAn.dauVet, taiKhoan.hoSo.id, bayGio)
+      return thanhCong(docDuAn(duAn))
+    },
+
+    async moLaiDuAn(phien: Phien | null, duAnId: string, bayGio: Date) {
+      const xt = xacThucDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn } = xt.giaTri
+      const lyDo = kiemMoLaiDuAn({ vaiNguoiGoi: taiKhoan.hoSo.vai, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      duAn.trangThai = 'HOAT_DONG'
+      duAn.dauVet = dauVetSauSua(duAn.dauVet, taiKhoan.hoSo.id, bayGio)
+      return thanhCong(docDuAn(duAn))
     },
   }
 }

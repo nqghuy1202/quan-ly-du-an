@@ -12,21 +12,25 @@ import { VStack } from '@astryxdesign/core/VStack'
 import { thanhCong, type KetQua } from '../kho/ketQua'
 import type { HoSo, Phien } from '../kho/khoDuLieu'
 import { TEN_VAI, duocQuanLyNguoiDung, type VaiHeThong } from '../luat/taiKhoan'
+import { duocQuanLyDuAn } from '../luat/duAn'
 import { useKho } from './khoContext'
+import { ManDuAn } from './ManDuAn'
 import { ManHoSo } from './ManHoSo'
 import { ManNguoiDung } from './ManNguoiDung'
 import { TrangDuAnCuaToi } from './TrangDuAnCuaToi'
 
-type Trang = 'duAn' | 'hoSo' | 'nguoiDung'
+type Trang = 'duAn' | 'tatCaDuAn' | 'hoSo' | 'nguoiDung'
 
 interface Props {
   phien: Phien
   /** Gọi khi người dùng đăng xuất hoặc phiên không còn dùng được. */
   onHetPhien: () => void
+  /** Đồng hồ cho dấu vết (ngày tạo, ngày chỉnh sửa). */
+  dongHo: () => Date
 }
 
 /** Khung ứng dụng sau khi đăng nhập: tên và vai cố định ở đầu trang, nút đăng xuất. */
-export function KhungUngDung({ phien, onHetPhien }: Props) {
+export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   const kho = useKho()
   const [tai, setTai] = useState<KetQua<HoSo> | null>(null)
   const [lanTai, setLanTai] = useState(0)
@@ -83,7 +87,10 @@ export function KhungUngDung({ phien, onHetPhien }: Props) {
   const hoSo = tai.giaTri
   // Cùng luật quyền với Kho: chỉ PM thấy mục Người dùng.
   const thayNguoiDung = duocQuanLyNguoiDung(hoSo.vai)
-  const trangHien: Trang = trang === 'nguoiDung' && !thayNguoiDung ? 'duAn' : trang
+  // Cùng luật với Kho: ở ticket này chỉ PM thấy mục Tất cả Dự án.
+  const thayTatCaDuAn = duocQuanLyDuAn(hoSo.vai)
+  const trangHien: Trang =
+    (trang === 'nguoiDung' && !thayNguoiDung) || (trang === 'tatCaDuAn' && !thayTatCaDuAn) ? 'duAn' : trang
 
   function khiVaiCuaToiDoi(vai: VaiHeThong) {
     setTai(thanhCong({ ...hoSo, vai }))
@@ -92,6 +99,8 @@ export function KhungUngDung({ phien, onHetPhien }: Props) {
   let noiDung: ReactNode
   if (trangHien === 'duAn') {
     noiDung = <TrangDuAnCuaToi phien={phien} onHetPhien={onHetPhien} />
+  } else if (trangHien === 'tatCaDuAn') {
+    noiDung = <ManDuAn phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'hoSo') {
     noiDung = (
       <ManHoSo phien={phien} hoSo={hoSo} onDaLuu={(moi) => setTai(thanhCong(moi))} onHetPhien={onHetPhien} />
@@ -120,6 +129,14 @@ export function KhungUngDung({ phien, onHetPhien }: Props) {
                 aria-current={trangHien === 'duAn' ? 'page' : undefined}
                 onClick={() => setTrang('duAn')}
               />
+              {thayTatCaDuAn && (
+                <Button
+                  label="Tất cả Dự án"
+                  variant={trangHien === 'tatCaDuAn' ? 'secondary' : 'ghost'}
+                  aria-current={trangHien === 'tatCaDuAn' ? 'page' : undefined}
+                  onClick={() => setTrang('tatCaDuAn')}
+                />
+              )}
               <Button
                 label="Hồ sơ"
                 variant={trangHien === 'hoSo' ? 'secondary' : 'ghost'}

@@ -12,6 +12,8 @@ export type MaLoi =
   | 'MA_DA_DUNG'
   | 'MA_HET_HAN'
   | 'PHAI_CON_PM'
+  | 'DU_AN_DA_LUU_TRU'
+  | 'DU_AN_DANG_HOAT_DONG'
 
 export interface LoiKho {
   ma: MaLoi
@@ -46,4 +48,6 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   MA_HET_HAN: 'Mã đặt lại đã hết hạn. Hãy yêu cầu mã mới.',
   PHAI_CON_PM:
     'Không hạ được vai: hệ thống phải luôn còn ít nhất một PM. Hãy đặt một người khác làm PM trước.',
+  DU_AN_DA_LUU_TRU: 'Dự án đã Lưu trữ nên chỉ xem được. Mở lại Dự án để sửa.',
+  DU_AN_DANG_HOAT_DONG: 'Dự án đang hoạt động, không cần mở lại.',
 }

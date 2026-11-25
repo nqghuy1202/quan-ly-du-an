@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { KetQua, MaLoi } from './ketQua'
 import type { KhoDuLieu, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
 import { CAC_VAI, THONG_BAO, type VaiHeThong } from '../luat/taiKhoan'
+import { DO_DAI_TEN_DU_AN_TOI_DA, THONG_BAO_DU_AN } from '../luat/duAn'
 
 export interface BanCaiHopDong {
   kho: KhoDuLieu
@@ -40,6 +41,8 @@ const MAT_KHAU = 'matkhau-dung-1'
 const MAT_KHAU_MOI = 'matkhau-moi-2'
 /** Đồng hồ của các ca đặt lại mật khẩu: truyền vào, không đọc giờ thật. */
 const LUC_YEU_CAU = new Date('2026-03-01T08:00:00+07:00')
+/** Đồng hồ của các ca Dự án: truyền vào, không đọc giờ thật. */
+const LUC_TAO_DU_AN = new Date('2026-04-10T09:30:00+07:00')
 
 function giaTri<T>(kq: KetQua<T>): T {
   if (!kq.ok) throw new Error(`Mong đợi thành công, nhận lỗi ${kq.loi.ma}: ${kq.loi.thongBao}`)
@@ -82,6 +85,20 @@ export function chayBoTestHopDong(
     async function dangKyVaDangNhap(ten: string, tenHienThi = ten): Promise<Phien> {
       const email = await dangKyDaXacNhan(ten, tenHienThi)
       return giaTri(await kho.dangNhap({ email, matKhau: MAT_KHAU }))
+    }
+
+    /** Đăng ký, xác nhận, đặt vai PM ngoài luồng ứng dụng rồi đăng nhập. */
+    async function taoPM(ten: string, tenHienThi = ten): Promise<Phien> {
+      const email = await dangKyDaXacNhan(ten, tenHienThi)
+      await banCai.datVaiPM(email)
+      return giaTri(await kho.dangNhap({ email, matKhau: MAT_KHAU }))
+    }
+
+    /** Tạo một người có vai `vai` (PM `phienPM` đổi vai giúp nếu cần). */
+    async function taoNguoiCoVai(phienPM: Phien, ten: string, vai: VaiHeThong, tenHienThi = ten): Promise<Phien> {
+      const phien = await dangKyVaDangNhap(ten, tenHienThi)
+      if (vai !== 'THANH_VIEN') giaTri(await kho.doiVai(phienPM, phien.nguoiDungId, { vai }))
+      return phien
     }
 
     async function maDatLai(email: string): Promise<string> {
@@ -368,6 +385,12 @@ export function chayBoTestHopDong(
           expect(maLoi(await kho.danhSachDuAnCuaToi(phien))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.danhSachNguoiDung(phien))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.doiVai(phien, 'ai-do', { vai: 'PM' }))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.taoDuAn(phien, { ten: 'X' }, LUC_TAO_DU_AN))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.danhSachDuAn(phien))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.layDuAn(phien, 'du-an'))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.suaDuAn(phien, 'du-an', { ten: 'X' }, LUC_TAO_DU_AN))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.luuTruDuAn(phien, 'du-an', LUC_TAO_DU_AN))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.moLaiDuAn(phien, 'du-an', LUC_TAO_DU_AN))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.dangXuat(phien))).toBe('CHUA_DANG_NHAP')
         }
       })
@@ -421,22 +444,8 @@ export function chayBoTestHopDong(
     })
 
     describe('vai hệ thống và danh sách người dùng', () => {
-      /** Đăng ký, xác nhận, đặt vai PM ngoài luồng ứng dụng rồi đăng nhập. */
-      async function taoPM(ten: string, tenHienThi = ten): Promise<Phien> {
-        const email = await dangKyDaXacNhan(ten, tenHienThi)
-        await banCai.datVaiPM(email)
-        return giaTri(await kho.dangNhap({ email, matKhau: MAT_KHAU }))
-      }
-
       async function vaiCua(phien: Phien): Promise<VaiHeThong> {
         return giaTri(await kho.layHoSoCuaToi(phien)).vai
-      }
-
-      /** Tạo một người có vai `vai` (PM `phienPM` đổi vai giúp nếu cần). */
-      async function taoNguoiCoVai(phienPM: Phien, ten: string, vai: VaiHeThong): Promise<Phien> {
-        const phien = await dangKyVaDangNhap(ten)
-        if (vai !== 'THANH_VIEN') giaTri(await kho.doiVai(phienPM, phien.nguoiDungId, { vai }))
-        return phien
       }
 
       function timTrong(danhSach: NguoiDungTomTat[], id: string): NguoiDungTomTat | undefined {
@@ -576,6 +585,223 @@ export function chayBoTestHopDong(
         giaTri(await kho.doiVai(pmB, pmC.nguoiDungId, { vai: 'PM' }))
         expect(giaTri(await kho.doiVai(pmB, pmB.nguoiDungId, { vai: 'SUPPORT' })).vai).toBe('SUPPORT')
         expect(await vaiCua(pmC)).toBe('PM')
+      })
+    })
+
+    describe('Dự án: tạo, sửa, Lưu trữ, danh sách và dấu vết', () => {
+      const LUC_SUA = sau(LUC_TAO_DU_AN, 2 * 60 * 60 * 1000)
+      const LUC_LUU_TRU = sau(LUC_TAO_DU_AN, 24 * 60 * 60 * 1000)
+      const LUC_MO_LAI = sau(LUC_TAO_DU_AN, 48 * 60 * 60 * 1000)
+
+      async function idCacDuAn(phienPM: Phien, trangThai?: string): Promise<string[]> {
+        const ds = giaTri(await kho.danhSachDuAn(phienPM, trangThai === undefined ? undefined : { trangThai }))
+        return ds.map((duAn) => duAn.id)
+      }
+
+      it('PM tạo Dự án: tên bỏ khoảng trắng hai đầu, mô tả tuỳ chọn, đang hoạt động, dấu vết theo người gọi và đồng hồ truyền vào', async () => {
+        const pm = await taoPM('pm-tao', 'An PM')
+        const duAn = giaTri(await kho.taoDuAn(pm, { ten: '  Website bán hàng  ' }, LUC_TAO_DU_AN))
+        expect(duAn).toEqual({
+          id: expect.any(String),
+          ten: 'Website bán hàng',
+          moTa: '',
+          trangThai: 'HOAT_DONG',
+          dauVet: {
+            taoBoi: { id: pm.nguoiDungId, tenHienThi: 'An PM' },
+            taoLuc: LUC_TAO_DU_AN,
+            suaBoi: null,
+            suaLuc: null,
+          },
+        })
+        // Đọc lại thấy đúng như vậy.
+        expect(giaTri(await kho.layDuAn(pm, duAn.id))).toEqual(duAn)
+
+        const coMoTa = giaTri(await kho.taoDuAn(pm, { ten: 'Ứng dụng', moTa: '  Làm lại app  ' }, LUC_TAO_DU_AN))
+        expect(coMoTa.moTa).toBe('Làm lại app')
+        expect(coMoTa.id).not.toBe(duAn.id)
+      })
+
+      it('tên đúng 120 ký tự được nhận', async () => {
+        const pm = await taoPM('pm-dai')
+        const ten = 'a'.repeat(DO_DAI_TEN_DU_AN_TOI_DA)
+        expect(giaTri(await kho.taoDuAn(pm, { ten }, LUC_TAO_DU_AN)).ten).toBe(ten)
+      })
+
+      it.each([
+        { ca: 'tên rỗng', ten: '', thongBao: THONG_BAO_DU_AN.tenTrong },
+        { ca: 'tên chỉ khoảng trắng', ten: ' \t  ', thongBao: THONG_BAO_DU_AN.tenTrong },
+        { ca: 'tên quá 120 ký tự', ten: 'a'.repeat(DO_DAI_TEN_DU_AN_TOI_DA + 1), thongBao: THONG_BAO_DU_AN.tenQuaDai },
+      ])('$ca bị từ chối kèm thông báo tiếng Việt và không tạo gì', async ({ ten, thongBao }) => {
+        const pm = await taoPM('pm-sai')
+        const truoc = await idCacDuAn(pm)
+        const kq = await kho.taoDuAn(pm, { ten, moTa: 'Mô tả' }, LUC_TAO_DU_AN)
+        expect(maLoi(kq)).toBe('KHONG_HOP_LE')
+        if (!kq.ok) expect(kq.loi.loiTheoO?.ten).toBe(thongBao)
+        expect(await idCacDuAn(pm)).toEqual(truoc)
+      })
+
+      it.each<VaiHeThong>(['SUPPORT', 'THANH_VIEN'])('%s tạo Dự án trả KHONG_CO_QUYEN và không tạo gì', async (vai) => {
+        const pm = await taoPM('pm-quyen')
+        const nguoiGoi = await taoNguoiCoVai(pm, 'nguoi-goi', vai)
+        const truoc = await idCacDuAn(pm)
+        expect(maLoi(await kho.taoDuAn(nguoiGoi, { ten: 'Dự án lén' }, LUC_TAO_DU_AN))).toBe('KHONG_CO_QUYEN')
+        // Dữ liệu sai cũng chỉ là không có quyền: không lộ gì thêm.
+        expect(maLoi(await kho.taoDuAn(nguoiGoi, { ten: '' }, LUC_TAO_DU_AN))).toBe('KHONG_CO_QUYEN')
+        expect(await idCacDuAn(pm)).toEqual(truoc)
+      })
+
+      it.each<VaiHeThong>(['SUPPORT', 'THANH_VIEN'])(
+        '%s chưa thấy và chưa sửa được Dự án nào (quyền theo người trong dự án ở ticket 05)',
+        async (vai) => {
+          const pm = await taoPM('pm-an-giau')
+          const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Bí mật' }, LUC_TAO_DU_AN))
+          const nguoiGoi = await taoNguoiCoVai(pm, 'nguoi-ngoai', vai)
+
+          expect(maLoi(await kho.danhSachDuAn(nguoiGoi))).toBe('KHONG_CO_QUYEN')
+          expect(maLoi(await kho.layDuAn(nguoiGoi, duAn.id))).toBe('KHONG_CO_QUYEN')
+          expect(maLoi(await kho.suaDuAn(nguoiGoi, duAn.id, { ten: 'Bị sửa' }, LUC_SUA))).toBe('KHONG_CO_QUYEN')
+          expect(maLoi(await kho.luuTruDuAn(nguoiGoi, duAn.id, LUC_SUA))).toBe('KHONG_CO_QUYEN')
+          expect(maLoi(await kho.moLaiDuAn(nguoiGoi, duAn.id, LUC_SUA))).toBe('KHONG_CO_QUYEN')
+          // Không lộ Dự án có tồn tại hay không.
+          expect(maLoi(await kho.layDuAn(nguoiGoi, 'khong-ton-tai'))).toBe('KHONG_CO_QUYEN')
+
+          expect(giaTri(await kho.layDuAn(pm, duAn.id))).toEqual(duAn)
+        },
+      )
+
+      it('PM sửa tên hoặc mô tả: cập nhật người và ngày chỉnh sửa gần nhất, giữ người và ngày tạo', async () => {
+        const pmTao = await taoPM('pm-goc', 'An PM')
+        const pmSua = await taoNguoiCoVai(pmTao, 'pm-sua', 'PM', 'Bình PM')
+        const duAn = giaTri(await kho.taoDuAn(pmTao, { ten: 'Tên cũ', moTa: 'Mô tả cũ' }, LUC_TAO_DU_AN))
+
+        const suaTen = giaTri(await kho.suaDuAn(pmSua, duAn.id, { ten: '  Tên mới  ' }, LUC_SUA))
+        expect(suaTen).toEqual({
+          ...duAn,
+          ten: 'Tên mới',
+          dauVet: {
+            taoBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
+            taoLuc: LUC_TAO_DU_AN,
+            suaBoi: { id: pmSua.nguoiDungId, tenHienThi: 'Bình PM' },
+            suaLuc: LUC_SUA,
+          },
+        })
+        expect(giaTri(await kho.layDuAn(pmTao, duAn.id))).toEqual(suaTen)
+
+        const sauNua = sau(LUC_SUA, 60_000)
+        const suaMoTa = giaTri(await kho.suaDuAn(pmTao, duAn.id, { moTa: 'Mô tả mới' }, sauNua))
+        expect(suaMoTa.ten).toBe('Tên mới')
+        expect(suaMoTa.moTa).toBe('Mô tả mới')
+        expect(suaMoTa.dauVet).toEqual({
+          taoBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
+          taoLuc: LUC_TAO_DU_AN,
+          suaBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
+          suaLuc: sauNua,
+        })
+
+        // Để trống mô tả là xoá mô tả.
+        expect(giaTri(await kho.suaDuAn(pmTao, duAn.id, { moTa: '   ' }, sauNua)).moTa).toBe('')
+      })
+
+      it('sửa với tên sai bị từ chối và không đổi gì, kể cả dấu vết', async () => {
+        const pm = await taoPM('pm-sua-sai')
+        const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Giữ nguyên' }, LUC_TAO_DU_AN))
+        for (const { ten, thongBao } of [
+          { ten: '   ', thongBao: THONG_BAO_DU_AN.tenTrong },
+          { ten: 'b'.repeat(DO_DAI_TEN_DU_AN_TOI_DA + 1), thongBao: THONG_BAO_DU_AN.tenQuaDai },
+        ]) {
+          const kq = await kho.suaDuAn(pm, duAn.id, { ten, moTa: 'Không được lưu' }, LUC_SUA)
+          expect(maLoi(kq)).toBe('KHONG_HOP_LE')
+          if (!kq.ok) expect(kq.loi.loiTheoO?.ten).toBe(thongBao)
+        }
+        expect(giaTri(await kho.layDuAn(pm, duAn.id))).toEqual(duAn)
+      })
+
+      it('Dự án không tồn tại trả KHONG_TIM_THAY', async () => {
+        const pm = await taoPM('pm-tim')
+        expect(maLoi(await kho.layDuAn(pm, 'khong-ton-tai'))).toBe('KHONG_TIM_THAY')
+        expect(maLoi(await kho.suaDuAn(pm, 'khong-ton-tai', { ten: 'X' }, LUC_SUA))).toBe('KHONG_TIM_THAY')
+        expect(maLoi(await kho.luuTruDuAn(pm, 'khong-ton-tai', LUC_SUA))).toBe('KHONG_TIM_THAY')
+        expect(maLoi(await kho.moLaiDuAn(pm, 'khong-ton-tai', LUC_SUA))).toBe('KHONG_TIM_THAY')
+      })
+
+      it('Lưu trữ: mọi lệnh ghi trả DU_AN_DA_LUU_TRU nhưng vẫn đọc được; mở lại thì sửa được; cả hai bước cập nhật dấu vết', async () => {
+        const pmTao = await taoPM('pm-luu', 'An PM')
+        const pmKhac = await taoNguoiCoVai(pmTao, 'pm-khac', 'PM', 'Bình PM')
+        const duAn = giaTri(await kho.taoDuAn(pmTao, { ten: 'Sắp xong', moTa: 'Mô tả' }, LUC_TAO_DU_AN))
+
+        const daLuu = giaTri(await kho.luuTruDuAn(pmKhac, duAn.id, LUC_LUU_TRU))
+        expect(daLuu).toEqual({
+          ...duAn,
+          trangThai: 'LUU_TRU',
+          dauVet: { ...duAn.dauVet, suaBoi: { id: pmKhac.nguoiDungId, tenHienThi: 'Bình PM' }, suaLuc: LUC_LUU_TRU },
+        })
+
+        // Mọi lệnh ghi bị từ chối, kể cả với dữ liệu sai, và không đổi gì.
+        for (const phien of [pmTao, pmKhac]) {
+          expect(maLoi(await kho.suaDuAn(phien, duAn.id, { ten: 'Sửa lén' }, LUC_MO_LAI))).toBe('DU_AN_DA_LUU_TRU')
+          expect(maLoi(await kho.suaDuAn(phien, duAn.id, { moTa: 'Sửa lén' }, LUC_MO_LAI))).toBe('DU_AN_DA_LUU_TRU')
+          expect(maLoi(await kho.suaDuAn(phien, duAn.id, { ten: '' }, LUC_MO_LAI))).toBe('DU_AN_DA_LUU_TRU')
+          expect(maLoi(await kho.luuTruDuAn(phien, duAn.id, LUC_MO_LAI))).toBe('DU_AN_DA_LUU_TRU')
+        }
+        const kq = await kho.suaDuAn(pmTao, duAn.id, { ten: 'Sửa lén' }, LUC_MO_LAI)
+        if (!kq.ok) expect(kq.loi.thongBao).toBe(THONG_BAO_DU_AN.daLuuTru)
+
+        // Vẫn đọc được, và vẫn nằm trong danh sách.
+        expect(giaTri(await kho.layDuAn(pmTao, duAn.id))).toEqual(daLuu)
+        expect(await idCacDuAn(pmTao)).toContain(duAn.id)
+
+        // Mở lại: đang hoạt động, dấu vết cập nhật, sửa được trở lại.
+        const moLai = giaTri(await kho.moLaiDuAn(pmTao, duAn.id, LUC_MO_LAI))
+        expect(moLai.trangThai).toBe('HOAT_DONG')
+        expect(moLai.dauVet).toEqual({
+          ...duAn.dauVet,
+          suaBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
+          suaLuc: LUC_MO_LAI,
+        })
+        const sauMoLai = sau(LUC_MO_LAI, 60_000)
+        const sua = giaTri(await kho.suaDuAn(pmKhac, duAn.id, { ten: 'Làm tiếp' }, sauMoLai))
+        expect(sua.ten).toBe('Làm tiếp')
+        expect(sua.dauVet.suaLuc).toEqual(sauMoLai)
+        expect(sua.dauVet.taoLuc).toEqual(LUC_TAO_DU_AN)
+      })
+
+      it('mở lại Dự án đang hoạt động trả DU_AN_DANG_HOAT_DONG và không đổi dấu vết', async () => {
+        const pm = await taoPM('pm-mo-lai')
+        const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Đang chạy' }, LUC_TAO_DU_AN))
+        expect(maLoi(await kho.moLaiDuAn(pm, duAn.id, LUC_MO_LAI))).toBe('DU_AN_DANG_HOAT_DONG')
+        expect(giaTri(await kho.layDuAn(pm, duAn.id))).toEqual(duAn)
+      })
+
+      it('PM thấy mọi Dự án, kể cả do PM khác tạo, và lọc được giữa đang hoạt động và Lưu trữ', async () => {
+        const pmA = await taoPM('pm-ds-a')
+        const pmB = await taoNguoiCoVai(pmA, 'pm-ds-b', 'PM')
+        const motA = giaTri(await kho.taoDuAn(pmA, { ten: 'Một' }, LUC_TAO_DU_AN))
+        const haiB = giaTri(await kho.taoDuAn(pmB, { ten: 'Hai' }, LUC_TAO_DU_AN))
+        const baB = giaTri(await kho.taoDuAn(pmB, { ten: 'Ba' }, LUC_TAO_DU_AN))
+        giaTri(await kho.luuTruDuAn(pmA, baB.id, LUC_LUU_TRU))
+
+        const tatCa = await idCacDuAn(pmA)
+        expect(tatCa).toEqual(expect.arrayContaining([motA.id, haiB.id, baB.id]))
+
+        const hoatDong = await idCacDuAn(pmA, 'HOAT_DONG')
+        expect(hoatDong).toEqual(expect.arrayContaining([motA.id, haiB.id]))
+        expect(hoatDong).not.toContain(baB.id)
+
+        const luuTru = await idCacDuAn(pmB, 'LUU_TRU')
+        expect(luuTru).toContain(baB.id)
+        expect(luuTru).not.toContain(motA.id)
+        expect(luuTru).not.toContain(haiB.id)
+
+        // Bản ghi trong danh sách đầy đủ như khi đọc một Dự án.
+        const ds = giaTri(await kho.danhSachDuAn(pmA))
+        expect(ds.find((duAn) => duAn.id === haiB.id)).toEqual(haiB)
+      })
+
+      it('lọc với trạng thái không phải đang hoạt động hay Lưu trữ trả KHONG_HOP_LE', async () => {
+        const pm = await taoPM('pm-loc-sai')
+        const kq = await kho.danhSachDuAn(pm, { trangThai: 'DA_XOA' })
+        expect(maLoi(kq)).toBe('KHONG_HOP_LE')
+        if (!kq.ok) expect(kq.loi.loiTheoO?.trangThai).toBe(THONG_BAO_DU_AN.trangThaiSai)
       })
     })
 

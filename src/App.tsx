@@ -15,7 +15,10 @@ interface Props {
    * ứng dụng dùng hộp thư của bản bộ nhớ nó tự tạo.
    */
   moPhong?: MoPhongThu | null
-  /** Đồng hồ cho hạn mã đặt lại mật khẩu; mặc định là giờ của máy. Test truyền đồng hồ cố định. */
+  /**
+   * Đồng hồ cho hạn mã đặt lại mật khẩu và dấu vết (ngày tạo, ngày chỉnh sửa); mặc định là giờ
+   * của máy. Test truyền đồng hồ cố định.
+   */
   dongHo?: () => Date
 }
 
@@ -34,7 +37,7 @@ export function App({ kho: khoTruyenVao, moPhong: moPhongTruyenVao, dongHo = gio
     <Theme theme={themes[defaultThemeSlug]}>
       <KhoContext value={kho}>
         {phien ? (
-          <KhungUngDung key={phien.maPhien} phien={phien} onHetPhien={hetPhien} />
+          <KhungUngDung key={phien.maPhien} phien={phien} onHetPhien={hetPhien} dongHo={dongHo} />
         ) : (
           <ManXacThuc onDaDangNhap={setPhien} moPhong={moPhong} dongHo={dongHo} />
         )}

@@ -12,6 +12,7 @@ import type {
   SuaHoSoDauVao,
   VaiHeThong,
 } from '../luat/taiKhoan'
+import type { DauVet, LocDuAnDauVao, SuaDuAnDauVao, TaoDuAnDauVao, TrangThaiDuAn } from '../luat/duAn'
 
 export interface HoSo {
   id: string
@@ -38,6 +39,22 @@ export interface Phien {
 export interface DuAnTomTat {
   id: string
   ten: string
+}
+
+/** Người ghi trong dấu vết: tên hiển thị là tên hiện tại của tài khoản lúc đọc. */
+export interface NguoiDauVet {
+  id: string
+  tenHienThi: string
+}
+
+/** Một Dự án đầy đủ: tên, mô tả, trạng thái và dấu vết. */
+export interface DuAn {
+  id: string
+  ten: string
+  /** Chuỗi rỗng khi không có mô tả. */
+  moTa: string
+  trangThai: TrangThaiDuAn
+  dauVet: DauVet<NguoiDauVet>
 }
 
 /** Kết quả của các lệnh không được lộ email có tài khoản hay không: luôn cùng một thông báo. */
@@ -93,4 +110,31 @@ export interface KhoDuLieu {
    * `PHAI_CON_PM` (hạ PM cuối cùng, kể cả PM tự hạ mình).
    */
   doiVai(phien: Phien | null, nguoiDungId: string, dauVao: DoiVaiDauVao): Promise<KetQua<NguoiDungTomTat>>
+  /**
+   * Tạo Dự án đang hoạt động; người tạo là người gọi, ngày tạo là `bayGio`, chưa có phần chỉnh
+   * sửa. Chỉ PM. Lỗi: `KHONG_CO_QUYEN`, `KHONG_HOP_LE` (tên rỗng, chỉ khoảng trắng, quá 120 ký tự).
+   */
+  taoDuAn(phien: Phien | null, dauVao: TaoDuAnDauVao, bayGio: Date): Promise<KetQua<DuAn>>
+  /**
+   * Mọi Dự án, lọc theo trạng thái nếu có; thứ tự không bảo đảm, giao diện tự xếp. Chỉ PM (người
+   * trong dự án ở ticket 05). Lỗi: `KHONG_CO_QUYEN`, `KHONG_HOP_LE` (trạng thái lọc sai).
+   */
+  danhSachDuAn(phien: Phien | null, loc?: LocDuAnDauVao): Promise<KetQua<DuAn[]>>
+  /** Một Dự án, kể cả đã Lưu trữ. Chỉ PM. Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`. */
+  layDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<DuAn>>
+  /**
+   * Sửa tên và/hoặc mô tả; cập nhật người và ngày chỉnh sửa gần nhất (`bayGio`). Chỉ PM.
+   * Lỗi (không đổi gì): `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DA_LUU_TRU`, `KHONG_HOP_LE`.
+   */
+  suaDuAn(phien: Phien | null, duAnId: string, dauVao: SuaDuAnDauVao, bayGio: Date): Promise<KetQua<DuAn>>
+  /**
+   * Lưu trữ Dự án: từ đó mọi lệnh ghi lên nó trả `DU_AN_DA_LUU_TRU`, nhưng vẫn đọc được. Cập nhật
+   * dấu vết chỉnh sửa. Chỉ PM. Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DA_LUU_TRU`.
+   */
+  luuTruDuAn(phien: Phien | null, duAnId: string, bayGio: Date): Promise<KetQua<DuAn>>
+  /**
+   * Mở lại Dự án đã Lưu trữ: sửa được trở lại. Cập nhật dấu vết chỉnh sửa. Chỉ PM.
+   * Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DANG_HOAT_DONG`.
+   */
+  moLaiDuAn(phien: Phien | null, duAnId: string, bayGio: Date): Promise<KetQua<DuAn>>
 }
