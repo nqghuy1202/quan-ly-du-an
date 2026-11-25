@@ -132,6 +132,10 @@ const MA_TU_CSDL: readonly MaLoi[] = [
 export const THONG_BAO_TASK_CHUA_CO_TREN_SUPABASE =
   'Máy chủ chưa hỗ trợ Task. Chức năng này sẽ có khi cơ sở dữ liệu được cập nhật.'
 
+/** Lệnh repo GitHub chưa có trên bản Supabase (bảng và phân quyền từng dòng làm ở ticket 17). */
+export const THONG_BAO_REPO_CHUA_CO_TREN_SUPABASE =
+  'Máy chủ chưa hỗ trợ gắn repo GitHub. Chức năng này sẽ có khi cơ sở dữ liệu được cập nhật.'
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Id không phải uuid thì chắc chắn không có trong cơ sở dữ liệu (và gửi đi sẽ gây lỗi kiểu). */
@@ -370,6 +374,13 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     const mo = phien ? phienDangMo.get(phien.maPhien) : undefined
     if (!phien || !mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
     return thatBai('LOI_HE_THONG', THONG_BAO_TASK_CHUA_CO_TREN_SUPABASE)
+  }
+
+  /** Lệnh repo GitHub trên bản này: như `taskChuaCo`, báo chưa hỗ trợ. Không gọi mạng. */
+  function repoChuaCo(phien: Phien | null): KetQua<never> {
+    const mo = phien ? phienDangMo.get(phien.maPhien) : undefined
+    if (!phien || !mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
+    return thatBai('LOI_HE_THONG', THONG_BAO_REPO_CHUA_CO_TREN_SUPABASE)
   }
 
   return {
@@ -716,6 +727,19 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
 
     async layTask(phien: Phien | null) {
       return taskChuaCo(phien)
+    },
+
+    // CHƯA CÀI (ticket 17): repo GitHub trên Supabase. Người chưa đăng nhập vẫn nhận CHUA_DANG_NHAP.
+    async ganRepoVaoDuAn(phien: Phien | null) {
+      return repoChuaCo(phien)
+    },
+
+    async goRepoKhoiDuAn(phien: Phien | null) {
+      return repoChuaCo(phien)
+    },
+
+    async danhSachRepoCuaDuAn(phien: Phien | null) {
+      return repoChuaCo(phien)
     },
   }
 }

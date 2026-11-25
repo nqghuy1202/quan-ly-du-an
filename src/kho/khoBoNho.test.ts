@@ -1,5 +1,6 @@
 import { BANG_CA_QUYEN, CAC_HANH_DONG } from './bangCaQuyen'
 import { chayBangCaQuyen, chayBoTestHopDong, type BanCaiHopDong } from './hopDong'
+import { chayHopDongRepo } from './hopDongRepo'
 import { taoKhoBoNho, type ThuMoPhong } from './khoBoNho'
 import { CAC_VAI } from '../luat/taiKhoan'
 
@@ -28,6 +29,8 @@ function taoBanCai(): BanCaiHopDong {
 chayBoTestHopDong('bản bộ nhớ', taoBanCai)
 
 chayBangCaQuyen('bản bộ nhớ', taoBanCai)
+
+chayHopDongRepo('bản bộ nhớ', taoBanCai)
 
 describe('bảng ca dùng chung cho quyền (dữ liệu)', () => {
   it('mọi hành động có đủ dòng cho từng vai, trong và ngoài Dự án, khi Dự án đang hoạt động', () => {

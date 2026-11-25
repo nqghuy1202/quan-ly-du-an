@@ -21,6 +21,7 @@ import type {
   TrangThaiDuAn,
 } from '../luat/duAn'
 import type { TaoTaskDauVao, TrangThaiTask } from '../luat/task'
+import type { GanRepoDauVao } from '../luat/github'
 
 export interface HoSo {
   id: string
@@ -88,6 +89,11 @@ export interface Task {
   trangThai: TrangThaiTask
   soLanTraLai: number
   dauVet: DauVet<NguoiDauVet>
+}
+
+/** Một repo GitHub gắn vào Dự án: tên dạng `chu-so-huu/ten-repo`, giữ chữ hoa chữ thường như lúc gắn. */
+export interface RepoDuAn {
+  tenRepo: string
 }
 
 /** Kết quả của các lệnh không được lộ email có tài khoản hay không: luôn cùng một thông báo. */
@@ -216,4 +222,21 @@ export interface KhoDuLieu {
    * gọi không thấy Dự án của nó: không lộ là có tồn tại).
    */
   layTask(phien: Phien | null, taskId: string): Promise<KetQua<Task>>
+  /**
+   * Gắn repo GitHub vào Dự án bằng tên `chu-so-huu/ten-repo` (không phân biệt hoa thường khi so
+   * trùng). PM hoặc Support của Dự án. Chỉ ghi tên, không gọi GitHub. Lỗi (không đổi gì), theo thứ
+   * tự: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY` (như `suaDuAn`), `DU_AN_DA_LUU_TRU`,
+   * `REPO_KHONG_HOP_LE` (kèm lỗi ở ô `repo`), `REPO_DA_GAN`.
+   */
+  ganRepoVaoDuAn(phien: Phien | null, duAnId: string, dauVao: GanRepoDauVao): Promise<KetQua<RepoDuAn>>
+  /**
+   * Gỡ repo khỏi Dự án (tên không phân biệt hoa thường). PM hoặc Support của Dự án. Lỗi (không đổi
+   * gì): `KHONG_CO_QUYEN`, `KHONG_TIM_THAY` (như `suaDuAn`, hoặc repo chưa gắn), `DU_AN_DA_LUU_TRU`.
+   */
+  goRepoKhoiDuAn(phien: Phien | null, duAnId: string, tenRepo: string): Promise<KetQua<null>>
+  /**
+   * Repo gắn vào Dự án; thứ tự không bảo đảm, giao diện tự xếp. Ai thấy Dự án thì thấy danh sách
+   * này, kể cả Dự án đã Lưu trữ. Lỗi: `KHONG_TIM_THAY` (như `layDuAn`).
+   */
+  danhSachRepoCuaDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<RepoDuAn[]>>
 }

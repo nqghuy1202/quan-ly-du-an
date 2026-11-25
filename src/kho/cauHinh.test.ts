@@ -105,6 +105,9 @@ describe('chọn bản cài Kho theo cấu hình môi trường', () => {
         await kho.taoTask(phien, 'du-an', { tieuDe: 'X', nguoiThucHienId: 'a', nguoiKiemTraId: 'b' }, LUC),
         await kho.danhSachTask(phien, 'du-an'),
         await kho.layTask(phien, 'task'),
+        await kho.ganRepoVaoDuAn(phien, 'du-an', { repo: 'a/b' }),
+        await kho.goRepoKhoiDuAn(phien, 'du-an', 'a/b'),
+        await kho.danhSachRepoCuaDuAn(phien, 'du-an'),
         await kho.dangXuat(phien),
       ]) {
         expect(kq.ok || kq.loi.ma).toBe('CHUA_DANG_NHAP')

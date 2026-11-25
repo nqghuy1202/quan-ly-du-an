@@ -14,9 +14,11 @@ import type {
   NguoiDauVet,
   NguoiDungTomTat,
   Phien,
+  RepoDuAn,
   Task,
   ThongBaoChung,
 } from './khoDuLieu'
+import { khoaRepo, kiemTraRepo, type GanRepoDauVao } from '../luat/github'
 import {
   TRANG_THAI_TASK_BAN_DAU,
   duocXemTask,
@@ -173,6 +175,8 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   /** Người trong dự án: duAnId -> tập id tài khoản. */
   const nguoiTheoDuAn = new Map<string, Set<string>>()
   const taskTheoId = new Map<string, BanGhiTask>()
+  /** Repo GitHub của Dự án: duAnId -> tên repo, theo thứ tự gắn. */
+  const repoTheoDuAn = new Map<string, string[]>()
   let demNguoiDung = 0
   let demPhien = 0
   let demMa = 0
@@ -631,6 +635,46 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       // Không tồn tại và không thấy được trả cùng một lỗi: không lộ rằng Task có tồn tại.
       if (!task || !duocXemTask(nhinTuDuAn(xt.giaTri, task.duAnId))) return thatBai('KHONG_TIM_THAY')
       return thanhCong(docTask(task))
+    },
+
+    async ganRepoVaoDuAn(phien: Phien | null, duAnId: string, dauVao: GanRepoDauVao) {
+      const xt = quanLyDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { duAn, nguoiGoi } = xt.giaTri
+      const lyDo = kiemGhiDuAn({ ...nguoiGoi, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraRepo.gan(dauVao)
+      if (!kt.ok) return thatBai('REPO_KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const { repo } = kt.giaTri
+      const danhSach = repoTheoDuAn.get(duAnId) ?? []
+      if (danhSach.some((da) => khoaRepo(da) === khoaRepo(repo))) {
+        return thatBai('REPO_DA_GAN', undefined, { repo: THONG_BAO_MAC_DINH.REPO_DA_GAN })
+      }
+      repoTheoDuAn.set(duAnId, [...danhSach, repo])
+      const ketQua: RepoDuAn = { tenRepo: repo }
+      return thanhCong(ketQua)
+    },
+
+    async goRepoKhoiDuAn(phien: Phien | null, duAnId: string, tenRepo: string) {
+      const xt = quanLyDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { duAn, nguoiGoi } = xt.giaTri
+      const lyDo = kiemGhiDuAn({ ...nguoiGoi, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const danhSach = repoTheoDuAn.get(duAnId) ?? []
+      const khoa = typeof tenRepo === 'string' ? khoaRepo(tenRepo) : null
+      if (khoa === null || !danhSach.some((da) => khoaRepo(da) === khoa)) return thatBai('KHONG_TIM_THAY')
+      repoTheoDuAn.set(
+        duAnId,
+        danhSach.filter((da) => khoaRepo(da) !== khoa),
+      )
+      return thanhCong(null)
+    },
+
+    async danhSachRepoCuaDuAn(phien: Phien | null, duAnId: string) {
+      const xt = xemDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      return thanhCong((repoTheoDuAn.get(duAnId) ?? []).map((tenRepo): RepoDuAn => ({ tenRepo })))
     },
   }
 }
