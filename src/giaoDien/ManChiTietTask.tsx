@@ -8,15 +8,22 @@ import { Text } from '@astryxdesign/core/Text'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
-import type { Phien, Task } from '../kho/khoDuLieu'
+import type { DuAn, NguoiCuaTask, Phien, Task } from '../kho/khoDuLieu'
 import { dinhDangNgayGio } from '../luat/duAn'
-import { TEN_TRANG_THAI_TASK, dinhDangNgay } from '../luat/task'
+import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay } from '../luat/task'
+import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
+import { PhanSuaTask } from './PhanSuaTask'
 
 interface Props {
   phien: Phien
+  /** Vai hệ thống của người đang đăng nhập, để ẩn biểu mẫu sửa theo cùng luật với Kho. */
+  vai: VaiHeThong
   taskId: string
+  /** Trạng thái của Dự án chứa Task: Dự án đã Lưu trữ thì Task chỉ xem. */
+  trangThaiDuAn: DuAn['trangThai']
+  dongHo: () => Date
   /** Tên Dự án chứa Task, cho nút quay lại. */
   tenDuAn: string
   /** Thông báo thành công mang sang từ màn trước (vd. vừa tạo xong). */
@@ -25,12 +32,36 @@ interface Props {
   onHetPhien: () => void
 }
 
-/** Chi tiết một Task: người được giao, hạn, trạng thái, số lần bị Trả lại và dấu vết. Chỉ xem. */
-export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayLai, onHetPhien }: Props) {
+/** Dòng người được giao; người đã rời Dự án kèm dấu hiệu "đã rời dự án". */
+function DongNguoi({ nhan, nguoi }: { nhan: string; nguoi: NguoiCuaTask }) {
+  return (
+    <HStack gap={2} vAlign="center" wrap="wrap">
+      <Text>{`${nhan}: ${nguoi.tenHienThi}`}</Text>
+      {nguoi.daRoiDuAn && <Token label={THONG_BAO_SUA_TASK.daRoiDuAn} color="orange" />}
+    </HStack>
+  )
+}
+
+/**
+ * Chi tiết một Task: người được giao, hạn, trạng thái, số lần bị Trả lại và dấu vết. PM hoặc Support
+ * của Dự án sửa được và đổi người khi Task chưa ở trạng thái cuối; người khác chỉ xem, kèm lý do.
+ */
+export function ManChiTietTask({
+  phien,
+  vai,
+  taskId,
+  trangThaiDuAn,
+  dongHo,
+  tenDuAn,
+  thongBaoBanDau,
+  onQuayLai,
+  onHetPhien,
+}: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task> } | null>(null)
   const tai = daTai && daTai.lan === lanTai ? daTai.kq : null
+  const [thongBaoSua, setThongBaoSua] = useState<string | null>(null)
 
   useEffect(() => {
     let huy = false
@@ -84,13 +115,14 @@ export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayL
         <Heading level={2}>{task.tieuDe}</Heading>
         <Token label={TEN_TRANG_THAI_TASK[task.trangThai]} color={MAU_TRANG_THAI_TASK[task.trangThai]} />
       </HStack>
-      {thongBaoBanDau && <Banner status="success" title={thongBaoBanDau} role="status" />}
+      {thongBaoBanDau && thongBaoSua === null && <Banner status="success" title={thongBaoBanDau} role="status" />}
+      {thongBaoSua !== null && <Banner status="success" title={thongBaoSua} role="status" />}
 
       <VStack gap={1} role="group" aria-label="Thông tin Task">
         <Heading level={3}>Thông tin</Heading>
         <Text>{`Trạng thái: ${TEN_TRANG_THAI_TASK[task.trangThai]}`}</Text>
-        <Text>{`Người thực hiện: ${task.nguoiThucHien.tenHienThi}`}</Text>
-        <Text>{`Người kiểm tra: ${task.nguoiKiemTra.tenHienThi}`}</Text>
+        <DongNguoi nhan="Người thực hiện" nguoi={task.nguoiThucHien} />
+        <DongNguoi nhan="Người kiểm tra" nguoi={task.nguoiKiemTra} />
         <Text>{`Hạn: ${task.han === null ? 'Không có hạn' : dinhDangNgay(task.han)}`}</Text>
         <Text>{`Số lần bị Trả lại: ${task.soLanTraLai}`}</Text>
       </VStack>
@@ -114,6 +146,21 @@ export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayL
         )}
         <Text>Ngày giờ theo giờ Việt Nam.</Text>
       </VStack>
+
+      <PhanSuaTask
+        key={task.id}
+        phien={phien}
+        vai={vai}
+        task={task}
+        trangThaiDuAn={trangThaiDuAn}
+        dongHo={dongHo}
+        onDaCapNhat={(moi, thongBao) => {
+          setDaTai({ lan: lanTai, kq: { ok: true, giaTri: moi } })
+          setThongBaoSua(thongBao)
+        }}
+        onCanDocLai={() => setLanTai((n) => n + 1)}
+        onHetPhien={onHetPhien}
+      />
     </VStack>
   )
 }

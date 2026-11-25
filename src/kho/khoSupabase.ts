@@ -717,5 +717,17 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     async layTask(phien: Phien | null) {
       return taskChuaCo(phien)
     },
+
+    async suaTask(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
+    async doiNguoiTask(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
+    async danhSachTaskNguoiDangGiu(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
   }
 }

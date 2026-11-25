@@ -80,6 +80,8 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
     thongBaoBanDau ? { loai: 'thanhCong', noiDung: thongBaoBanDau } : null,
   )
   const [manTask, setManTask] = useState<ManTask | null>(null)
+  // Thêm hay gỡ người đổi dấu hiệu "đã rời dự án" trên Task: đọc lại bảng Task.
+  const [lanTaiTask, setLanTaiTask] = useState(0)
 
   useEffect(() => {
     let huy = false
@@ -121,6 +123,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
   }
 
   function doiDanhSachNguoi(capNhat: (cu: NguoiTrongDuAn[]) => NguoiTrongDuAn[]) {
+    setLanTaiTask((n) => n + 1)
     setDaTaiNguoi((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq: { ok: true, giaTri: capNhat(cu.kq.giaTri) } } : cu))
   }
 
@@ -242,7 +245,10 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       <ManChiTietTask
         key={manTask.taskId}
         phien={phien}
+        vai={vai}
         taskId={manTask.taskId}
+        trangThaiDuAn={duAn.trangThai}
+        dongHo={dongHo}
         tenDuAn={duAn.ten}
         thongBaoBanDau={manTask.thongBao}
         onQuayLai={() => setManTask(null)}
@@ -324,10 +330,12 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         onThuLai={() => setLanTaiNguoi((n) => n + 1)}
         onDoiDanhSach={doiDanhSachNguoi}
         onCanDocLai={docLai}
+        onMoTask={(taskId) => setManTask({ loai: 'chiTiet', taskId, thongBao: null })}
         onHetPhien={onHetPhien}
       />
 
       <PhanTaskCuaDuAn
+        key={lanTaiTask}
         phien={phien}
         duAnId={duAnId}
         lyDoKhongTao={lyDoKhongTaoTaskMoi}

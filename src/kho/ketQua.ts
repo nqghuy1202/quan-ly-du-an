@@ -22,6 +22,8 @@ export type MaLoi =
   | 'NGUOI_NGOAI_DU_AN'
   /** Cùng một người vừa là Người thực hiện vừa là Người kiểm tra. */
   | 'TRUNG_NGUOI'
+  /** Task đã Hoàn thành hoặc Huỷ (trạng thái cuối): không sửa, không đổi người được nữa. */
+  | 'TASK_DA_CHOT'
   /** Không gọi được máy chủ (mất mạng, máy chủ lỗi, quá nhiều yêu cầu); chỉ bản cài có I/O trả mã này. */
   | 'LOI_HE_THONG'
 
@@ -67,5 +69,6 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   NGUOI_NGOAI_DU_AN:
     'Người được chọn không ở trong Dự án. Chỉ chọn được người đang ở trong Dự án làm Người thực hiện hay Người kiểm tra.',
   TRUNG_NGUOI: 'Người kiểm tra phải khác Người thực hiện: không ai tự duyệt việc của mình.',
+  TASK_DA_CHOT: 'Task đã Hoàn thành hoặc Huỷ nên không sửa hay đổi người được nữa.',
   LOI_HE_THONG: 'Không kết nối được máy chủ hoặc máy chủ đang lỗi. Hãy thử lại sau ít phút.',
 }

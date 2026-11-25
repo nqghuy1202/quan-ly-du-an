@@ -12,7 +12,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { Phien, Task } from '../kho/khoDuLieu'
 import { dinhDangNgayGio } from '../luat/duAn'
-import { TEN_TRANG_THAI_TASK, dinhDangNgay, xepTask, type TrangThaiTask } from '../luat/task'
+import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay, xepTask, type TrangThaiTask } from '../luat/task'
 import { useKho } from './khoContext'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 
@@ -33,6 +33,8 @@ type Dong = {
   trangThai: TrangThaiTask
   nguoiThucHien: string
   nguoiKiemTra: string
+  thucHienDaRoi: boolean
+  kiemTraDaRoi: boolean
   han: string
   taoBoi: string
 }
@@ -44,9 +46,21 @@ function thanhDong(task: Task): Dong {
     trangThai: task.trangThai,
     nguoiThucHien: task.nguoiThucHien.tenHienThi,
     nguoiKiemTra: task.nguoiKiemTra.tenHienThi,
+    thucHienDaRoi: task.nguoiThucHien.daRoiDuAn === true,
+    kiemTraDaRoi: task.nguoiKiemTra.daRoiDuAn === true,
     han: task.han === null ? 'Không có hạn' : dinhDangNgay(task.han),
     taoBoi: `${task.dauVet.taoBoi.tenHienThi}, ${dinhDangNgayGio(task.dauVet.taoLuc)}`,
   }
+}
+
+/** Tên người được giao; người đã rời Dự án kèm dấu hiệu "đã rời dự án". */
+function TenNguoi({ ten, daRoi }: { ten: string; daRoi: boolean }) {
+  return (
+    <HStack gap={2} vAlign="center" wrap="wrap">
+      <Text>{ten}</Text>
+      {daRoi && <Token label={THONG_BAO_SUA_TASK.daRoiDuAn} color="orange" />}
+    </HStack>
+  )
 }
 
 /** Phần "Task" của màn chi tiết Dự án: bảng Task đơn giản, nút tạo Task (hoặc lý do không tạo được). */
@@ -88,13 +102,13 @@ export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHe
       key: 'nguoiThucHien',
       header: 'Người thực hiện',
       width: proportional(1),
-      renderCell: (dong) => <Text>{dong.nguoiThucHien}</Text>,
+      renderCell: (dong) => <TenNguoi ten={dong.nguoiThucHien} daRoi={dong.thucHienDaRoi} />,
     },
     {
       key: 'nguoiKiemTra',
       header: 'Người kiểm tra',
       width: proportional(1),
-      renderCell: (dong) => <Text>{dong.nguoiKiemTra}</Text>,
+      renderCell: (dong) => <TenNguoi ten={dong.nguoiKiemTra} daRoi={dong.kiemTraDaRoi} />,
     },
     { key: 'han', header: 'Hạn', width: proportional(1), renderCell: (dong) => <Text>{dong.han}</Text> },
     { key: 'taoBoi', header: 'Người tạo, ngày tạo', width: proportional(1), renderCell: (dong) => <Text>{dong.taoBoi}</Text> },
