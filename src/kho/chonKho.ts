@@ -2,21 +2,26 @@
 // - không có cấu hình Supabase: bản bộ nhớ, có sẵn một PM chạy thử; chỉ để chạy thử trên máy;
 // - có cấu hình Supabase hợp lệ (địa chỉ và khoá công khai): bản Supabase;
 // - cấu hình sai, hoặc có khoá service trong biến VITE_*: lỗi, ứng dụng không chạy.
-// Dựng Kho không gọi mạng; chỉ các lệnh của Kho mới gọi.
+// Cổng GitHub (chỉ đọc) đi cùng bản cài: bản Supabase gọi Edge Function `doc-github` bằng chính phiên
+// đăng nhập của người dùng; bản bộ nhớ dùng bản giả (chỉ để chạy thử, không gọi mạng).
+// Dựng Kho và Cổng không gọi mạng; chỉ các lệnh của Kho và Cổng mới gọi.
 import { docCauHinhKho, type MoiTruong } from './cauHinh'
 import { PM_CHAY_THU, taoKhoBoNho, type MoPhongThu } from './khoBoNho'
 import type { KhoDuLieu } from './khoDuLieu'
 import { taoKhoSupabase } from './khoSupabase'
+import type { CongGitHub } from '../github/congGitHub'
+import { loiGia, taoCongGiaGitHub } from '../github/congGiaGitHub'
+import { taoCongGitHubEdge } from '../github/congGitHubEdge'
 
 export type KhoDaChon =
-  | { loai: 'BO_NHO'; kho: KhoDuLieu; moPhong: MoPhongThu }
-  | { loai: 'SUPABASE'; kho: KhoDuLieu; moPhong: null }
+  | { loai: 'BO_NHO'; kho: KhoDuLieu; moPhong: MoPhongThu; congGitHub: CongGitHub }
+  | { loai: 'SUPABASE'; kho: KhoDuLieu; moPhong: null; congGitHub: CongGitHub }
   | { loai: 'LOI'; thongBao: string }
 
 export interface TuyChonChonKho {
   /** Trang mà đường dẫn trong thư của Supabase đưa người dùng về (thường là địa chỉ của ứng dụng). */
   duongDanQuayLai?: string
-  /** `fetch` cho bản Supabase (test truyền bản cấm gọi mạng). */
+  /** `fetch` cho bản Supabase và Cổng GitHub gọi hàm (test truyền bản cấm gọi mạng). */
   fetch?: typeof fetch
 }
 
@@ -27,18 +32,32 @@ export function chonKho(env: MoiTruong, tuyChon: TuyChonChonKho = {}): KhoDaChon
       return cauHinh
     case 'BO_NHO': {
       const boNho = taoKhoBoNho({ pmBanDau: PM_CHAY_THU })
-      return { loai: 'BO_NHO', kho: boNho, moPhong: boNho.moPhong }
+      // Bản giả: mọi link báo không kết nối được GitHub; Task vẫn dùng được.
+      return {
+        loai: 'BO_NHO',
+        kho: boNho,
+        moPhong: boNho.moPhong,
+        congGitHub: taoCongGiaGitHub({ macDinh: loiGia('MAT_MANG') }).cong,
+      }
     }
-    case 'SUPABASE':
+    case 'SUPABASE': {
+      const kho = taoKhoSupabase({
+        url: cauHinh.url,
+        khoaCongKhai: cauHinh.khoaCongKhai,
+        ...(tuyChon.duongDanQuayLai ? { duongDanQuayLai: tuyChon.duongDanQuayLai } : {}),
+        ...(tuyChon.fetch ? { fetch: tuyChon.fetch } : {}),
+      })
       return {
         loai: 'SUPABASE',
-        kho: taoKhoSupabase({
+        kho,
+        moPhong: null,
+        congGitHub: taoCongGitHubEdge({
           url: cauHinh.url,
           khoaCongKhai: cauHinh.khoaCongKhai,
-          ...(tuyChon.duongDanQuayLai ? { duongDanQuayLai: tuyChon.duongDanQuayLai } : {}),
+          layMaTruyCap: () => kho.maTruyCapHienTai(),
           ...(tuyChon.fetch ? { fetch: tuyChon.fetch } : {}),
         }),
-        moPhong: null,
       }
+    }
   }
 }

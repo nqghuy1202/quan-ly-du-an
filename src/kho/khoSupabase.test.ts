@@ -7,6 +7,8 @@
 //   do "CHƯA KIỂM ...", để không ai đọc nhầm là đạt.
 import { describe, it } from 'vitest'
 import { chayBangCaQuyen, chayBoTestHopDong } from './hopDong'
+import { chayHopDongLienKet } from './hopDongLienKet'
+import { chayHopDongRepo } from './hopDongRepo'
 import { chayHopDongSuaTask } from './hopDongSuaTask'
 import { cauHinhTestSupabase, taoBoBanCaiSupabase } from './hopDongSupabase'
 
@@ -19,15 +21,11 @@ switch (ketQua.trangThai) {
     const { taoBanCai, tuyChon } = taoBoBanCaiSupabase(ketQua.cauHinh)
     chayBoTestHopDong('bản Supabase', taoBanCai, tuyChon)
     chayBangCaQuyen('bản Supabase', taoBanCai, tuyChon)
-    // Repo GitHub chưa có trên bản Supabase (ticket 17): chưa chạy `chayHopDongRepo` ở đây.
-    describe('Repo GitHub của Dự án — bản Supabase', () => {
-      it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh repo GitHub (ticket 17 cài và chạy chayHopDongRepo)', () => {})
-    })
+    // Repo GitHub của Dự án (ticket 15) trên bản Supabase (ticket 17: khoSupabaseGitHub.ts, migration lát 4).
+    chayHopDongRepo('bản Supabase', taoBanCai, tuyChon)
     chayHopDongSuaTask('bản Supabase', taoBanCai, tuyChon)
-    // Link issue hoặc PR trên Task chưa có trên bản Supabase (ticket 17).
-    describe('Link issue hoặc PR trên Task — bản Supabase', () => {
-      it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh link GitHub của Task (ticket 17 cài và chạy chayHopDongLienKet)', () => {})
-    })
+    // Link issue hoặc PR trên Task (ticket 16) trên bản Supabase (ticket 17).
+    chayHopDongLienKet('bản Supabase', taoBanCai, tuyChon)
     break
   }
   case 'THIEU_CAU_HINH': {

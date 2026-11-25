@@ -4,7 +4,7 @@ import { themes, defaultThemeSlug } from './astryx-themes'
 import type { KhoDuLieu, Phien } from './kho/khoDuLieu'
 import { PM_CHAY_THU, taoKhoBoNho, type MoPhongThu } from './kho/khoBoNho'
 import type { CongGitHub } from './github/congGitHub'
-import { loiGia, taoCongGiaGitHub } from './github/congGiaGitHub'
+import { taoCongKhongKhaDung } from './github/congKhongKhaDung'
 import { CongGitHubContext } from './giaoDien/congGitHubContext'
 import { KhoContext } from './giaoDien/khoContext'
 import { KhungUngDung } from './giaoDien/KhungUngDung'
@@ -27,23 +27,24 @@ interface Props {
    */
   dongHo?: () => Date
   /**
-   * Cổng GitHub (chỉ đọc) để đọc trạng thái link issue và PR trên Task. Chưa có bản gọi Edge
-   * Function (ticket 17), nên khi không truyền thì dùng bản giả báo mất mạng cho mọi link: Task vẫn
-   * dùng được, chỉ không có trạng thái GitHub. Test truyền bản giả theo kịch bản.
+   * Cổng GitHub (chỉ đọc) để đọc trạng thái link issue và PR trên Task. `main.tsx` chọn theo cấu
+   * hình môi trường (`chonKho`: bản gọi Edge Function khi chạy Supabase, bản giả khi chạy bản bộ
+   * nhớ). Không truyền thì dùng cổng báo `GITHUB_KHONG_KHA_DUNG` cho mọi link: Task vẫn dùng được,
+   * chỉ không có trạng thái GitHub. Test truyền bản giả theo kịch bản.
    */
   congGitHub?: CongGitHub
 }
 
 const gioCuaMay = () => new Date()
 
-/** Cổng tạm cho tới khi có Edge Function: mọi link đều báo không kết nối được GitHub. */
-const CONG_CHUA_NOI: CongGitHub = taoCongGiaGitHub({ macDinh: loiGia('MAT_MANG') }).cong
+/** Chưa cấu hình cổng nào: mọi link báo GitHub không khả dụng thay vì làm hỏng trang. */
+const CONG_CHUA_CAU_HINH: CongGitHub = taoCongKhongKhaDung()
 
 export function App({
   kho: khoTruyenVao,
   moPhong: moPhongTruyenVao,
   dongHo = gioCuaMay,
-  congGitHub = CONG_CHUA_NOI,
+  congGitHub = CONG_CHUA_CAU_HINH,
 }: Props) {
   const [{ kho, moPhong }] = useState<{ kho: KhoDuLieu; moPhong: MoPhongThu | null }>(() => {
     if (khoTruyenVao) return { kho: khoTruyenVao, moPhong: moPhongTruyenVao ?? null }

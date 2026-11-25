@@ -188,7 +188,8 @@ export function taoBoBanCaiSupabase(cauHinh: CauHinhTestSupabase): BoBanCaiSupab
       // Giờ do máy chủ đặt; Supabase Auth không phân biệt mã sai, đã dùng hay hết hạn.
       dongHoCuaKho: true,
       gopLoiMaDatLai: true,
-      // Task trên Supabase đã có (ticket 10: migration lát 2 và khoSupabaseTask.ts); các ca Task chạy
+      // Task trên Supabase đã có (ticket 10: migration lát 2 và khoSupabaseTask.ts), cùng link GitHub của
+      // Task (ticket 17: khoSupabaseGitHub.ts, migration lát 4); các ca Task và link chạy
       // trên Supabase thật khi chủ dự án chạy lệnh riêng, và vẫn "CHƯA KIỂM" trong `npm test`.
       coTask: true,
       // Dựng Task ở trạng thái bất kỳ nhờ khoá service (xem `datTrangThaiTask` ở trên).
