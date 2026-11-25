@@ -17,7 +17,7 @@ createRoot(root).render(
     {khoDaChon.loai === 'LOI' ? (
       <ManLoiCauHinh thongBao={khoDaChon.thongBao} />
     ) : (
-      <App kho={khoDaChon.kho} moPhong={khoDaChon.moPhong} />
+      <App kho={khoDaChon.kho} moPhong={khoDaChon.moPhong} congGitHub={khoDaChon.congGitHub} />
     )}
   </StrictMode>,
 )
