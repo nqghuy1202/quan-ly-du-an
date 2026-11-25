@@ -13,7 +13,8 @@
 // - Supabase Auth không phân biệt mã đặt lại sai, đã dùng hay hết hạn: cả ba trả `MA_KHONG_HOP_LE`.
 // - Đăng ký lại một email đã đăng ký nhưng chưa xác nhận: Supabase gửi lại thư thay vì báo trùng.
 //
-// CHƯA CÀI: các lệnh Task (taoTask, danhSachTask, layTask) chỉ trả "chưa hỗ trợ"; ticket 10 cài thật.
+// Lệnh Task (ticket 07, 08, 09) nằm ở khoSupabaseTask.ts, dùng bảng public.task trong
+// supabase/migrations/20261125000200_lat_2_task.sql. Lệnh repo GitHub chưa cài (ticket 17).
 //
 // CỔNG CHƯA KIỂM: các lệnh cần mạng chỉ chạy được với Supabase thật (lệnh riêng, xem
 // src/kho/khoSupabase.test.ts). Cổng chỉ kiểm các nhánh không gọi mạng.
@@ -24,6 +25,7 @@ import {
   type SupabaseClient,
 } from '@supabase/supabase-js'
 import { THONG_BAO_MAC_DINH, thanhCong, thatBai, type KetQua, type MaLoi } from './ketQua'
+import { taoLenhTaskSupabase } from './khoSupabaseTask'
 import type { DuAn, DuAnTomTat, HoSo, KhoDuLieu, NguoiDungTomTat, Phien } from './khoDuLieu'
 import {
   duocQuanLyDuAn,
@@ -124,13 +126,6 @@ const MA_TU_CSDL: readonly MaLoi[] = [
   'NGUOI_NGOAI_DU_AN',
   'TRUNG_NGUOI',
 ]
-
-/**
- * Lệnh Task chưa có trên bản Supabase (bảng, phân quyền từng dòng và hàm của Task làm ở ticket 10).
- * Bộ test hợp đồng và bảng ca phần Task bị bỏ qua cho bản này (`coTask: false`, hopDongSupabase.ts).
- */
-export const THONG_BAO_TASK_CHUA_CO_TREN_SUPABASE =
-  'Máy chủ chưa hỗ trợ Task. Chức năng này sẽ có khi cơ sở dữ liệu được cập nhật.'
 
 /** Lệnh repo GitHub chưa có trên bản Supabase (bảng và phân quyền từng dòng làm ở ticket 17). */
 export const THONG_BAO_REPO_CHUA_CO_TREN_SUPABASE =
@@ -369,12 +364,8 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     return docLaiDuAn(nguoiGoi.db, duAnId)
   }
 
-  /** Lệnh Task trên bản này: chưa đăng nhập thì `CHUA_DANG_NHAP`, còn lại báo chưa hỗ trợ. Không gọi mạng. */
-  function taskChuaCo(phien: Phien | null): KetQua<never> {
-    const mo = phien ? phienDangMo.get(phien.maPhien) : undefined
-    if (!phien || !mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
-    return thatBai('LOI_HE_THONG', THONG_BAO_TASK_CHUA_CO_TREN_SUPABASE)
-  }
+  /** Lệnh Task (ticket 10): xem khoSupabaseTask.ts. Dùng chung xác thực và luật xem, ghi Dự án ở đây. */
+  const lenhTask = taoLenhTaskSupabase({ xacThuc, xemDuAn, quanLyDuAn, laUuid, loiTuCsdl })
 
   /** Lệnh repo GitHub trên bản này: như `taskChuaCo`, báo chưa hỗ trợ. Không gọi mạng. */
   function repoChuaCo(phien: Phien | null): KetQua<never> {
@@ -716,18 +707,8 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       return thanhCong(null)
     },
 
-    // CHƯA CÀI (ticket 10): Task trên Supabase. Người chưa đăng nhập vẫn nhận CHUA_DANG_NHAP như mọi lệnh.
-    async taoTask(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
-
-    async danhSachTask(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
-
-    async layTask(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
+    // Lệnh Task (ticket 07, 08, 09): bản Supabase ở khoSupabaseTask.ts.
+    ...lenhTask,
 
     // CHƯA CÀI (ticket 17): repo GitHub trên Supabase. Người chưa đăng nhập vẫn nhận CHUA_DANG_NHAP.
     async ganRepoVaoDuAn(phien: Phien | null) {
@@ -740,26 +721,6 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
 
     async danhSachRepoCuaDuAn(phien: Phien | null) {
       return repoChuaCo(phien)
-    },
-
-    async viecCuaToi(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
-
-    async choToiDuyet(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
-
-    async suaTask(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
-
-    async doiNguoiTask(phien: Phien | null) {
-      return taskChuaCo(phien)
-    },
-
-    async danhSachTaskNguoiDangGiu(phien: Phien | null) {
-      return taskChuaCo(phien)
     },
   }
 }
