@@ -28,5 +28,8 @@ Dùng đúng các từ này trong mã, test, giao diện và ticket. Nguồn: `.
 | **Bộ test hợp đồng** | Một bộ test chạy lại cho mọi bản cài của Kho dữ liệu. |
 | **Bảng ca dùng chung** | Bảng (vai, trạng thái, người gọi, bước muốn làm, kết quả mong đợi) là nguồn sự thật của ma trận chuyển trạng thái và quyền xem. Bản bộ nhớ chạy trong cổng; bản Supabase chạy tay trên Supabase thật. |
 | **Cổng GitHub** | Giao diện thứ hai (lát 4): nhận danh sách repo và link, trả trạng thái đã chuẩn hoá hoặc lỗi có mã. Chỉ đọc. |
+| **Edge Function** | Hàm chạy phía Supabase. Dự án có một: `doc-github`, đọc trạng thái issue hoặc PR trên GitHub cho người đã đăng nhập, chỉ đọc, giữ token GitHub chỉ đọc trong secret. |
+| **Danh sách kiểm tay** | Bảy mục bắt buộc chủ dự án chạy trên Supabase thật trước khi đưa ứng dụng lên mạng (`supabase/README.md`, Phần B), vì phân quyền từng dòng là hàng rào duy nhất. Chưa kiểm xong thì chưa đưa lên mạng. |
+| **Cổng không kiểm được** | Phần `npm test` không kiểm được vì không có mạng và DB: bản Supabase, migration, phân quyền từng dòng, hàm cơ sở dữ liệu, Edge Function với GitHub thật, luồng email. Chỉ kiểm tay. |
 | **Lát 0** | Dựng khung do người làm (cài phụ thuộc, cấu hình), không giao AI. |
 | **Cổng** | Bước kiểm của Bảng ticket AI (test + review) trước khi đáp một ticket lên nhánh đích. |
