@@ -12,8 +12,11 @@ const CAU_MAN_TRONG = /bạn chưa ở dự án nào, hãy nhờ PM hoặc Suppo
 
 function dungApp(kho: KhoDuLieu = taoKhoBoNho()) {
   const user = userEvent.setup()
-  render(<App kho={kho} />)
-  return { user, kho }
+  const { container } = render(<App kho={kho} />)
+  // Astryx gắn vùng thông báo (live region, role="alert") thẳng vào body, ngoài vùng render;
+  // tìm cảnh báo trong vùng của ứng dụng để chỉ lấy Banner lỗi trên màn.
+  const ungDung = within(container)
+  return { user, kho, ungDung }
 }
 
 async function dangNhapQuaGiaoDien(user: ReturnType<typeof userEvent.setup>, email: string, matKhau = MAT_KHAU) {
@@ -68,7 +71,7 @@ describe('màn đăng nhập và đăng ký', () => {
   })
 
   it('email đã dùng (khác hoa thường) báo lỗi tiếng Việt', async () => {
-    const { user, kho } = dungApp()
+    const { user, kho, ungDung } = dungApp()
     await kho.dangKy({ email: 'binh@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Bình' })
     await user.click(screen.getByRole('button', { name: 'Chưa có tài khoản? Đăng ký' }))
     await user.type(screen.getByLabelText('Email'), 'BINH@vi-du.vn')
@@ -76,21 +79,21 @@ describe('màn đăng nhập và đăng ký', () => {
     await user.type(screen.getByLabelText('Tên hiển thị'), 'Bình khác')
     await user.click(screen.getByRole('button', { name: 'Đăng ký' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Email này đã được dùng để đăng ký.')
+    expect(await ungDung.findByRole('alert')).toHaveTextContent('Email này đã được dùng để đăng ký.')
   })
 
   it('sai mật khẩu và email chưa đăng ký hiện cùng một thông báo chung', async () => {
-    const { user, kho } = dungApp()
+    const { user, kho, ungDung } = dungApp()
     await kho.dangKy({ email: 'ha@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'Hà' })
 
     await dangNhapQuaGiaoDien(user, 'ha@vi-du.vn', 'sai-mat-khau')
-    const thongBaoSaiMatKhau = (await screen.findByRole('alert')).textContent
+    const thongBaoSaiMatKhau = (await ungDung.findByRole('alert')).textContent
 
     await user.clear(screen.getByLabelText('Email'))
     await user.clear(screen.getByLabelText('Mật khẩu'))
     await dangNhapQuaGiaoDien(user, 'chua-co@vi-du.vn')
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-    expect(screen.getByRole('alert').textContent).toBe(thongBaoSaiMatKhau)
+    await waitFor(() => expect(ungDung.getByRole('alert')).toBeInTheDocument())
+    expect(ungDung.getByRole('alert').textContent).toBe(thongBaoSaiMatKhau)
     expect(thongBaoSaiMatKhau).toContain('Email hoặc mật khẩu không đúng.')
   })
 })
@@ -129,11 +132,11 @@ describe('khung ứng dụng', () => {
         return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnCuaToi(phien)
       },
     }
-    const { user } = dungApp(kho)
+    const { user, ungDung } = dungApp(kho)
     await goc.dangKy({ email: 'g@vi-du.vn', matKhau: MAT_KHAU, tenHienThi: 'G' })
     await dangNhapQuaGiaoDien(user, 'g@vi-du.vn')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được danh sách Dự án.')
+    expect(await ungDung.findByRole('alert')).toHaveTextContent('Không tải được danh sách Dự án.')
     await user.click(screen.getByRole('button', { name: 'Thử lại' }))
     expect(await screen.findByRole('heading', { name: CAU_MAN_TRONG })).toBeInTheDocument()
   })
