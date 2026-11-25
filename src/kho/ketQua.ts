@@ -11,6 +11,7 @@ export type MaLoi =
   | 'MA_KHONG_HOP_LE'
   | 'MA_DA_DUNG'
   | 'MA_HET_HAN'
+  | 'PHAI_CON_PM'
 
 export interface LoiKho {
   ma: MaLoi
@@ -43,4 +44,6 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   MA_KHONG_HOP_LE: 'Mã đặt lại không đúng. Hãy kiểm tra email và mã trong thư.',
   MA_DA_DUNG: 'Mã đặt lại này đã được dùng. Hãy yêu cầu mã mới.',
   MA_HET_HAN: 'Mã đặt lại đã hết hạn. Hãy yêu cầu mã mới.',
+  PHAI_CON_PM:
+    'Không hạ được vai: hệ thống phải luôn còn ít nhất một PM. Hãy đặt một người khác làm PM trước.',
 }

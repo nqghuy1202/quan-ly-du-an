@@ -5,8 +5,8 @@
 // và cách thay cho việc bấm đường dẫn xác nhận (`BanCaiHopDong`).
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { KetQua, MaLoi } from './ketQua'
-import type { KhoDuLieu, Phien, ThongBaoChung } from './khoDuLieu'
-import { THONG_BAO } from '../luat/taiKhoan'
+import type { KhoDuLieu, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
+import { CAC_VAI, THONG_BAO, type VaiHeThong } from '../luat/taiKhoan'
 
 export interface BanCaiHopDong {
   kho: KhoDuLieu
@@ -19,11 +19,21 @@ export interface BanCaiHopDong {
   maDatLaiMoiNhat(email: string): Promise<string | null>
   /** Thời hạn mã đặt lại mà bản cài được cấu hình, tính bằng mili giây. */
   thoiHanMaDatLaiMs: number
+  /**
+   * Đặt vai PM cho tài khoản có email `email`, ngoài luồng của ứng dụng (thay cho việc chủ dự án
+   * tự đặt PM đầu tiên trên kho thật; bản bộ nhớ: `chuDuAn.datVaiPM`).
+   */
+  datVaiPM(email: string): Promise<void>
 }
 
 export interface TuyChonHopDong {
   /** Sinh email chưa dùng cho mỗi ca (bản cài dùng DB thật cần email khác nhau mỗi lần chạy). */
   emailMoi?: (ten: string) => string
+  /**
+   * Mỗi ca bắt đầu với kho chưa có PM nào (mặc định đúng). Kho thật đã có PM của chủ dự án thì
+   * đặt `false`: các ca "PM cuối cùng" bị bỏ qua vì không dựng được tình huống đó.
+   */
+  khoChuaCoPM?: boolean
 }
 
 const MAT_KHAU = 'matkhau-dung-1'
@@ -50,6 +60,7 @@ export function chayBoTestHopDong(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const khoChuaCoPM = tuyChon.khoChuaCoPM ?? true
 
   describe(`Kho dữ liệu (hợp đồng) — ${tenBanCai}`, () => {
     let banCai: BanCaiHopDong
@@ -355,6 +366,8 @@ export function chayBoTestHopDong(
           expect(maLoi(await kho.layHoSoCuaToi(phien))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.suaHoSo(phien, 'ai-do', { tenHienThi: 'X' }))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.danhSachDuAnCuaToi(phien))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.danhSachNguoiDung(phien))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.doiVai(phien, 'ai-do', { vai: 'PM' }))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.dangXuat(phien))).toBe('CHUA_DANG_NHAP')
         }
       })
@@ -404,6 +417,165 @@ export function chayBoTestHopDong(
         const kq = await kho.suaHoSo(phienA, phienB.nguoiDungId, { tenHienThi: 'Bị sửa', githubUsername: 'ke-gian' })
         expect(maLoi(kq)).toBe('KHONG_CO_QUYEN')
         expect(giaTri(await kho.layHoSoCuaToi(phienB))).toEqual(truocB)
+      })
+    })
+
+    describe('vai hệ thống và danh sách người dùng', () => {
+      /** Đăng ký, xác nhận, đặt vai PM ngoài luồng ứng dụng rồi đăng nhập. */
+      async function taoPM(ten: string, tenHienThi = ten): Promise<Phien> {
+        const email = await dangKyDaXacNhan(ten, tenHienThi)
+        await banCai.datVaiPM(email)
+        return giaTri(await kho.dangNhap({ email, matKhau: MAT_KHAU }))
+      }
+
+      async function vaiCua(phien: Phien): Promise<VaiHeThong> {
+        return giaTri(await kho.layHoSoCuaToi(phien)).vai
+      }
+
+      /** Tạo một người có vai `vai` (PM `phienPM` đổi vai giúp nếu cần). */
+      async function taoNguoiCoVai(phienPM: Phien, ten: string, vai: VaiHeThong): Promise<Phien> {
+        const phien = await dangKyVaDangNhap(ten)
+        if (vai !== 'THANH_VIEN') giaTri(await kho.doiVai(phienPM, phien.nguoiDungId, { vai }))
+        return phien
+      }
+
+      function timTrong(danhSach: NguoiDungTomTat[], id: string): NguoiDungTomTat | undefined {
+        return danhSach.find((nd) => nd.id === id)
+      }
+
+      it('PM liệt kê được mọi tài khoản với tên, email và vai', async () => {
+        const pm = await taoPM('pm-an', 'An PM')
+        const support = await taoNguoiCoVai(pm, 'support-binh', 'SUPPORT')
+        const thanhVien = await dangKyVaDangNhap('tv-chi', 'Chi')
+        // Tài khoản chưa xác nhận email cũng là một tài khoản.
+        const chuaXacNhan = giaTri(await kho.dangKy({ email: emailMoi('dung'), matKhau: MAT_KHAU, tenHienThi: 'Dũng' }))
+
+        const danhSach = giaTri(await kho.danhSachNguoiDung(pm))
+        expect(timTrong(danhSach, pm.nguoiDungId)).toEqual({
+          id: pm.nguoiDungId,
+          email: emailMoi('pm-an'),
+          tenHienThi: 'An PM',
+          vai: 'PM',
+        })
+        expect(timTrong(danhSach, support.nguoiDungId)).toEqual({
+          id: support.nguoiDungId,
+          email: emailMoi('support-binh'),
+          tenHienThi: 'support-binh',
+          vai: 'SUPPORT',
+        })
+        expect(timTrong(danhSach, thanhVien.nguoiDungId)).toEqual({
+          id: thanhVien.nguoiDungId,
+          email: emailMoi('tv-chi'),
+          tenHienThi: 'Chi',
+          vai: 'THANH_VIEN',
+        })
+        expect(timTrong(danhSach, chuaXacNhan.id)).toEqual({
+          id: chuaXacNhan.id,
+          email: emailMoi('dung'),
+          tenHienThi: 'Dũng',
+          vai: 'THANH_VIEN',
+        })
+      })
+
+      it.each<VaiHeThong>(['SUPPORT', 'THANH_VIEN'])('%s gọi danh sách người dùng trả KHONG_CO_QUYEN', async (vai) => {
+        const pm = await taoPM('pm-giang')
+        const nguoiGoi = await taoNguoiCoVai(pm, 'nguoi-goi', vai)
+        expect(maLoi(await kho.danhSachNguoiDung(nguoiGoi))).toBe('KHONG_CO_QUYEN')
+      })
+
+      it.each(CAC_VAI.flatMap((tu) => CAC_VAI.filter((den) => den !== tu).map((den) => ({ tu, den }))))(
+        'PM đổi vai $tu → $den, vai mới có hiệu lực ngay ở lần đọc sau',
+        async ({ tu, den }) => {
+          const pm = await taoPM('pm-hai')
+          const dich = await taoNguoiCoVai(pm, 'dich', tu)
+          expect(await vaiCua(dich)).toBe(tu)
+
+          const kq = giaTri(await kho.doiVai(pm, dich.nguoiDungId, { vai: den }))
+          expect(kq).toEqual(expect.objectContaining({ id: dich.nguoiDungId, vai: den }))
+
+          // Lần đọc sau, kể cả bằng phiên đang mở của chính người đó, thấy vai mới.
+          expect(await vaiCua(dich)).toBe(den)
+          expect(timTrong(giaTri(await kho.danhSachNguoiDung(pm)), dich.nguoiDungId)?.vai).toBe(den)
+          // Quyền theo vai mới có hiệu lực ngay.
+          expect(maLoi(await kho.danhSachNguoiDung(dich))).toBe(den === 'PM' ? 'THANH_CONG' : 'KHONG_CO_QUYEN')
+        },
+      )
+
+      it('PM đặt lại đúng vai đang có thì thành công và không đổi gì', async () => {
+        const pm = await taoPM('pm-lap')
+        const tv = await dangKyVaDangNhap('tv-lap')
+        expect(giaTri(await kho.doiVai(pm, tv.nguoiDungId, { vai: 'THANH_VIEN' })).vai).toBe('THANH_VIEN')
+        expect(await vaiCua(tv)).toBe('THANH_VIEN')
+      })
+
+      it.each<VaiHeThong>(['SUPPORT', 'THANH_VIEN'])(
+        '%s đổi vai bất kỳ ai, kể cả tự nâng vai mình, trả KHONG_CO_QUYEN và vai không đổi',
+        async (vai) => {
+          const pm = await taoPM('pm-khanh')
+          const nguoiGoi = await taoNguoiCoVai(pm, 'nguoi-goi', vai)
+          const khac = await dangKyVaDangNhap('nguoi-khac')
+
+          for (const vaiMoi of CAC_VAI) {
+            expect(maLoi(await kho.doiVai(nguoiGoi, nguoiGoi.nguoiDungId, { vai: vaiMoi }))).toBe('KHONG_CO_QUYEN')
+            expect(maLoi(await kho.doiVai(nguoiGoi, khac.nguoiDungId, { vai: vaiMoi }))).toBe('KHONG_CO_QUYEN')
+            expect(maLoi(await kho.doiVai(nguoiGoi, pm.nguoiDungId, { vai: vaiMoi }))).toBe('KHONG_CO_QUYEN')
+          }
+          // Không lộ gì thêm: id không tồn tại hay vai sai cũng chỉ là không có quyền.
+          expect(maLoi(await kho.doiVai(nguoiGoi, 'khong-ton-tai', { vai: 'PM' }))).toBe('KHONG_CO_QUYEN')
+          expect(maLoi(await kho.doiVai(nguoiGoi, khac.nguoiDungId, { vai: 'ADMIN' }))).toBe('KHONG_CO_QUYEN')
+
+          expect(await vaiCua(nguoiGoi)).toBe(vai)
+          expect(await vaiCua(khac)).toBe('THANH_VIEN')
+          expect(await vaiCua(pm)).toBe('PM')
+        },
+      )
+
+      it('vai không phải PM, Support hay Thành viên trả KHONG_HOP_LE và vai không đổi', async () => {
+        const pm = await taoPM('pm-lam')
+        const tv = await dangKyVaDangNhap('tv-lam')
+        for (const vaiSai of ['ADMIN', '', 'pm']) {
+          const kq = await kho.doiVai(pm, tv.nguoiDungId, { vai: vaiSai })
+          expect(maLoi(kq)).toBe('KHONG_HOP_LE')
+          if (!kq.ok) expect(kq.loi.thongBao).toBe(THONG_BAO.vaiSai)
+        }
+        expect(await vaiCua(tv)).toBe('THANH_VIEN')
+      })
+
+      it('PM đổi vai tài khoản không tồn tại trả KHONG_TIM_THAY', async () => {
+        const pm = await taoPM('pm-mai')
+        expect(maLoi(await kho.doiVai(pm, 'khong-ton-tai', { vai: 'SUPPORT' }))).toBe('KHONG_TIM_THAY')
+      })
+
+      it.skipIf(!khoChuaCoPM)('PM cuối cùng tự hạ mình trả PHAI_CON_PM và vai không đổi', async () => {
+        const pm = await taoPM('pm-cuoi')
+        for (const vaiMoi of ['SUPPORT', 'THANH_VIEN'] as const) {
+          const kq = await kho.doiVai(pm, pm.nguoiDungId, { vai: vaiMoi })
+          expect(maLoi(kq)).toBe('PHAI_CON_PM')
+          if (!kq.ok) expect(kq.loi.thongBao).toMatch(/ít nhất một PM/)
+        }
+        expect(await vaiCua(pm)).toBe('PM')
+        expect(maLoi(await kho.danhSachNguoiDung(pm))).toBe('THANH_CONG')
+      })
+
+      it.skipIf(!khoChuaCoPM)('còn PM khác thì hạ được; tới khi chỉ còn một PM thì không hạ được nữa', async () => {
+        const pmA = await taoPM('pm-a')
+        const pmB = await taoNguoiCoVai(pmA, 'pm-b', 'PM')
+        const pmC = await taoNguoiCoVai(pmA, 'pm-c', 'PM')
+
+        // Hạ PM khác khi còn PM khác.
+        expect(giaTri(await kho.doiVai(pmA, pmC.nguoiDungId, { vai: 'SUPPORT' })).vai).toBe('SUPPORT')
+        // PM tự hạ mình khi còn PM khác.
+        expect(giaTri(await kho.doiVai(pmA, pmA.nguoiDungId, { vai: 'THANH_VIEN' })).vai).toBe('THANH_VIEN')
+        expect(await vaiCua(pmA)).toBe('THANH_VIEN')
+
+        // B giờ là PM cuối cùng: tự hạ bị từ chối, vai không đổi.
+        expect(maLoi(await kho.doiVai(pmB, pmB.nguoiDungId, { vai: 'SUPPORT' }))).toBe('PHAI_CON_PM')
+        expect(await vaiCua(pmB)).toBe('PM')
+
+        // Nâng lại một PM khác thì B hạ được.
+        giaTri(await kho.doiVai(pmB, pmC.nguoiDungId, { vai: 'PM' }))
+        expect(giaTri(await kho.doiVai(pmB, pmB.nguoiDungId, { vai: 'SUPPORT' })).vai).toBe('SUPPORT')
+        expect(await vaiCua(pmC)).toBe('PM')
       })
     })
 

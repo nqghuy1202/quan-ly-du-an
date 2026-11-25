@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Theme } from '@astryxdesign/core/theme'
 import { themes, defaultThemeSlug } from './astryx-themes'
 import type { KhoDuLieu, Phien } from './kho/khoDuLieu'
-import { taoKhoBoNho, type MoPhongThu } from './kho/khoBoNho'
+import { PM_CHAY_THU, taoKhoBoNho, type MoPhongThu } from './kho/khoBoNho'
 import { KhoContext } from './giaoDien/khoContext'
 import { KhungUngDung } from './giaoDien/KhungUngDung'
 import { ManXacThuc } from './giaoDien/ManXacThuc'
@@ -24,7 +24,7 @@ const gioCuaMay = () => new Date()
 export function App({ kho: khoTruyenVao, moPhong: moPhongTruyenVao, dongHo = gioCuaMay }: Props) {
   const [{ kho, moPhong }] = useState<{ kho: KhoDuLieu; moPhong: MoPhongThu | null }>(() => {
     if (khoTruyenVao) return { kho: khoTruyenVao, moPhong: moPhongTruyenVao ?? null }
-    const boNho = taoKhoBoNho()
+    const boNho = taoKhoBoNho({ pmBanDau: PM_CHAY_THU })
     return { kho: boNho, moPhong: boNho.moPhong }
   })
   const [phien, setPhien] = useState<Phien | null>(null)

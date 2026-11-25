@@ -1,9 +1,14 @@
 import {
+  CAC_VAI,
   THONG_BAO,
   TEN_VAI,
   dangKySchema,
   datLaiMatKhauSchema,
+  doiVaiSchema,
+  duocQuanLyNguoiDung,
   duocSuaHoSo,
+  kiemDoiVai,
+  xepTheoTen,
   emailSchema,
   hetHanLuc,
   kiemTra,
@@ -46,6 +51,58 @@ describe('luật tài khoản', () => {
 
   it('tên vai bằng tiếng Việt', () => {
     expect(TEN_VAI.THANH_VIEN).toBe('Thành viên')
+  })
+})
+
+describe('luật vai hệ thống', () => {
+  it('ba vai có tên tiếng Việt', () => {
+    expect(CAC_VAI.map((vai) => TEN_VAI[vai])).toEqual(['PM', 'Support', 'Thành viên'])
+  })
+
+  it('chỉ PM quản lý người dùng', () => {
+    expect(duocQuanLyNguoiDung('PM')).toBe(true)
+    expect(duocQuanLyNguoiDung('SUPPORT')).toBe(false)
+    expect(duocQuanLyNguoiDung('THANH_VIEN')).toBe(false)
+  })
+
+  it.each(['SUPPORT', 'THANH_VIEN'] as const)('%s không đổi được vai nào, kể cả tự nâng', (vaiNguoiGoi) => {
+    for (const vaiHienTai of CAC_VAI) {
+      for (const vaiMoi of CAC_VAI) {
+        expect(kiemDoiVai({ vaiNguoiGoi, vaiHienTai, vaiMoi, soPM: 3 })).toBe('KHONG_CO_QUYEN')
+      }
+    }
+  })
+
+  it('PM đổi được mọi vai khi không đụng tới PM cuối cùng', () => {
+    for (const vaiHienTai of CAC_VAI) {
+      for (const vaiMoi of CAC_VAI) {
+        expect(kiemDoiVai({ vaiNguoiGoi: 'PM', vaiHienTai, vaiMoi, soPM: 2 })).toBeNull()
+      }
+    }
+  })
+
+  it('hạ PM cuối cùng bị từ chối; giữ nguyên PM thì vẫn được', () => {
+    expect(kiemDoiVai({ vaiNguoiGoi: 'PM', vaiHienTai: 'PM', vaiMoi: 'SUPPORT', soPM: 1 })).toBe('PHAI_CON_PM')
+    expect(kiemDoiVai({ vaiNguoiGoi: 'PM', vaiHienTai: 'PM', vaiMoi: 'THANH_VIEN', soPM: 1 })).toBe('PHAI_CON_PM')
+    expect(kiemDoiVai({ vaiNguoiGoi: 'PM', vaiHienTai: 'PM', vaiMoi: 'PM', soPM: 1 })).toBeNull()
+    expect(kiemDoiVai({ vaiNguoiGoi: 'PM', vaiHienTai: 'THANH_VIEN', vaiMoi: 'SUPPORT', soPM: 1 })).toBeNull()
+  })
+
+  it('vai đổi tới phải là một trong ba vai, báo lỗi tiếng Việt', () => {
+    expect(kiemTra(doiVaiSchema, { vai: 'SUPPORT' })).toEqual({ ok: true, giaTri: { vai: 'SUPPORT' } })
+    expect(kiemTra(doiVaiSchema, { vai: 'ADMIN' })).toEqual({ ok: false, loiTheoO: { vai: THONG_BAO.vaiSai } })
+    expect(kiemTra(doiVaiSchema, {})).toEqual({ ok: false, loiTheoO: { vai: THONG_BAO.vaiSai } })
+  })
+
+  it('xếp người dùng theo tên tiếng Việt, trùng tên thì theo email', () => {
+    const ds = [
+      { tenHienThi: 'Bảo', email: 'b@x.vn' },
+      { tenHienThi: 'An', email: 'z@x.vn' },
+      { tenHienThi: 'Ánh', email: 'c@x.vn' },
+      { tenHienThi: 'An', email: 'a@x.vn' },
+    ]
+    // "Ánh" đứng trước "Bảo" (so theo mã ký tự thì "Á" lại đứng sau "B").
+    expect(xepTheoTen(ds).map((nd) => nd.email)).toEqual(['a@x.vn', 'z@x.vn', 'c@x.vn', 'b@x.vn'])
   })
 })
 

@@ -2,7 +2,10 @@
 // Kho dữ liệu và giao diện cùng dùng các hàm ở đây.
 import { z } from 'zod'
 
-export type VaiHeThong = 'PM' | 'SUPPORT' | 'THANH_VIEN'
+/** Ba vai hệ thống, theo thứ tự hiện trên giao diện. */
+export const CAC_VAI = ['PM', 'SUPPORT', 'THANH_VIEN'] as const
+
+export type VaiHeThong = (typeof CAC_VAI)[number]
 
 export const TEN_VAI: Record<VaiHeThong, string> = {
   PM: 'PM',
@@ -32,6 +35,7 @@ export const THONG_BAO = {
   daGuiMaDatLai:
     'Nếu email này có tài khoản, một mã đặt lại mật khẩu đã được gửi tới hộp thư. Hãy nhập mã đó để đặt mật khẩu mới.',
   daDatLaiMatKhau: 'Đã đặt mật khẩu mới. Hãy đăng nhập bằng mật khẩu mới.',
+  vaiSai: 'Vai phải là PM, Support hoặc Thành viên.',
 } as const
 
 /** Thời hạn mặc định của mã đặt lại mật khẩu: 1 giờ (tính bằng mili giây). */
@@ -84,11 +88,18 @@ export const datLaiMatKhauSchema = z.object({
   matKhauMoi: chuoi(THONG_BAO.matKhauNgan).min(DO_DAI_MAT_KHAU_TOI_THIEU, { error: THONG_BAO.matKhauNgan }),
 })
 
+/** Đổi vai hệ thống của một tài khoản. */
+export const doiVaiSchema = z.object({
+  vai: z.enum(CAC_VAI, { error: THONG_BAO.vaiSai }),
+})
+
 export type DangKyDauVao = z.input<typeof dangKySchema>
 export type DangNhapDauVao = z.input<typeof dangNhapSchema>
 export type SuaHoSoDauVao = z.input<typeof suaHoSoSchema>
 export type EmailDauVao = z.input<typeof emailSchema>
 export type DatLaiMatKhauDauVao = z.input<typeof datLaiMatKhauSchema>
+/** `vai` để kiểu chuỗi: dữ liệu từ biểu mẫu chưa tin được, Kho kiểm bằng `doiVaiSchema`. */
+export type DoiVaiDauVao = { vai: string }
 
 export type KiemTra<T> = { ok: true; giaTri: T } | { ok: false; loiTheoO: Record<string, string> }
 
@@ -109,9 +120,41 @@ export function chuanHoaEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-/** Chỉ chủ hồ sơ được sửa hồ sơ của mình (đổi vai là việc khác, ở ticket 03). */
+/** Chỉ chủ hồ sơ được sửa hồ sơ của mình (đổi vai là việc riêng, xem `kiemDoiVai`). */
 export function duocSuaHoSo(nguoiGoiId: string, chuHoSoId: string): boolean {
   return nguoiGoiId === chuHoSoId
+}
+
+/** Chỉ PM thấy màn Người dùng, liệt kê mọi tài khoản và đổi vai hệ thống. */
+export function duocQuanLyNguoiDung(vaiNguoiGoi: VaiHeThong): boolean {
+  return vaiNguoiGoi === 'PM'
+}
+
+/** Xếp danh sách tài khoản theo tên hiển thị (thứ tự tiếng Việt), trùng tên thì theo email. */
+export function xepTheoTen<T extends { tenHienThi: string; email: string }>(danhSach: readonly T[]): T[] {
+  return [...danhSach].sort(
+    (a, b) => a.tenHienThi.localeCompare(b.tenHienThi, 'vi') || a.email.localeCompare(b.email, 'vi'),
+  )
+}
+
+export type LyDoKhongDoiVai = 'KHONG_CO_QUYEN' | 'PHAI_CON_PM'
+
+/**
+ * Có đổi được vai của một tài khoản không; trả lý do từ chối, hoặc null nếu được.
+ * - Người gọi không phải PM: `KHONG_CO_QUYEN` (kể cả khi tự nâng vai mình).
+ * - Hạ PM cuối cùng (kể cả PM tự hạ mình): `PHAI_CON_PM`. Hệ thống luôn giữ ít nhất một PM.
+ */
+export function kiemDoiVai(tinhHuong: {
+  vaiNguoiGoi: VaiHeThong
+  vaiHienTai: VaiHeThong
+  vaiMoi: VaiHeThong
+  /** Số tài khoản đang có vai PM, tính cả người bị đổi. */
+  soPM: number
+}): LyDoKhongDoiVai | null {
+  if (!duocQuanLyNguoiDung(tinhHuong.vaiNguoiGoi)) return 'KHONG_CO_QUYEN'
+  const haPM = tinhHuong.vaiHienTai === 'PM' && tinhHuong.vaiMoi !== 'PM'
+  if (haPM && tinhHuong.soPM <= 1) return 'PHAI_CON_PM'
+  return null
 }
 
 /** Thời điểm mã đặt lại cấp lúc `capLuc` hết hạn, với thời hạn `thoiHanMs`. */

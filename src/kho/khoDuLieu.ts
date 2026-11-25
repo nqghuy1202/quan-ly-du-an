@@ -7,6 +7,7 @@ import type {
   DangKyDauVao,
   DangNhapDauVao,
   DatLaiMatKhauDauVao,
+  DoiVaiDauVao,
   EmailDauVao,
   SuaHoSoDauVao,
   VaiHeThong,
@@ -17,6 +18,14 @@ export interface HoSo {
   email: string
   tenHienThi: string
   githubUsername: string | null
+  vai: VaiHeThong
+}
+
+/** Một tài khoản trên màn Người dùng của PM. */
+export interface NguoiDungTomTat {
+  id: string
+  email: string
+  tenHienThi: string
   vai: VaiHeThong
 }
 
@@ -72,4 +81,16 @@ export interface KhoDuLieu {
   suaHoSo(phien: Phien | null, nguoiDungId: string, dauVao: SuaHoSoDauVao): Promise<KetQua<HoSo>>
   /** Các Dự án người gọi được thấy. */
   danhSachDuAnCuaToi(phien: Phien | null): Promise<KetQua<DuAnTomTat[]>>
+  /**
+   * Mọi tài khoản (tên, email, vai); thứ tự không bảo đảm, giao diện tự xếp. Chỉ PM.
+   * Lỗi: `KHONG_CO_QUYEN`.
+   */
+  danhSachNguoiDung(phien: Phien | null): Promise<KetQua<NguoiDungTomTat[]>>
+  /**
+   * Đổi vai hệ thống của tài khoản `nguoiDungId`; có hiệu lực ngay ở lần đọc sau. Chỉ PM.
+   * Lỗi (vai không đổi): `KHONG_CO_QUYEN` (người gọi không phải PM, kể cả tự nâng vai mình),
+   * `KHONG_HOP_LE` (vai không phải PM, Support hay Thành viên), `KHONG_TIM_THAY`,
+   * `PHAI_CON_PM` (hạ PM cuối cùng, kể cả PM tự hạ mình).
+   */
+  doiVai(phien: Phien | null, nguoiDungId: string, dauVao: DoiVaiDauVao): Promise<KetQua<NguoiDungTomTat>>
 }

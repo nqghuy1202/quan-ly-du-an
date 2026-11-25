@@ -2,8 +2,11 @@
 // Không I/O, không đồng hồ, không số ngẫu nhiên: mã sinh theo bộ đếm, giờ do người gọi truyền vào.
 // Không gửi thư thật: thư được ghi vào một hộp thư mô phỏng (`moPhong`), và việc bấm đường dẫn
 // trong thư xác nhận được thay bằng `moPhong.xacNhanEmail`.
+// PM đầu tiên: ngoài đời thật chủ dự án tự đặt vai trên Supabase. Bản bộ nhớ thay việc đó bằng
+// tuỳ chọn `pmBanDau` (tạo sẵn một PM khi dựng Kho) hoặc `chuDuAn.datVaiPM` (đặt PM cho một tài
+// khoản có sẵn). Cả hai chỉ dành cho dev và test, không phải đường dùng thật của ứng dụng.
 import { thanhCong, thatBai, type KetQua } from './ketQua'
-import type { DuAnTomTat, HoSo, KhoDuLieu, Phien, ThongBaoChung } from './khoDuLieu'
+import type { DuAnTomTat, HoSo, KhoDuLieu, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
 import {
   THOI_HAN_MA_DAT_LAI_MAC_DINH_MS,
   THONG_BAO,
@@ -12,17 +15,22 @@ import {
   dangKySchema,
   dangNhapSchema,
   datLaiMatKhauSchema,
+  doiVaiSchema,
+  duocQuanLyNguoiDung,
   duocSuaHoSo,
   emailSchema,
   hetHanLuc,
+  kiemDoiVai,
   kiemTra,
   suaHoSoSchema,
   tinhTrangMaDatLai,
   type DangKyDauVao,
   type DangNhapDauVao,
   type DatLaiMatKhauDauVao,
+  type DoiVaiDauVao,
   type EmailDauVao,
   type SuaHoSoDauVao,
+  type VaiHeThong,
 } from '../luat/taiKhoan'
 
 /** Một thư bản bộ nhớ "đã gửi" (thay cho thư thật). */
@@ -41,13 +49,45 @@ export interface MoPhongThu {
   thuGuiToi(email: string): ThuMoPhong[]
 }
 
+/**
+ * Việc chủ dự án làm thẳng trên kho thật (ngoài ứng dụng), mô phỏng cho bản bộ nhớ.
+ * Chỉ dành cho dev và test.
+ */
+export interface MoPhongChuDuAn {
+  /**
+   * Đặt vai PM cho tài khoản có email `email`, không qua kiểm quyền (thay cho việc chủ dự án
+   * tự đặt PM đầu tiên trên Supabase). Lỗi: `KHONG_TIM_THAY`.
+   */
+  datVaiPM(email: string): Promise<KetQua<null>>
+}
+
 export interface KhoBoNho extends KhoDuLieu {
   moPhong: MoPhongThu
+  chuDuAn: MoPhongChuDuAn
+}
+
+/** Tài khoản PM tạo sẵn khi dựng Kho: đã xác nhận email, vào được ngay. */
+export interface TaiKhoanPMBanDau {
+  email: string
+  matKhau: string
+  tenHienThi: string
+}
+
+/**
+ * PM tạo sẵn khi chạy thử (`npm run dev`), để có người mở được màn Người dùng. Chỉ dành cho
+ * chạy thử: với bản Supabase, PM đầu tiên do chủ dự án tự đặt vai trên Supabase.
+ */
+export const PM_CHAY_THU: TaiKhoanPMBanDau = {
+  email: 'pm@vi-du.vn',
+  matKhau: 'matkhau-pm',
+  tenHienThi: 'PM chạy thử',
 }
 
 export interface TuyChonKhoBoNho {
   /** Thời hạn của mã đặt lại mật khẩu, tính bằng mili giây. Mặc định 1 giờ. */
   thoiHanMaDatLaiMs?: number
+  /** Tạo sẵn một PM ban đầu (dev và test). Dữ liệu sai thì ném lỗi khi dựng Kho. */
+  pmBanDau?: TaiKhoanPMBanDau
 }
 
 interface MaDatLai {
@@ -75,6 +115,28 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   let demMa = 0
 
   const banSao = (hoSo: HoSo): HoSo => ({ ...hoSo })
+  const tomTat = ({ id, email, tenHienThi, vai }: HoSo): NguoiDungTomTat => ({ id, email, tenHienThi, vai })
+
+  /** Tạo tài khoản mới với dữ liệu đã kiểm; trả hồ sơ gốc (không phải bản sao). */
+  function taoTaiKhoan(email: string, matKhau: string, tenHienThi: string, vai: VaiHeThong, daXacNhan: boolean): HoSo {
+    demNguoiDung += 1
+    const hoSo: HoSo = { id: `nguoi-dung-${demNguoiDung}`, email, tenHienThi, githubUsername: null, vai }
+    taiKhoanTheoId.set(hoSo.id, { hoSo, matKhau, daXacNhan, maDatLai: null })
+    idTheoEmail.set(email, hoSo.id)
+    return hoSo
+  }
+
+  function soPM(): number {
+    let dem = 0
+    for (const taiKhoan of taiKhoanTheoId.values()) if (taiKhoan.hoSo.vai === 'PM') dem += 1
+    return dem
+  }
+
+  if (tuyChon.pmBanDau) {
+    const kt = kiemTra(dangKySchema, tuyChon.pmBanDau)
+    if (!kt.ok) throw new Error(`pmBanDau không hợp lệ: ${Object.values(kt.loiTheoO).join(' ')}`)
+    taoTaiKhoan(kt.giaTri.email, kt.giaTri.matKhau, kt.giaTri.tenHienThi, 'PM', true)
+  }
 
   function timTheoEmail(email: string): TaiKhoan | undefined {
     const id = idTheoEmail.get(chuanHoaEmail(email))
@@ -103,8 +165,18 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
     },
   }
 
+  const chuDuAn: MoPhongChuDuAn = {
+    async datVaiPM(email: string) {
+      const taiKhoan = timTheoEmail(email)
+      if (!taiKhoan) return thatBai('KHONG_TIM_THAY')
+      taiKhoan.hoSo.vai = 'PM'
+      return thanhCong(null)
+    },
+  }
+
   return {
     moPhong,
+    chuDuAn,
 
     async dangKy(dauVao: DangKyDauVao) {
       const kt = kiemTra(dangKySchema, dauVao)
@@ -113,16 +185,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (idTheoEmail.has(email)) {
         return thatBai('EMAIL_DA_DUNG', undefined, { email: 'Email này đã được dùng để đăng ký.' })
       }
-      demNguoiDung += 1
-      const hoSo: HoSo = {
-        id: `nguoi-dung-${demNguoiDung}`,
-        email,
-        tenHienThi,
-        githubUsername: null,
-        vai: VAI_MAC_DINH,
-      }
-      taiKhoanTheoId.set(hoSo.id, { hoSo, matKhau, daXacNhan: false, maDatLai: null })
-      idTheoEmail.set(email, hoSo.id)
+      const hoSo = taoTaiKhoan(email, matKhau, tenHienThi, VAI_MAC_DINH, false)
       hopThu.push({ loai: 'XAC_NHAN_EMAIL', email })
       return thanhCong(banSao(hoSo))
     },
@@ -216,6 +279,33 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       // Dự án có từ ticket 04; tới lúc đó chưa ai ở Dự án nào.
       const duAn: DuAnTomTat[] = []
       return thanhCong(duAn)
+    },
+
+    async danhSachNguoiDung(phien: Phien | null) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      if (!duocQuanLyNguoiDung(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
+      return thanhCong([...taiKhoanTheoId.values()].map((taiKhoan) => tomTat(taiKhoan.hoSo)))
+    },
+
+    async doiVai(phien: Phien | null, nguoiDungId: string, dauVao: DoiVaiDauVao) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      // Kiểm quyền trước mọi thứ khác: người không phải PM không biết được gì thêm.
+      if (!duocQuanLyNguoiDung(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
+      const kt = kiemTra(doiVaiSchema, dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', THONG_BAO.vaiSai, kt.loiTheoO)
+      const dich = taiKhoanTheoId.get(nguoiDungId)
+      if (!dich) return thatBai('KHONG_TIM_THAY')
+      const lyDo = kiemDoiVai({
+        vaiNguoiGoi: xt.giaTri.hoSo.vai,
+        vaiHienTai: dich.hoSo.vai,
+        vaiMoi: kt.giaTri.vai,
+        soPM: soPM(),
+      })
+      if (lyDo) return thatBai(lyDo)
+      dich.hoSo.vai = kt.giaTri.vai
+      return thanhCong(tomTat(dich.hoSo))
     },
   }
 }

@@ -16,7 +16,56 @@ chayBoTestHopDong('bản bộ nhớ', () => {
     xacNhanEmail: (email: string) => kho.moPhong.xacNhanEmail(email),
     maDatLaiMoiNhat: async (email: string) => maDatLaiMoiNhat(kho.moPhong.thuGuiToi(email)),
     thoiHanMaDatLaiMs: MUOI_LAM_PHUT,
+    datVaiPM: async (email: string) => {
+      const kq = await kho.chuDuAn.datVaiPM(email)
+      if (!kq.ok) throw new Error(kq.loi.thongBao)
+    },
   }
+})
+
+describe('PM ban đầu của bản bộ nhớ (chỉ cho dev và test)', () => {
+  const PM = { email: 'PM@Vi-Du.vn', matKhau: 'matkhau-pm-1', tenHienThi: 'Chủ dự án' }
+
+  it('tuỳ chọn pmBanDau tạo sẵn một PM đã xác nhận email, đăng nhập và quản lý người dùng được ngay', async () => {
+    const kho = taoKhoBoNho({ pmBanDau: PM })
+    const phien = await kho.dangNhap({ email: 'pm@vi-du.vn', matKhau: PM.matKhau })
+    if (!phien.ok) throw new Error(phien.loi.thongBao)
+    const hoSo = await kho.layHoSoCuaToi(phien.giaTri)
+    expect(hoSo.ok && hoSo.giaTri).toEqual(
+      expect.objectContaining({ email: 'pm@vi-du.vn', tenHienThi: 'Chủ dự án', vai: 'PM' }),
+    )
+    const danhSach = await kho.danhSachNguoiDung(phien.giaTri)
+    expect(danhSach.ok && danhSach.giaTri).toHaveLength(1)
+    // Tạo sẵn không gửi thư nào.
+    expect(kho.moPhong.thuGuiToi('pm@vi-du.vn')).toEqual([])
+  })
+
+  it('không có pmBanDau thì kho bắt đầu trống, người đăng ký đầu tiên vẫn chỉ là Thành viên', async () => {
+    const kho = taoKhoBoNho()
+    await kho.dangKy({ email: 'dau-tien@vi-du.vn', matKhau: '12345678', tenHienThi: 'Đầu tiên' })
+    await kho.moPhong.xacNhanEmail('dau-tien@vi-du.vn')
+    const phien = await kho.dangNhap({ email: 'dau-tien@vi-du.vn', matKhau: '12345678' })
+    if (!phien.ok) throw new Error(phien.loi.thongBao)
+    const hoSo = await kho.layHoSoCuaToi(phien.giaTri)
+    expect(hoSo.ok && hoSo.giaTri.vai).toBe('THANH_VIEN')
+    expect((await kho.danhSachNguoiDung(phien.giaTri)).ok).toBe(false)
+  })
+
+  it('email của pmBanDau đã có thì đăng ký lại trả EMAIL_DA_DUNG', async () => {
+    const kho = taoKhoBoNho({ pmBanDau: PM })
+    const kq = await kho.dangKy({ email: 'pm@vi-du.vn', matKhau: '12345678', tenHienThi: 'Kẻ giả' })
+    expect(kq.ok || kq.loi.ma).toBe('EMAIL_DA_DUNG')
+  })
+
+  it('pmBanDau sai dữ liệu thì báo ngay khi dựng Kho', () => {
+    expect(() => taoKhoBoNho({ pmBanDau: { ...PM, matKhau: '123' } })).toThrow(/pmBanDau/)
+  })
+
+  it('chuDuAn.datVaiPM với email không có tài khoản trả KHONG_TIM_THAY', async () => {
+    const kho = taoKhoBoNho()
+    const kq = await kho.chuDuAn.datVaiPM('khong-co@vi-du.vn')
+    expect(kq.ok || kq.loi.ma).toBe('KHONG_TIM_THAY')
+  })
 })
 
 describe('hộp thư mô phỏng của bản bộ nhớ', () => {
