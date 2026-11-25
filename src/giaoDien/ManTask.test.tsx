@@ -208,7 +208,9 @@ describe('Task trong trang Dự án: tạo và xem', () => {
     await moFormTao(user)
     await user.type(screen.getByLabelText('Tiêu đề'), 'Việc')
     await user.click(screen.getByRole('button', { name: 'Tạo Task' }))
-    const canhBao = await ungDung.findByRole('alert')
+    // Astryx còn một vùng thông báo (aria-live) cũng mang role alert; lấy đúng banner có lý do.
+    const canhBao = (await ungDung.findByText('Chưa tạo được Task.')).closest('[role="alert"]')
+    expect(canhBao).not.toBeNull()
     expect(canhBao).toHaveTextContent('Chưa tạo được Task.')
     expect(canhBao).toHaveTextContent(THONG_BAO_MAC_DINH.NGUOI_NGOAI_DU_AN)
     expect(await cacTask(bc)).toEqual([])

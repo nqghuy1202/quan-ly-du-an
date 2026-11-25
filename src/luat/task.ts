@@ -81,25 +81,28 @@ const tieuDeTask = z
 /** Mô tả tuỳ chọn: bỏ khoảng trắng hai đầu; để trống nghĩa là không có mô tả. */
 const moTaTask = z.string({ error: THONG_BAO_TASK.moTaSai }).trim().normalize('NFC')
 
-/** Hạn tuỳ chọn: một ngày `YYYY-MM-DD` có thật (ngày đã qua vẫn nhận); trống hay thiếu là không có hạn. */
+/**
+ * Hạn tuỳ chọn: một ngày `YYYY-MM-DD` có thật (ngày đã qua vẫn nhận); trống, null hay thiếu là không
+ * có hạn. Chỉ kiểm ở đây (không biến đổi), để ô thiếu vẫn được coi là tuỳ chọn; chuẩn hoá ở `kiemTraTask`.
+ */
 const hanTask = z
-  .union([z.string(), z.null(), z.undefined()], { error: THONG_BAO_TASK.hanSai })
-  .transform((giaTri) => (giaTri ?? '').trim())
-  .refine((giaTri) => giaTri === '' || laNgayHopLe(giaTri), { error: THONG_BAO_TASK.hanSai })
-  .transform((giaTri) => (giaTri === '' ? null : giaTri))
+  .string({ error: THONG_BAO_TASK.hanSai })
+  .refine((giaTri) => giaTri.trim() === '' || laNgayHopLe(giaTri.trim()), { error: THONG_BAO_TASK.hanSai })
+  .nullish()
 
-/** Id một người được chọn; trống hay thiếu là chưa chọn (null), Kho trả `THIEU_NGUOI`. */
-const idNguoiDuocChon = z
-  .union([z.string(), z.null(), z.undefined()], { error: THONG_BAO_TASK.nguoiSai })
-  .transform((giaTri) => {
-    const id = (giaTri ?? '').trim()
-    return id === '' ? null : id
-  })
+/** Id một người được chọn; trống, null hay thiếu là chưa chọn, Kho trả `THIEU_NGUOI`. */
+const idNguoiDuocChon = z.string({ error: THONG_BAO_TASK.nguoiSai }).nullish()
+
+/** Chuỗi tuỳ chọn sau khi bỏ khoảng trắng; trống là null. */
+function chuoiHoacNull(giaTri: string | null | undefined): string | null {
+  const daCat = (giaTri ?? '').trim()
+  return daCat === '' ? null : daCat
+}
 
 /** Tạo Task: tiêu đề bắt buộc, mô tả và hạn tuỳ chọn, hai người được chọn (kiểm riêng bằng `kiemNguoiTask`). */
 export const taoTaskSchema = z.object({
   tieuDe: tieuDeTask,
-  moTa: moTaTask.default(''),
+  moTa: moTaTask.optional(),
   han: hanTask,
   nguoiThucHienId: idNguoiDuocChon,
   nguoiKiemTraId: idNguoiDuocChon,
@@ -125,9 +128,9 @@ export const kiemTraTask = {
       giaTri: {
         tieuDe,
         moTa: moTa ?? '',
-        han: han ?? null,
-        nguoiThucHienId: nguoiThucHienId ?? null,
-        nguoiKiemTraId: nguoiKiemTraId ?? null,
+        han: chuoiHoacNull(han),
+        nguoiThucHienId: chuoiHoacNull(nguoiThucHienId),
+        nguoiKiemTraId: chuoiHoacNull(nguoiKiemTraId),
       },
     }
   },
