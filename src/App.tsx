@@ -8,7 +8,10 @@ import { KhungUngDung } from './giaoDien/KhungUngDung'
 import { ManXacThuc } from './giaoDien/ManXacThuc'
 
 interface Props {
-  /** Kho dữ liệu dùng cho ứng dụng; mặc định là bản bộ nhớ (bản Supabase thêm ở ticket sau). */
+  /**
+   * Kho dữ liệu dùng cho ứng dụng. `main.tsx` chọn theo cấu hình môi trường (`chonKho`: Supabase
+   * hoặc bản bộ nhớ); không truyền thì dùng bản bộ nhớ có sẵn một PM chạy thử.
+   */
   kho?: KhoDuLieu
   /**
    * Hộp thư mô phỏng đi cùng `kho` khi đó là bản bộ nhớ (thay cho thư thật). Khi không truyền `kho`,

@@ -16,6 +16,7 @@ Web nhiều người dùng bằng tiếng Việt để PM và Support quản lý
 | Lint | `npm run lint` |
 | Dựng bản chạy | `npm run build` |
 | Tra Astryx | `npm run astryx -- component <Tên>` (hoặc `npx astryx ...`) |
+| Bộ test hợp đồng và bảng ca trên Supabase thật (chủ dự án chạy tay, cần mạng; không thuộc cổng) | `npx vitest run --config vitest.supabase.config.ts` (xem `supabase/README.md`) |
 
 Cổng của Bảng ticket AI chạy `npm test`. Phải xanh trước khi đáp ticket; nên chạy thêm `npm run typecheck` và `npm run lint`.
 
@@ -47,8 +48,15 @@ src/
   luat/                  luật nghiệp vụ thuần (zod ở ranh giới, quyền), không I/O
   kho/                   Kho dữ liệu: khoDuLieu.ts (giao diện), ketQua.ts (lỗi có mã),
                          khoBoNho.ts (bản bộ nhớ), hopDong.ts (bộ test hợp đồng dùng chung;
-                         bản cài mới gọi chayBoTestHopDong trong file *.test.ts của mình)
+                         bản cài mới gọi chayBoTestHopDong trong file *.test.ts của mình),
+                         khoSupabase.ts (bản Supabase), cauHinh.ts + chonKho.ts (chọn bản cài theo
+                         biến VITE_SUPABASE_*, từ chối khoá service), hopDongSupabase.ts (dựng bản
+                         Supabase cho bộ test chạy tay; chỉ test dùng)
   giaoDien/              các màn; lấy Kho qua KhoContext/useKho
+supabase/
+  migrations/            migration lên (chủ dự án tự áp; cổng không kiểm SQL)
+  down/                  migration xuống tương ứng (chạy tay)
+  README.md              việc làm tay, phần cổng không kiểm, cách chạy bộ test trên Supabase thật
 ```
 
 Test cạnh mã (`*.test.ts[x]` trong `src/`), chạy bằng Vitest và Testing Library. Môi trường test mặc định là `node`; **test giao diện bắt buộc khai `// @vitest-environment jsdom` ở dòng đầu file**. Không đổi mặc định sang `jsdom` trong `vite.config.ts`: cổng kiểm chạy trong sandbox và sẽ báo `EPERM`.

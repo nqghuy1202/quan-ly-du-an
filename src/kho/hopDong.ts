@@ -36,6 +36,17 @@ export interface TuyChonHopDong {
    * đặt `false`: các ca "PM cuối cùng" bị bỏ qua vì không dựng được tình huống đó.
    */
   khoChuaCoPM?: boolean
+  /**
+   * Kho tự lấy giờ của mình, bỏ qua `bayGio` truyền vào (bản Supabase: cơ sở dữ liệu và Auth dùng
+   * giờ máy chủ). Khi đúng: ngày trong dấu vết chỉ được kiểm là một ngày, không so với giờ truyền
+   * vào, và ca "mã hết hạn theo đồng hồ truyền vào" bị bỏ qua. Mặc định sai.
+   */
+  dongHoCuaKho?: boolean
+  /**
+   * Kho không phân biệt mã đặt lại sai, đã dùng hay hết hạn (Supabase Auth trả cùng một lỗi): khi
+   * đúng, dùng lại mã đã dùng phải trả `MA_KHONG_HOP_LE` thay cho `MA_DA_DUNG`. Mặc định sai.
+   */
+  gopLoiMaDatLai?: boolean
 }
 
 const MAT_KHAU = 'matkhau-dung-1'
@@ -65,6 +76,10 @@ export function chayBoTestHopDong(
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
   const khoChuaCoPM = tuyChon.khoChuaCoPM ?? true
+  const dongHoCuaKho = tuyChon.dongHoCuaKho ?? false
+  const gopLoiMaDatLai = tuyChon.gopLoiMaDatLai ?? false
+  /** Ngày mong đợi trong dấu vết: đúng giờ truyền vào, hoặc chỉ là một ngày nếu kho tự lấy giờ. */
+  const luc = (moc: Date): Date => (dongHoCuaKho ? expect.any(Date) : moc)
 
   describe(`Kho dữ liệu (hợp đồng) — ${tenBanCai}`, () => {
     let banCai: BanCaiHopDong
@@ -267,12 +282,12 @@ export function chayBoTestHopDong(
         giaTri(await kho.datLaiMatKhau({ email, ma, matKhauMoi: MAT_KHAU_MOI }, LUC_YEU_CAU))
 
         const lanHai = await kho.datLaiMatKhau({ email, ma, matKhauMoi: 'mat-khau-thu-ba' }, LUC_YEU_CAU)
-        expect(maLoi(lanHai)).toBe('MA_DA_DUNG')
+        expect(maLoi(lanHai)).toBe(gopLoiMaDatLai ? 'MA_KHONG_HOP_LE' : 'MA_DA_DUNG')
         expect(maLoi(await kho.dangNhap({ email, matKhau: MAT_KHAU_MOI }))).toBe('THANH_CONG')
         expect(maLoi(await kho.dangNhap({ email, matKhau: 'mat-khau-thu-ba' }))).toBe('SAI_THONG_TIN_DANG_NHAP')
       })
 
-      it('mã hết hạn theo thời hạn cấu hình tính bằng đồng hồ truyền vào: trả MA_HET_HAN', async () => {
+      it.skipIf(dongHoCuaKho)('mã hết hạn theo thời hạn cấu hình tính bằng đồng hồ truyền vào: trả MA_HET_HAN', async () => {
         const email = await dangKyDaXacNhan('nhung')
         giaTri(await kho.yeuCauDatLaiMatKhau({ email }, LUC_YEU_CAU))
         const ma = await maDatLai(email)
@@ -612,7 +627,7 @@ export function chayBoTestHopDong(
           trangThai: 'HOAT_DONG',
           dauVet: {
             taoBoi: { id: pm.nguoiDungId, tenHienThi: 'An PM' },
-            taoLuc: LUC_TAO_DU_AN,
+            taoLuc: luc(LUC_TAO_DU_AN),
             suaBoi: null,
             suaLuc: null,
           },
@@ -687,9 +702,9 @@ export function chayBoTestHopDong(
           ten: 'Tên mới',
           dauVet: {
             taoBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
-            taoLuc: LUC_TAO_DU_AN,
+            taoLuc: luc(LUC_TAO_DU_AN),
             suaBoi: { id: pmSua.nguoiDungId, tenHienThi: 'Bình PM' },
-            suaLuc: LUC_SUA,
+            suaLuc: luc(LUC_SUA),
           },
         })
         expect(giaTri(await kho.layDuAn(pmTao, duAn.id))).toEqual(suaTen)
@@ -700,9 +715,9 @@ export function chayBoTestHopDong(
         expect(suaMoTa.moTa).toBe('Mô tả mới')
         expect(suaMoTa.dauVet).toEqual({
           taoBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
-          taoLuc: LUC_TAO_DU_AN,
+          taoLuc: luc(LUC_TAO_DU_AN),
           suaBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
-          suaLuc: sauNua,
+          suaLuc: luc(sauNua),
         })
 
         // Để trống mô tả là xoá mô tả.
@@ -740,7 +755,7 @@ export function chayBoTestHopDong(
         expect(daLuu).toEqual({
           ...duAn,
           trangThai: 'LUU_TRU',
-          dauVet: { ...duAn.dauVet, suaBoi: { id: pmKhac.nguoiDungId, tenHienThi: 'Bình PM' }, suaLuc: LUC_LUU_TRU },
+          dauVet: { ...duAn.dauVet, suaBoi: { id: pmKhac.nguoiDungId, tenHienThi: 'Bình PM' }, suaLuc: luc(LUC_LUU_TRU) },
         })
 
         // Mọi lệnh ghi bị từ chối, kể cả với dữ liệu sai, và không đổi gì.
@@ -763,13 +778,14 @@ export function chayBoTestHopDong(
         expect(moLai.dauVet).toEqual({
           ...duAn.dauVet,
           suaBoi: { id: pmTao.nguoiDungId, tenHienThi: 'An PM' },
-          suaLuc: LUC_MO_LAI,
+          suaLuc: luc(LUC_MO_LAI),
         })
         const sauMoLai = sau(LUC_MO_LAI, 60_000)
         const sua = giaTri(await kho.suaDuAn(pmKhac, duAn.id, { ten: 'Làm tiếp' }, sauMoLai))
         expect(sua.ten).toBe('Làm tiếp')
-        expect(sua.dauVet.suaLuc).toEqual(sauMoLai)
-        expect(sua.dauVet.taoLuc).toEqual(LUC_TAO_DU_AN)
+        expect(sua.dauVet.suaLuc).toEqual(luc(sauMoLai))
+        expect(sua.dauVet.taoLuc).toEqual(duAn.dauVet.taoLuc)
+        expect(sua.dauVet.taoLuc).toEqual(luc(LUC_TAO_DU_AN))
       })
 
       it('mở lại Dự án đang hoạt động trả DU_AN_DANG_HOAT_DONG và không đổi dấu vết', async () => {

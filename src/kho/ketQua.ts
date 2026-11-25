@@ -16,6 +16,8 @@ export type MaLoi =
   | 'DU_AN_DANG_HOAT_DONG'
   | 'CHUA_DANG_KY'
   | 'DA_TRONG_DU_AN'
+  /** Không gọi được máy chủ (mất mạng, máy chủ lỗi, quá nhiều yêu cầu); chỉ bản cài có I/O trả mã này. */
+  | 'LOI_HE_THONG'
 
 export interface LoiKho {
   ma: MaLoi
@@ -55,4 +57,5 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   CHUA_DANG_KY:
     'Email này chưa đăng ký. Hãy nhờ người đó tự đăng ký tài khoản trước rồi thêm lại (hệ thống không gửi thư mời).',
   DA_TRONG_DU_AN: 'Người này đã ở trong Dự án.',
+  LOI_HE_THONG: 'Không kết nối được máy chủ hoặc máy chủ đang lỗi. Hãy thử lại sau ít phút.',
 }

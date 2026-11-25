@@ -14,3 +14,9 @@
 - [ ] Có một lệnh riêng (không nằm trong lệnh test mặc định) để chủ dự án chạy bộ test hợp đồng và bảng ca trên Supabase thật.
 - [ ] Ghi trong tài liệu của ticket hoặc trong nội dung migration những gì cổng không kiểm và việc chủ dự án phải làm tay (áp migration, đặt PM đầu tiên).
 - [ ] Có test tự động cho mọi phần cổng kiểm được (chọn bản cài theo cấu hình, từ chối khoá service, bản Supabase tự bỏ qua đúng), chạy bằng lệnh test của repo, không cần mạng, DB hay file ngoài repo; không đổi danh sách phụ thuộc, không sửa hook của repo.
+
+## Ghi chú triển khai
+
+- Migration: `supabase/migrations/20261125000100_lat_1_ho_so_du_an.sql`, bản xuống ở `supabase/down/`. Đầu file migration ghi phần cổng không kiểm và việc chủ dự án làm tay.
+- Việc làm tay (áp migration, bật xác nhận email, mẫu thư có mã, đặt PM đầu tiên), phần cổng không kiểm và các khác biệt đã biết với bản bộ nhớ: `supabase/README.md`.
+- Lệnh riêng chạy bộ test hợp đồng và bảng ca trên Supabase thật: `npx vitest run --config vitest.supabase.config.ts` (không nằm trong `npm test`).
