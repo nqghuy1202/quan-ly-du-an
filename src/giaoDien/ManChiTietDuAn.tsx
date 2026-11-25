@@ -352,6 +352,16 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       />
 
       <PhanTaskCuaDuAn
+        vai={vai}
+        trangThaiDuAn={duAn.trangThai}
+        laNguoiTrongDuAn={
+          taiNguoi?.ok === true
+            ? taiNguoi.giaTri.some((nguoi) => nguoi.id === phien.nguoiDungId)
+            : vai === 'PM'
+              ? false
+              : null
+        }
+        dongHo={dongHo}
         key={lanTaiTask}
         phien={phien}
         duAnId={duAnId}

@@ -106,6 +106,8 @@ function theTheoCot(b: ReturnType<typeof within>): Record<string, string[]> {
       trangThai,
       cot(b, trangThai)
         .queryAllByRole('button')
+        // Bỏ menu "Chuyển Task … sang cột khác" của thẻ (đường đổi cột bằng bàn phím, ticket 12).
+        .filter((nut) => !(nut.getAttribute('aria-label') ?? '').startsWith('Chuyển Task'))
         .map((nut) => nut.textContent ?? '')
         .sort(),
     ]),
