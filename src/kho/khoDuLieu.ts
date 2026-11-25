@@ -20,7 +20,12 @@ import type {
   ThemNguoiDauVao,
   TrangThaiDuAn,
 } from '../luat/duAn'
-import type { TaoTaskDauVao, TrangThaiTask } from '../luat/task'
+import type {
+  DoiNguoiTaskDauVao,
+  SuaTaskDauVao,
+  TaoTaskDauVao,
+  TrangThaiTask,
+} from '../luat/task'
 import type { GanRepoDauVao } from '../luat/github'
 
 export interface HoSo {
@@ -63,6 +68,12 @@ export interface NguoiDauVet {
   tenHienThi: string
 }
 
+/**
+ * Người được giao một Task. `daRoiDuAn` chỉ có mặt (và là `true`) khi người đó đã bị gỡ khỏi Dự án
+ * mà vẫn được ghi trên Task, cho đến khi PM hoặc Support giao lại.
+ */
+export type NguoiCuaTask = NguoiDauVet & { daRoiDuAn?: true }
+
 /** Một Dự án đầy đủ: tên, mô tả, trạng thái và dấu vết. */
 export interface DuAn {
   id: string
@@ -84,8 +95,8 @@ export interface Task {
   /** Chuỗi rỗng khi không có mô tả. */
   moTa: string
   han: string | null
-  nguoiThucHien: NguoiDauVet
-  nguoiKiemTra: NguoiDauVet
+  nguoiThucHien: NguoiCuaTask
+  nguoiKiemTra: NguoiCuaTask
   trangThai: TrangThaiTask
   soLanTraLai: number
   dauVet: DauVet<NguoiDauVet>
@@ -255,4 +266,29 @@ export interface KhoDuLieu {
    * tên Dự án; cùng phạm vi Dự án như `viecCuaToi`; thứ tự không bảo đảm.
    */
   choToiDuyet(phien: Phien | null): Promise<KetQua<TaskKemDuAn[]>>
+  /**
+   * Sửa tiêu đề, mô tả và/hoặc hạn của Task chưa ở trạng thái cuối (ô không gửi thì giữ nguyên; hạn
+   * trống hay null là xoá hạn); cập nhật người và ngày chỉnh sửa gần nhất (`bayGio`), người tạo và
+   * ngày tạo giữ nguyên. PM hoặc Support của Dự án. Lỗi (không đổi gì), theo thứ tự:
+   * `KHONG_CO_QUYEN` (Người thực hiện, Người kiểm tra, Thành viên và người ngoài Dự án; Task không
+   * tồn tại với người không phải PM), `KHONG_TIM_THAY` (PM, Task không tồn tại), `DU_AN_DA_LUU_TRU`,
+   * `TASK_DA_CHOT` (Hoàn thành hoặc Huỷ), `KHONG_HOP_LE` (như `taoTask`).
+   */
+  suaTask(phien: Phien | null, taskId: string, dauVao: SuaTaskDauVao, bayGio: Date): Promise<KetQua<Task>>
+  /**
+   * Đổi Người thực hiện và/hoặc Người kiểm tra của Task chưa ở trạng thái cuối (ô không gửi thì giữ
+   * nguyên, kể cả người đã rời Dự án); cập nhật dấu vết chỉnh sửa như `suaTask`. Giao lại cho người
+   * trong Dự án thì dấu hiệu "đã rời dự án" của ô đó biến mất. Lỗi (không đổi gì), theo thứ tự:
+   * `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DA_LUU_TRU`, `TASK_DA_CHOT` (như `suaTask`),
+   * `THIEU_NGUOI` (ô gửi trống), `NGUOI_NGOAI_DU_AN` (người được chọn không ở trong Dự án, kể cả
+   * id không tồn tại), `TRUNG_NGUOI`.
+   */
+  doiNguoiTask(phien: Phien | null, taskId: string, dauVao: DoiNguoiTaskDauVao, bayGio: Date): Promise<KetQua<Task>>
+  /**
+   * Các Task chưa chốt (không phải Hoàn thành, không phải Huỷ) của Dự án mà tài khoản `nguoiDungId`
+   * đang giữ, thực hiện hoặc kiểm tra; để PM hoặc Support giao lại trước khi gỡ người đó khỏi Dự án.
+   * Chỉ đọc nên Dự án đã Lưu trữ vẫn xem được. Thứ tự không bảo đảm. Lỗi: `KHONG_CO_QUYEN`,
+   * `KHONG_TIM_THAY` (như `goNguoiKhoiDuAn`: Dự án không tồn tại hoặc người đó không ở trong Dự án).
+   */
+  danhSachTaskNguoiDangGiu(phien: Phien | null, duAnId: string, nguoiDungId: string): Promise<KetQua<Task[]>>
 }

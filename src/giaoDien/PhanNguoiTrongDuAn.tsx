@@ -12,7 +12,8 @@ import { TextInput } from '@astryxdesign/core/TextInput'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua, LoiKho, MaLoi } from '../kho/ketQua'
-import type { NguoiTrongDuAn, Phien } from '../kho/khoDuLieu'
+import type { NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
+import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, vaiGiuTask, xepTask } from '../luat/task'
 import { TEN_VAI, xepTheoTen, type VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { trangThaiO } from './trangThaiO'
@@ -29,6 +30,8 @@ interface Props {
   onDoiDanhSach: (capNhat: (cu: NguoiTrongDuAn[]) => NguoiTrongDuAn[]) => void
   /** Kho từ chối vì Dự án hay quyền đã đổi ở nơi khác: đọc lại để nút và lý do khớp với Kho. */
   onCanDocLai: () => void
+  /** Mở một Task (để giao lại trước khi gỡ người giữ nó); không truyền thì danh sách Task chỉ để xem. */
+  onMoTask?: (taskId: string) => void
   onHetPhien: () => void
 }
 
@@ -39,6 +42,15 @@ type Dong = {
   email: string
   vai: VaiHeThong
 }
+
+/**
+ * Việc gỡ đang chờ người dùng xác nhận: người sắp gỡ và các Task chưa chốt họ đang giữ; `tasks` là
+ * null khi không kiểm được (lỗi), kèm lỗi để hiện.
+ */
+type ChoXacNhanGo = { nguoi: { id: string; tenHienThi: string }; tasks: Task[] | null; loi: LoiKho | null }
+
+/** Một dòng của bảng Task đang giữ. */
+type DongTaskDangGiu = { id: string; tieuDe: string; trangThai: string; vai: string }
 
 type ThongBao = { loai: 'thanhCong'; noiDung: string } | { loai: 'loi'; tieuDe: string; loi: LoiKho }
 
@@ -54,6 +66,7 @@ export function PhanNguoiTrongDuAn({
   onThuLai,
   onDoiDanhSach,
   onCanDocLai,
+  onMoTask,
   onHetPhien,
 }: Props) {
   const kho = useKho()
@@ -63,6 +76,7 @@ export function PhanNguoiTrongDuAn({
   // Chặn lệnh trùng (bấm hai lần trước khi kịp vẽ lại) bằng ref chứ không bằng state.
   const dangGuiRef = useRef(false)
   const [thongBao, setThongBao] = useState<ThongBao | null>(null)
+  const [choXacNhan, setChoXacNhan] = useState<ChoXacNhanGo | null>(null)
   const duocGhi = lyDoKhongGhi === null
 
   function xuLyLoi(tieuDe: string, loi: LoiKho) {
@@ -92,11 +106,12 @@ export function PhanNguoiTrongDuAn({
     }
   }
 
-  async function go(nguoi: Dong) {
-    if (dangGuiRef.current || !duocGhi) return
+  /** Gỡ hẳn khỏi Dự án (sau khi đã cho người dùng xem Task người đó đang giữ). */
+  async function thucHienGo(nguoi: { id: string; tenHienThi: string }) {
     dangGuiRef.current = true
     setDangGoId(nguoi.id)
     setThongBao(null)
+    setChoXacNhan(null)
     const kq = await kho.goNguoiKhoiDuAn(phien, duAnId, nguoi.id)
     dangGuiRef.current = false
     setDangGoId(null)
@@ -110,6 +125,48 @@ export function PhanNguoiTrongDuAn({
       xuLyLoi(`Không gỡ được ${nguoi.tenHienThi} khỏi Dự án.`, kq.loi)
     }
   }
+
+  /**
+   * Bấm "Gỡ": trước hết xem người đó đang giữ Task chưa chốt nào. Không giữ Task nào thì gỡ ngay;
+   * có thì hiện danh sách để giao lại, người dùng vẫn gỡ được (Task giữ nguyên người cũ).
+   */
+  async function go(nguoi: { id: string; tenHienThi: string }) {
+    if (dangGuiRef.current || !duocGhi) return
+    dangGuiRef.current = true
+    setDangGoId(nguoi.id)
+    setThongBao(null)
+    setChoXacNhan(null)
+    const kq = await kho.danhSachTaskNguoiDangGiu(phien, duAnId, nguoi.id)
+    if (kq.ok && kq.giaTri.length === 0) {
+      await thucHienGo(nguoi)
+      return
+    }
+    dangGuiRef.current = false
+    setDangGoId(null)
+    if (kq.ok) {
+      setChoXacNhan({ nguoi, tasks: kq.giaTri, loi: null })
+    } else if (LOI_CAN_DOC_LAI.includes(kq.loi.ma) || kq.loi.ma === 'CHUA_DANG_NHAP') {
+      xuLyLoi(`Không gỡ được ${nguoi.tenHienThi} khỏi Dự án.`, kq.loi)
+    } else {
+      setChoXacNhan({ nguoi, tasks: null, loi: kq.loi })
+    }
+  }
+
+  const cotTaskDangGiu: TableColumn<DongTaskDangGiu>[] = [
+    {
+      key: 'tieuDe',
+      header: 'Task',
+      width: proportional(2),
+      renderCell: (task) =>
+        onMoTask ? (
+          <Button label={task.tieuDe} variant="ghost" onClick={() => onMoTask(task.id)} />
+        ) : (
+          <Text weight="semibold">{task.tieuDe}</Text>
+        ),
+    },
+    { key: 'trangThai', header: 'Trạng thái', width: proportional(1), renderCell: (task) => <Text>{task.trangThai}</Text> },
+    { key: 'vai', header: 'Đang giữ ở vai', width: proportional(1), renderCell: (task) => <Text>{task.vai}</Text> },
+  ]
 
   const cot: TableColumn<Dong>[] = [
     {
@@ -186,6 +243,49 @@ export function PhanNguoiTrongDuAn({
       {thongBao?.loai === 'thanhCong' && <Banner status="success" title={thongBao.noiDung} role="status" />}
       {thongBao?.loai === 'loi' && (
         <Banner status="error" title={thongBao.tieuDe} description={thongBao.loi.thongBao} role="alert" />
+      )}
+      {choXacNhan && (
+        <VStack gap={2} role="group" aria-label="Task đang giữ">
+          {choXacNhan.tasks === null ? (
+            <Banner
+              status="warning"
+              title={`Chưa kiểm được Task ${choXacNhan.nguoi.tenHienThi} đang giữ.`}
+              description={choXacNhan.loi?.thongBao}
+              role="alert"
+            />
+          ) : (
+            <Banner
+              status="warning"
+              title={`${choXacNhan.nguoi.tenHienThi} đang giữ ${choXacNhan.tasks.length} Task chưa chốt.`}
+              description={`Giao lại các Task này trước khi gỡ nếu cần. Vẫn gỡ được: Task giữ nguyên ${choXacNhan.nguoi.tenHienThi} và hiện "${THONG_BAO_SUA_TASK.daRoiDuAn}" cho đến khi được giao lại.`}
+            />
+          )}
+          {choXacNhan.tasks !== null && (
+            <Table
+              aria-label={`Task chưa chốt của ${choXacNhan.nguoi.tenHienThi}`}
+              data={xepTask(choXacNhan.tasks).map((task) => ({
+                id: task.id,
+                tieuDe: task.tieuDe,
+                trangThai: TEN_TRANG_THAI_TASK[task.trangThai],
+                vai:
+                  vaiGiuTask(task, choXacNhan.nguoi.id) === 'NGUOI_THUC_HIEN' ? 'Người thực hiện' : 'Người kiểm tra',
+              }))}
+              columns={cotTaskDangGiu}
+              idKey="id"
+            />
+          )}
+          <HStack gap={2} wrap="wrap">
+            <Button
+              label={`Vẫn gỡ ${choXacNhan.nguoi.tenHienThi}`}
+              variant="primary"
+              onClick={() => thucHienGo(choXacNhan.nguoi)}
+            />
+            {choXacNhan.tasks === null && (
+              <Button label="Thử lại" variant="secondary" onClick={() => go(choXacNhan.nguoi)} />
+            )}
+            <Button label="Không gỡ" variant="ghost" onClick={() => setChoXacNhan(null)} />
+          </HStack>
+        </VStack>
       )}
       <FormLayout>
         <TextInput

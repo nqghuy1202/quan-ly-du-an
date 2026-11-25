@@ -7,6 +7,7 @@
 //   do "CHƯA KIỂM ...", để không ai đọc nhầm là đạt.
 import { describe, it } from 'vitest'
 import { chayBangCaQuyen, chayBoTestHopDong } from './hopDong'
+import { chayHopDongSuaTask } from './hopDongSuaTask'
 import { cauHinhTestSupabase, taoBoBanCaiSupabase } from './hopDongSupabase'
 
 // Đọc biến môi trường của tiến trình test mà không cần kiểu của Node trong mã ứng dụng.
@@ -22,6 +23,7 @@ switch (ketQua.trangThai) {
     describe('Repo GitHub của Dự án — bản Supabase', () => {
       it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh repo GitHub (ticket 17 cài và chạy chayHopDongRepo)', () => {})
     })
+    chayHopDongSuaTask('bản Supabase', taoBanCai, tuyChon)
     break
   }
   case 'THIEU_CAU_HINH': {

@@ -101,7 +101,7 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   if (trangHien === 'duAn') {
     noiDung = <TrangDuAnCuaToi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'viecCuaToi' || trangHien === 'choToiDuyet') {
-    noiDung = <TrangViecCaNhan key={trangHien} loai={trangHien} phien={phien} onHetPhien={onHetPhien} />
+    noiDung = <TrangViecCaNhan key={trangHien} loai={trangHien} phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'tatCaDuAn') {
     noiDung = <ManDuAn phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'hoSo') {

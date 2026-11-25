@@ -9,8 +9,9 @@ import { Text } from '@astryxdesign/core/Text'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
-import type { Phien, TaskKemDuAn } from '../kho/khoDuLieu'
+import type { DuAn, Phien, TaskKemDuAn } from '../kho/khoDuLieu'
 import { xepViecCaNhan } from '../luat/kanban'
+import type { VaiHeThong } from '../luat/taiKhoan'
 import { TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
 import { useKho } from './khoContext'
 import { ManChiTietTask } from './ManChiTietTask'
@@ -22,7 +23,76 @@ export type LoaiViecCaNhan = 'viecCuaToi' | 'choToiDuyet'
 interface Props {
   loai: LoaiViecCaNhan
   phien: Phien
+  vai: VaiHeThong
+  dongHo: () => Date
   onHetPhien: () => void
+}
+
+interface PropsChiTiet {
+  phien: Phien
+  vai: VaiHeThong
+  dongHo: () => Date
+  task: TaskKemDuAn
+  nhanQuayLai: string
+  onQuayLai: () => void
+  onHetPhien: () => void
+}
+
+/** Chi tiết Task mở từ danh sách cá nhân: đọc Dự án chứa Task để biết Dự án đã Lưu trữ hay chưa. */
+function ChiTietTaskCaNhan({ phien, vai, dongHo, task, nhanQuayLai, onQuayLai, onHetPhien }: PropsChiTiet) {
+  const kho = useKho()
+  const [duAn, setDuAn] = useState<KetQua<DuAn> | null>(null)
+  const [lanTai, setLanTai] = useState(0)
+
+  useEffect(() => {
+    let huy = false
+    kho.layDuAn(phien, task.duAnId).then((kq) => {
+      if (huy) return
+      if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
+      else setDuAn(kq)
+    })
+    return () => {
+      huy = true
+    }
+  }, [kho, phien, task.duAnId, lanTai, onHetPhien])
+
+  if (duAn === null) return <Spinner label="Đang tải Task" />
+  if (!duAn.ok) {
+    return (
+      <VStack gap={4}>
+        <Banner
+          status="error"
+          title="Không tải được Dự án chứa Task này."
+          role="alert"
+          endContent={
+            <Button
+              label="Thử lại"
+              variant="secondary"
+              onClick={() => {
+                setDuAn(null)
+                setLanTai((n) => n + 1)
+              }}
+            />
+          }
+        />
+        <Button label={nhanQuayLai} variant="ghost" onClick={onQuayLai} />
+      </VStack>
+    )
+  }
+  return (
+    <ManChiTietTask
+      phien={phien}
+      vai={vai}
+      taskId={task.id}
+      trangThaiDuAn={duAn.giaTri.trangThai}
+      dongHo={dongHo}
+      tenDuAn={task.tenDuAn}
+      nhanQuayLai={nhanQuayLai}
+      thongBaoBanDau={null}
+      onQuayLai={onQuayLai}
+      onHetPhien={onHetPhien}
+    />
+  )
 }
 
 const NOI_DUNG: Record<
@@ -61,7 +131,7 @@ type Dong = {
  * "Việc của tôi" hoặc "Chờ tôi duyệt": Task qua mọi Dự án của người dùng, mỗi dòng kèm tên Dự án.
  * Mở được chi tiết Task; có trạng thái trống, đang tải và lỗi.
  */
-export function TrangViecCaNhan({ loai, phien, onHetPhien }: Props) {
+export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props) {
   const kho = useKho()
   const noiDung = NOI_DUNG[loai]
   const [tai, setTai] = useState<KetQua<TaskKemDuAn[]> | null>(null)
@@ -89,13 +159,13 @@ export function TrangViecCaNhan({ loai, phien, onHetPhien }: Props) {
 
   if (taskDangMo !== null) {
     return (
-      <ManChiTietTask
+      <ChiTietTaskCaNhan
         key={taskDangMo.id}
         phien={phien}
-        taskId={taskDangMo.id}
-        tenDuAn={taskDangMo.tenDuAn}
+        vai={vai}
+        dongHo={dongHo}
+        task={taskDangMo}
         nhanQuayLai={`Về ${noiDung.tieuDe}`}
-        thongBaoBanDau={null}
         onQuayLai={() => {
           // Quay lại thì đọc lại danh sách: trạng thái hay người được giao có thể đã đổi.
           setTai(null)

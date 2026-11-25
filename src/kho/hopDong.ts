@@ -34,9 +34,9 @@ export interface BanCaiHopDong {
    */
   datVaiPM(email: string): Promise<void>
   /**
-   * Đặt thẳng trạng thái của Task, ngoài luồng của ứng dụng (dựng sẵn Task ở trạng thái bất kỳ;
-   * bản bộ nhớ: `chuDuAn.datTrangThaiTask`). Bản cài chưa có thì bỏ trống: các ca cần Task ở
-   * trạng thái khác Mới (Kanban, "Việc của tôi", "Chờ tôi duyệt") bị bỏ qua, mang tên "CHƯA KIỂM".
+   * Đặt Task `taskId` sang trạng thái bất kỳ, ngoài luồng của ứng dụng (lát này chưa có cách đi tới
+   * trạng thái cuối; bản bộ nhớ: `chuDuAn.datTrangThaiTask`). Bản cài chưa có thì bỏ trống: các ca
+   * cần nó (hopDongSuaTask.ts) bị bỏ qua, mang tên "CHƯA KIỂM".
    */
   datTrangThaiTask?(taskId: string, trangThai: TrangThaiTask): Promise<void>
 }
@@ -1860,6 +1860,23 @@ export function chayBangCaQuyen(
           }
           case 'XEM_TASK':
             thucTe = ketQuaLenh(await kho.layTask(nguoiGoi, taskSanId))
+            break
+          case 'SUA_TASK':
+            thucTe = ketQuaLenh(await kho.suaTask(nguoiGoi, taskSanId, { tieuDe: 'Tiêu đề mới' }, LUC))
+            break
+          case 'DOI_NGUOI_TASK':
+            // Đổi chỗ hai người: cả hai đều ở trong Dự án.
+            thucTe = ketQuaLenh(
+              await kho.doiNguoiTask(
+                nguoiGoi,
+                taskSanId,
+                { nguoiThucHienId: nguoiKiemId, nguoiKiemTraId: nguoiCu.nguoiDungId },
+                LUC,
+              ),
+            )
+            break
+          case 'XEM_TASK_NGUOI_DANG_GIU':
+            thucTe = ketQuaLenh(await kho.danhSachTaskNguoiDangGiu(nguoiGoi, duAn.id, nguoiCu.nguoiDungId))
             break
           default:
             throw new Error(`Hành động chưa có cách chạy: ${String(ca.hanhDong)}`)

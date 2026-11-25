@@ -8,6 +8,7 @@ import { HStack } from '@astryxdesign/core/HStack'
 import { Selector } from '@astryxdesign/core/Selector'
 import { StatusDot } from '@astryxdesign/core/StatusDot'
 import { Text } from '@astryxdesign/core/Text'
+import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { Task } from '../kho/khoDuLieu'
 import {
@@ -19,7 +20,7 @@ import {
   nhomTheoCot,
   type LocTask,
 } from '../luat/kanban'
-import { TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
+import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
 
 interface Props {
   tasks: readonly Task[]
@@ -61,8 +62,14 @@ function TheTask({ task, onMo }: TheTaskProps) {
       <Card padding={3}>
         <VStack gap={1}>
           <Button label={task.tieuDe} variant="ghost" onClick={() => onMo(task.id)} />
-          <Text type="supporting">{`Người thực hiện: ${task.nguoiThucHien.tenHienThi}`}</Text>
-          <Text type="supporting">{`Người kiểm tra: ${task.nguoiKiemTra.tenHienThi}`}</Text>
+          <HStack gap={2} vAlign="center" wrap="wrap">
+            <Text type="supporting">{`Người thực hiện: ${task.nguoiThucHien.tenHienThi}`}</Text>
+            {task.nguoiThucHien.daRoiDuAn && <Token label={THONG_BAO_SUA_TASK.daRoiDuAn} color="orange" />}
+          </HStack>
+          <HStack gap={2} vAlign="center" wrap="wrap">
+            <Text type="supporting">{`Người kiểm tra: ${task.nguoiKiemTra.tenHienThi}`}</Text>
+            {task.nguoiKiemTra.daRoiDuAn && <Token label={THONG_BAO_SUA_TASK.daRoiDuAn} color="orange" />}
+          </HStack>
           <Text type="supporting">{`Hạn: ${task.han === null ? 'Không có hạn' : dinhDangNgay(task.han)}`}</Text>
         </VStack>
       </Card>

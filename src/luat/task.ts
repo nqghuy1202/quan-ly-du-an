@@ -220,3 +220,177 @@ export function xepTask<T extends { tieuDe: string; dauVet: { taoLuc: Date } }>(
     (a, b) => b.dauVet.taoLuc.getTime() - a.dauVet.taoLuc.getTime() || a.tieuDe.localeCompare(b.tieuDe, 'vi'),
   )
 }
+
+// --- Ticket 08: sửa Task, đổi người, Task chưa chốt của người sắp bị gỡ ---
+
+/** Trạng thái cuối: Hoàn thành và Huỷ. Task đã chốt không sửa, không đổi người được nữa. */
+export const CAC_TRANG_THAI_TASK_DA_CHOT: readonly TrangThaiTask[] = ['HOAN_THANH', 'HUY']
+
+/** Task có đang ở trạng thái cuối (Hoàn thành hoặc Huỷ) không. */
+export function laTaskDaChot(trangThai: TrangThaiTask): boolean {
+  return CAC_TRANG_THAI_TASK_DA_CHOT.includes(trangThai)
+}
+
+export const THONG_BAO_SUA_TASK = {
+  /** Lý do hiện trên giao diện khi người dùng không sửa được Task. */
+  khongQuanLy: 'Chỉ PM hoặc Support của Dự án sửa được Task và đổi người. Bạn chỉ xem được Task này.',
+  /** Lý do hiện trên giao diện khi Dự án đã Lưu trữ. */
+  daLuuTru: 'Dự án đã Lưu trữ nên Task chỉ xem được. Mở lại Dự án để sửa.',
+  /** Lý do hiện trên giao diện khi Task ở trạng thái cuối. */
+  daChot: 'Task đã Hoàn thành hoặc Huỷ nên chỉ xem được, không sửa hay đổi người được nữa.',
+  /** Dấu hiệu cạnh tên người đã bị gỡ khỏi Dự án mà vẫn được ghi trên Task. */
+  daRoiDuAn: 'đã rời dự án',
+} as const
+
+/** Sửa Task: mỗi ô tuỳ chọn, ô không gửi thì giữ nguyên; hạn trống hay null là xoá hạn. */
+export const suaTaskSchema = z.object({
+  tieuDe: tieuDeTask.optional(),
+  moTa: moTaTask.optional(),
+  han: hanTask,
+})
+
+/** Đổi người: ô không gửi thì giữ nguyên; ô gửi trống hay null là bỏ người (Kho trả `THIEU_NGUOI`). */
+export const doiNguoiTaskSchema = z.object({
+  nguoiThucHienId: idNguoiDuocChon,
+  nguoiKiemTraId: idNguoiDuocChon,
+})
+
+/** Dữ liệu sửa Task đã kiểm: chỉ các ô được gửi. `han: null` là xoá hạn. */
+export interface DuLieuSuaTask {
+  tieuDe?: string
+  moTa?: string
+  han?: string | null
+}
+
+/** Dữ liệu đổi người đã kiểm: chỉ các ô được gửi; `null` là ô trống (chưa chọn). */
+export interface DuLieuDoiNguoiTask {
+  nguoiThucHienId?: string | null
+  nguoiKiemTraId?: string | null
+}
+
+/** Kiểm dữ liệu sửa Task và đổi người ở ranh giới (biểu mẫu, Kho). */
+export const kiemTraSuaTask = {
+  sua: (dauVao: unknown): KiemTra<DuLieuSuaTask> => {
+    const kt = kiemTra(suaTaskSchema, dauVao)
+    if (!kt.ok) return kt
+    const { tieuDe, moTa, han } = kt.giaTri
+    const giaTri: DuLieuSuaTask = {}
+    if (tieuDe !== undefined) giaTri.tieuDe = tieuDe
+    if (moTa !== undefined) giaTri.moTa = moTa
+    if (han !== undefined) giaTri.han = chuoiHoacNull(han)
+    return { ok: true, giaTri }
+  },
+  doiNguoi: (dauVao: unknown): KiemTra<DuLieuDoiNguoiTask> => {
+    const kt = kiemTra(doiNguoiTaskSchema, dauVao)
+    if (!kt.ok) return kt
+    const { nguoiThucHienId, nguoiKiemTraId } = kt.giaTri
+    const giaTri: DuLieuDoiNguoiTask = {}
+    if (nguoiThucHienId !== undefined) giaTri.nguoiThucHienId = chuoiHoacNull(nguoiThucHienId)
+    if (nguoiKiemTraId !== undefined) giaTri.nguoiKiemTraId = chuoiHoacNull(nguoiKiemTraId)
+    return { ok: true, giaTri }
+  },
+}
+
+/** Dữ liệu vào khi sửa Task. Ô không gửi thì giữ nguyên; `han` trống hay null là xoá hạn. */
+export interface SuaTaskDauVao {
+  tieuDe?: string
+  moTa?: string
+  han?: string | null
+}
+
+/** Dữ liệu vào khi đổi người của Task. Ô không gửi thì giữ nguyên. */
+export interface DoiNguoiTaskDauVao {
+  nguoiThucHienId?: string | null
+  nguoiKiemTraId?: string | null
+}
+
+/** Quyền sửa Task và đổi người: như quyền tạo Task (PM ở mọi Dự án, Support của Dự án). */
+export function duocSuaTask(nguoiGoi: NguoiGoiDuAn): boolean {
+  return duocQuanLyDuAn(nguoiGoi)
+}
+
+export type LyDoKhongSuaTask = LyDoKhongGhiDuAn | 'TASK_DA_CHOT'
+
+/**
+ * Có sửa được Task (hoặc đổi người) không; trả lý do từ chối, hoặc null nếu được. Kiểm theo thứ tự:
+ * quyền, rồi Dự án đã Lưu trữ, rồi Task đã chốt (Hoàn thành hoặc Huỷ).
+ */
+export function kiemSuaTask(
+  tinhHuong: NguoiGoiDuAn & { trangThai: TrangThaiDuAn; trangThaiTask: TrangThaiTask },
+): LyDoKhongSuaTask | null {
+  if (!duocSuaTask(tinhHuong)) return 'KHONG_CO_QUYEN'
+  const lyDoDuAn = kiemGhiDuAn(tinhHuong)
+  if (lyDoDuAn) return lyDoDuAn
+  if (laTaskDaChot(tinhHuong.trangThaiTask)) return 'TASK_DA_CHOT'
+  return null
+}
+
+/** Lý do (tiếng Việt) để hiện thay cho biểu mẫu sửa Task; null nếu được sửa. */
+export function lyDoKhongSuaTask(
+  tinhHuong: NguoiGoiDuAn & { trangThai: TrangThaiDuAn; trangThaiTask: TrangThaiTask },
+): string | null {
+  const lyDo = kiemSuaTask(tinhHuong)
+  if (lyDo === 'KHONG_CO_QUYEN') return THONG_BAO_SUA_TASK.khongQuanLy
+  if (lyDo === 'DU_AN_DA_LUU_TRU') return THONG_BAO_SUA_TASK.daLuuTru
+  if (lyDo === 'TASK_DA_CHOT') return THONG_BAO_SUA_TASK.daChot
+  return null
+}
+
+export type KetQuaDoiNguoiTask =
+  | { ok: true; nguoiThucHienId: string; nguoiKiemTraId: string }
+  | { ok: false; loi: LoiNguoiTask }
+
+/**
+ * Luật đổi người của một Task: ghép ô được gửi với người hiện tại rồi áp luật của `kiemNguoiTask`
+ * (đủ hai người, cả hai ở trong Dự án, khác nhau). Riêng người hiện tại ở ô không đổi được giữ
+ * nguyên dù đã rời Dự án (họ vẫn ghi trên Task cho đến khi được giao lại); chỉ người được chọn mới
+ * phải đang ở trong Dự án.
+ */
+export function kiemDoiNguoiTask(tinhHuong: {
+  hienTai: { nguoiThucHienId: string; nguoiKiemTraId: string }
+  moi: DuLieuDoiNguoiTask
+  laNguoiTrongDuAn: (nguoiDungId: string) => boolean
+}): KetQuaDoiNguoiTask {
+  const { hienTai, moi, laNguoiTrongDuAn } = tinhHuong
+  const ghep = (gui: string | null | undefined, cu: string): string | null => (gui === undefined ? cu : gui)
+  const nguoiThucHienId = ghep(moi.nguoiThucHienId, hienTai.nguoiThucHienId)
+  const nguoiKiemTraId = ghep(moi.nguoiKiemTraId, hienTai.nguoiKiemTraId)
+  const giuNguyen = new Set<string>()
+  if (nguoiThucHienId === hienTai.nguoiThucHienId) giuNguyen.add(hienTai.nguoiThucHienId)
+  if (nguoiKiemTraId === hienTai.nguoiKiemTraId) giuNguyen.add(hienTai.nguoiKiemTraId)
+  const loi = kiemNguoiTask({
+    nguoiThucHienId,
+    nguoiKiemTraId,
+    laNguoiTrongDuAn: (id) => giuNguyen.has(id) || laNguoiTrongDuAn(id),
+  })
+  if (loi) return { ok: false, loi }
+  // kiemNguoiTask đã bảo đảm cả hai id có mặt; kiểm lại để kiểu được thu hẹp.
+  if (nguoiThucHienId === null || nguoiKiemTraId === null) {
+    return { ok: false, loi: { ma: 'THIEU_NGUOI', loiTheoO: {} } }
+  }
+  return { ok: true, nguoiThucHienId, nguoiKiemTraId }
+}
+
+/**
+ * Task chưa chốt (không phải Hoàn thành, không phải Huỷ) mà `nguoiDungId` đang giữ, thực hiện hoặc
+ * kiểm tra. Dùng cho danh sách "giao lại trước khi gỡ người khỏi Dự án".
+ */
+export function taskChuaChotNguoiDangGiu<
+  T extends { trangThai: TrangThaiTask; nguoiThucHien: { id: string }; nguoiKiemTra: { id: string } },
+>(danhSach: readonly T[], nguoiDungId: string): T[] {
+  return danhSach.filter(
+    (task) =>
+      !laTaskDaChot(task.trangThai) &&
+      (task.nguoiThucHien.id === nguoiDungId || task.nguoiKiemTra.id === nguoiDungId),
+  )
+}
+
+/** Người đó giữ Task ở vai nào: dùng để hiện "Người thực hiện" hay "Người kiểm tra" (cả hai không thể trùng). */
+export function vaiGiuTask(
+  task: { nguoiThucHien: { id: string }; nguoiKiemTra: { id: string } },
+  nguoiDungId: string,
+): 'NGUOI_THUC_HIEN' | 'NGUOI_KIEM_TRA' | null {
+  if (task.nguoiThucHien.id === nguoiDungId) return 'NGUOI_THUC_HIEN'
+  if (task.nguoiKiemTra.id === nguoiDungId) return 'NGUOI_KIEM_TRA'
+  return null
+}

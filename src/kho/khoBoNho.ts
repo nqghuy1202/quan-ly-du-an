@@ -11,6 +11,7 @@ import type {
   DuAnTomTat,
   HoSo,
   KhoDuLieu,
+  NguoiCuaTask,
   NguoiDauVet,
   NguoiDungTomTat,
   Phien,
@@ -24,9 +25,15 @@ import { laChoToiDuyet, laViecCuaToi } from '../luat/kanban'
 import {
   TRANG_THAI_TASK_BAN_DAU,
   duocXemTask,
+  kiemDoiNguoiTask,
   kiemNguoiTask,
+  kiemSuaTask,
   kiemTaoTask,
+  kiemTraSuaTask,
   kiemTraTask,
+  taskChuaChotNguoiDangGiu,
+  type DoiNguoiTaskDauVao,
+  type SuaTaskDauVao,
   type TaoTaskDauVao,
   type TrangThaiTask,
 } from '../luat/task'
@@ -215,6 +222,12 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
     }
   }
 
+  /** Người của Task: người đã bị gỡ khỏi Dự án mà vẫn ghi trên Task thì kèm dấu hiệu "đã rời dự án". */
+  function nguoiCuaTask(id: string, duAnId: string): NguoiCuaTask {
+    const nguoi = nguoiDauVet(id)
+    return nguoiTheoDuAn.get(duAnId)?.has(id) ? nguoi : { ...nguoi, daRoiDuAn: true }
+  }
+
   /** Bản sao Task trả ra ngoài, như `docDuAn`. */
   function docTask(banGhi: BanGhiTask): Task {
     const { taoBoi, taoLuc, suaBoi, suaLuc } = banGhi.dauVet
@@ -224,8 +237,8 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       tieuDe: banGhi.tieuDe,
       moTa: banGhi.moTa,
       han: banGhi.han,
-      nguoiThucHien: nguoiDauVet(banGhi.nguoiThucHienId),
-      nguoiKiemTra: nguoiDauVet(banGhi.nguoiKiemTraId),
+      nguoiThucHien: nguoiCuaTask(banGhi.nguoiThucHienId, banGhi.duAnId),
+      nguoiKiemTra: nguoiCuaTask(banGhi.nguoiKiemTraId, banGhi.duAnId),
       trangThai: banGhi.trangThai,
       soLanTraLai: banGhi.soLanTraLai,
       dauVet: {
@@ -286,6 +299,20 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
     const duAn = duAnTheoId.get(duAnId)
     if (!duAn) return thatBai('KHONG_TIM_THAY')
     return thanhCong({ taiKhoan: xt.giaTri, duAn, nguoiGoi })
+  }
+
+  /**
+   * Ghi lên một Task: như `quanLyDuAn` trên Dự án của Task. Task không tồn tại: người không phải PM
+   * nhận `KHONG_CO_QUYEN` (không lộ gì), PM nhận `KHONG_TIM_THAY`.
+   */
+  function quanLyTask(phien: Phien | null, taskId: string): KetQua<NguCanh & { task: BanGhiTask }> {
+    const xt = xacThuc(phien)
+    if (!xt.ok) return xt
+    const task = taskTheoId.get(taskId)
+    if (!task) return xt.giaTri.hoSo.vai === 'PM' ? thatBai('KHONG_TIM_THAY') : thatBai('KHONG_CO_QUYEN')
+    const ql = quanLyDuAn(phien, task.duAnId)
+    if (!ql.ok) return ql
+    return thanhCong({ ...ql.giaTri, task })
   }
 
   /** Tạo tài khoản mới với dữ liệu đã kiểm; trả hồ sơ gốc (không phải bản sao). */
@@ -647,6 +674,50 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       }
       taskTheoId.set(banGhi.id, banGhi)
       return thanhCong(docTask(banGhi))
+    },
+
+    async suaTask(phien: Phien | null, taskId: string, dauVao: SuaTaskDauVao, bayGio: Date) {
+      const xt = quanLyTask(phien, taskId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn, nguoiGoi, task } = xt.giaTri
+      const lyDo = kiemSuaTask({ ...nguoiGoi, trangThai: duAn.trangThai, trangThaiTask: task.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraSuaTask.sua(dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      if (kt.giaTri.tieuDe !== undefined) task.tieuDe = kt.giaTri.tieuDe
+      if (kt.giaTri.moTa !== undefined) task.moTa = kt.giaTri.moTa
+      if (kt.giaTri.han !== undefined) task.han = kt.giaTri.han
+      task.dauVet = dauVetSauSua(task.dauVet, taiKhoan.hoSo.id, bayGio)
+      return thanhCong(docTask(task))
+    },
+
+    async doiNguoiTask(phien: Phien | null, taskId: string, dauVao: DoiNguoiTaskDauVao, bayGio: Date) {
+      const xt = quanLyTask(phien, taskId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn, nguoiGoi, task } = xt.giaTri
+      const lyDo = kiemSuaTask({ ...nguoiGoi, trangThai: duAn.trangThai, trangThaiTask: task.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraSuaTask.doiNguoi(dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const tap = nguoiTrong(task.duAnId)
+      const moi = kiemDoiNguoiTask({
+        hienTai: { nguoiThucHienId: task.nguoiThucHienId, nguoiKiemTraId: task.nguoiKiemTraId },
+        moi: kt.giaTri,
+        laNguoiTrongDuAn: (id) => tap.has(id),
+      })
+      if (!moi.ok) return thatBai(moi.loi.ma, undefined, moi.loi.loiTheoO)
+      task.nguoiThucHienId = moi.nguoiThucHienId
+      task.nguoiKiemTraId = moi.nguoiKiemTraId
+      task.dauVet = dauVetSauSua(task.dauVet, taiKhoan.hoSo.id, bayGio)
+      return thanhCong(docTask(task))
+    },
+
+    async danhSachTaskNguoiDangGiu(phien: Phien | null, duAnId: string, nguoiDungId: string) {
+      const xt = quanLyDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      if (!nguoiTrong(duAnId).has(nguoiDungId)) return thatBai('KHONG_TIM_THAY')
+      const cuaDuAn = [...taskTheoId.values()].filter((task) => task.duAnId === duAnId).map(docTask)
+      return thanhCong(taskChuaChotNguoiDangGiu(cuaDuAn, nguoiDungId))
     },
 
     async danhSachTask(phien: Phien | null, duAnId: string) {

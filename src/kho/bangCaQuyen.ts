@@ -38,13 +38,24 @@ export const MO_TA_HANH_DONG = {
   TAO_TASK: 'Tạo Task giao cho người cũ, người kiểm duyệt (taoTask).',
   DANH_SACH_TASK: 'Task có sẵn có hiện trong danh sách Task của Dự án không (danhSachTask).',
   XEM_TASK: 'Mở thẳng Task có sẵn (layTask).',
+  // Ticket 08: sửa Task, đổi người, Task chưa chốt của người sắp bị gỡ.
+  SUA_TASK: 'Sửa tiêu đề Task có sẵn, trạng thái Mới (suaTask).',
+  DOI_NGUOI_TASK: 'Đổi chỗ Người thực hiện và Người kiểm tra của Task có sẵn, đều ở trong Dự án (doiNguoiTask).',
+  XEM_TASK_NGUOI_DANG_GIU: 'Xem Task chưa chốt mà người cũ đang giữ (danhSachTaskNguoiDangGiu).',
 } as const
 
 export type HanhDong = keyof typeof MO_TA_HANH_DONG
 
 export const CAC_HANH_DONG = Object.keys(MO_TA_HANH_DONG) as HanhDong[]
 
-const HANH_DONG_TASK: readonly HanhDong[] = ['TAO_TASK', 'DANH_SACH_TASK', 'XEM_TASK']
+const HANH_DONG_TASK: readonly HanhDong[] = [
+  'TAO_TASK',
+  'DANH_SACH_TASK',
+  'XEM_TASK',
+  'SUA_TASK',
+  'DOI_NGUOI_TASK',
+  'XEM_TASK_NGUOI_DANG_GIU',
+]
 
 /** Hành động về Task: cần dựng thêm người kiểm và một Task có sẵn. */
 export function laHanhDongTask(hanhDong: HanhDong): boolean {
@@ -252,6 +263,44 @@ const DONG: readonly Dong[] = [
   ['SUPPORT',     false,       LT,    'XEM_TASK',                 'KHONG_TIM_THAY'],
   ['THANH_VIEN',  true,        LT,    'XEM_TASK',                 'DUOC'],
   ['THANH_VIEN',  false,       LT,    'XEM_TASK',                 'KHONG_TIM_THAY'],
+  // --- Ticket 08: sửa Task và đổi người như quyền quản lý Dự án; Dự án Lưu trữ: DU_AN_DA_LUU_TRU sau quyền.
+  ['PM',          true,        HD,    'SUA_TASK',                 'DUOC'],
+  ['PM',          false,       HD,    'SUA_TASK',                 'DUOC'],
+  ['SUPPORT',     true,        HD,    'SUA_TASK',                 'DUOC'],
+  ['SUPPORT',     false,       HD,    'SUA_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'SUA_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'SUA_TASK',                 'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'SUA_TASK',                 'DU_AN_DA_LUU_TRU'],
+  ['PM',          false,       LT,    'SUA_TASK',                 'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     true,        LT,    'SUA_TASK',                 'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     false,       LT,    'SUA_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'SUA_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'SUA_TASK',                 'KHONG_CO_QUYEN'],
+  ['PM',          true,        HD,    'DOI_NGUOI_TASK',           'DUOC'],
+  ['PM',          false,       HD,    'DOI_NGUOI_TASK',           'DUOC'],
+  ['SUPPORT',     true,        HD,    'DOI_NGUOI_TASK',           'DUOC'],
+  ['SUPPORT',     false,       HD,    'DOI_NGUOI_TASK',           'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'DOI_NGUOI_TASK',           'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'DOI_NGUOI_TASK',           'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'DOI_NGUOI_TASK',           'DU_AN_DA_LUU_TRU'],
+  ['PM',          false,       LT,    'DOI_NGUOI_TASK',           'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     true,        LT,    'DOI_NGUOI_TASK',           'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     false,       LT,    'DOI_NGUOI_TASK',           'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'DOI_NGUOI_TASK',           'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'DOI_NGUOI_TASK',           'KHONG_CO_QUYEN'],
+  // Danh sách Task chưa chốt của người sắp bị gỡ: chỉ người quản lý Dự án xem; chỉ đọc nên Dự án Lưu trữ vẫn xem được.
+  ['PM',          true,        HD,    'XEM_TASK_NGUOI_DANG_GIU',  'DUOC'],
+  ['PM',          false,       HD,    'XEM_TASK_NGUOI_DANG_GIU',  'DUOC'],
+  ['SUPPORT',     true,        HD,    'XEM_TASK_NGUOI_DANG_GIU',  'DUOC'],
+  ['SUPPORT',     false,       HD,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'XEM_TASK_NGUOI_DANG_GIU',  'DUOC'],
+  ['PM',          false,       LT,    'XEM_TASK_NGUOI_DANG_GIU',  'DUOC'],
+  ['SUPPORT',     true,        LT,    'XEM_TASK_NGUOI_DANG_GIU',  'DUOC'],
+  ['SUPPORT',     false,       LT,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
 ]
 
 /** Bảng ca dùng chung cho quyền: mỗi phần tử là một dòng. */
