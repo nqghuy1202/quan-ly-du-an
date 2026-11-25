@@ -44,6 +44,11 @@ src/
   astryx-themes.ts       sinh bởi astryx theme add
   globals.css            reset + astryx.css
   test/setup.ts          jest-dom + dọn sau mỗi test
+  luat/                  luật nghiệp vụ thuần (zod ở ranh giới, quyền), không I/O
+  kho/                   Kho dữ liệu: khoDuLieu.ts (giao diện), ketQua.ts (lỗi có mã),
+                         khoBoNho.ts (bản bộ nhớ), hopDong.ts (bộ test hợp đồng dùng chung;
+                         bản cài mới gọi chayBoTestHopDong trong file *.test.ts của mình)
+  giaoDien/              các màn; lấy Kho qua KhoContext/useKho
 ```
 
 Test cạnh mã (`*.test.ts[x]` trong `src/`), chạy bằng Vitest và Testing Library. Môi trường test mặc định là `node`; **test giao diện bắt buộc khai `// @vitest-environment jsdom` ở dòng đầu file**. Không đổi mặc định sang `jsdom` trong `vite.config.ts`: cổng kiểm chạy trong sandbox và sẽ báo `EPERM`.
