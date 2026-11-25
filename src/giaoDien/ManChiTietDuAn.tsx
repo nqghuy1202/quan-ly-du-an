@@ -356,6 +356,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         phien={phien}
         duAnId={duAnId}
         lyDoKhongTao={lyDoKhongTaoTaskMoi}
+        dongHo={dongHo}
         onTao={() => setManTask({ loai: 'tao' })}
         onMo={(taskId) => setManTask({ loai: 'chiTiet', taskId, thongBao: null })}
         onHetPhien={onHetPhien}

@@ -11,19 +11,22 @@ import type { KetQua } from '../kho/ketQua'
 import type { Phien, Task } from '../kho/khoDuLieu'
 import { BangKanbanTask } from './BangKanbanTask'
 import { useKho } from './khoContext'
+import { PhanTaskTreHan } from './PhanTaskTreHan'
 
 interface Props {
   phien: Phien
   duAnId: string
   /** Lý do không tạo được Task (cùng luật với Kho); null nếu được. */
   lyDoKhongTao: string | null
+  /** Đồng hồ để biết ngày hôm nay (giờ Việt Nam) khi tìm Task Trễ hạn. */
+  dongHo: () => Date
   onTao: () => void
   onMo: (taskId: string) => void
   onHetPhien: () => void
 }
 
 /** Phần "Task" của màn chi tiết Dự án: bảng Kanban kèm bộ lọc, nút tạo Task (hoặc lý do không tạo được). */
-export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHetPhien }: Props) {
+export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, dongHo, onTao, onMo, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task[]> } | null>(null)
@@ -68,7 +71,12 @@ export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHe
       />
     )
   } else {
-    noiDung = <BangKanbanTask tasks={tai.giaTri} onMo={onMo} />
+    noiDung = (
+      <VStack gap={4}>
+        <PhanTaskTreHan tasks={tai.giaTri} bayGio={dongHo()} onMo={onMo} />
+        <BangKanbanTask tasks={tai.giaTri} onMo={onMo} />
+      </VStack>
+    )
   }
 
   return (

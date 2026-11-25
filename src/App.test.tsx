@@ -340,7 +340,9 @@ describe('điều hướng bằng phím', () => {
     await user.keyboard('{Enter}')
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 
-    // Khung: Dự án của tôi → Việc của tôi → Chờ tôi duyệt → Hồ sơ → Đăng xuất.
+    // Khung: Tổng quan → Dự án của tôi → Việc của tôi → Chờ tôi duyệt → Hồ sơ → Đăng xuất.
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Tổng quan' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Dự án của tôi' })).toHaveFocus()
     await user.tab()
