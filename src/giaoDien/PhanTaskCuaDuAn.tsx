@@ -9,12 +9,20 @@ import { Text } from '@astryxdesign/core/Text'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { Phien, Task } from '../kho/khoDuLieu'
+import type { TrangThaiDuAn } from '../luat/duAn'
+import type { VaiHeThong } from '../luat/taiKhoan'
 import { BangKanbanTask } from './BangKanbanTask'
+import type { QuyenChuyenKanban } from './chuyenTheKanban'
 import { useKho } from './khoContext'
 
 interface Props {
   phien: Phien
+  vai: VaiHeThong
   duAnId: string
+  trangThaiDuAn: TrangThaiDuAn
+  /** Người gọi có nằm trong danh sách người trong dự án không; null là chưa biết (đang tải hoặc lỗi). */
+  laNguoiTrongDuAn: boolean | null
+  dongHo: () => Date
   /** Lý do không tạo được Task (cùng luật với Kho); null nếu được. */
   lyDoKhongTao: string | null
   onTao: () => void
@@ -22,8 +30,12 @@ interface Props {
   onHetPhien: () => void
 }
 
-/** Phần "Task" của màn chi tiết Dự án: bảng Kanban kèm bộ lọc, nút tạo Task (hoặc lý do không tạo được). */
-export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHetPhien }: Props) {
+/**
+ * Phần "Task" của màn chi tiết Dự án: bảng Kanban kèm bộ lọc và kéo thả đổi trạng thái, nút tạo Task
+ * (hoặc lý do không tạo được). Kéo thả cần biết người gọi có nằm trong Dự án không (cùng luật với
+ * Kho); chưa biết (đang tải hay lỗi) thì bảng chỉ xem và nói rõ.
+ */
+export function PhanTaskCuaDuAn({ phien, vai, duAnId, trangThaiDuAn, laNguoiTrongDuAn, dongHo, lyDoKhongTao, onTao, onMo, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task[]> } | null>(null)
@@ -41,6 +53,18 @@ export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHe
       huy = true
     }
   }, [kho, phien, duAnId, lanTai, onHetPhien])
+
+  /** Thay một Task trong bảng đã tải bằng bản mới (vừa đổi trạng thái hoặc vừa đọc lại). */
+  function thayTask(moi: Task) {
+    setDaTai((cu) =>
+      cu && cu.kq.ok
+        ? { lan: cu.lan, kq: { ok: true, giaTri: cu.kq.giaTri.map((task) => (task.id === moi.id ? moi : task)) } }
+        : cu,
+    )
+  }
+
+  const quyen: QuyenChuyenKanban | null =
+    laNguoiTrongDuAn === null ? null : { phien, vai, trangThaiDuAn, laNguoiTrongDuAn, dongHo }
 
   let noiDung: ReactNode
   if (tai === null) {
@@ -68,7 +92,14 @@ export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHe
       />
     )
   } else {
-    noiDung = <BangKanbanTask tasks={tai.giaTri} onMo={onMo} />
+    noiDung = (
+      <VStack gap={3}>
+        {laNguoiTrongDuAn === null && (
+          <Text type="supporting">Chưa kiểm xong quyền đổi trạng thái của bạn nên chưa kéo thả được.</Text>
+        )}
+        <BangKanbanTask tasks={tai.giaTri} onMo={onMo} quyen={quyen} onDaDoi={thayTask} onHetPhien={onHetPhien} />
+      </VStack>
+    )
   }
 
   return (
