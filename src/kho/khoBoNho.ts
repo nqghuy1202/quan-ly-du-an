@@ -8,6 +8,7 @@
 import { THONG_BAO_MAC_DINH, thanhCong, thatBai, type KetQua } from './ketQua'
 import type {
   DuAn,
+  DongLichSuTask,
   DuAnTomTat,
   HoSo,
   KhoDuLieu,
@@ -34,6 +35,14 @@ import {
   type LienKetGitHub,
   type ThemLienKetDauVao,
 } from '../luat/github'
+import {
+  dongLichSuMoi,
+  kiemChuyenTrangThai,
+  soLanTraLaiSau,
+  xepLichSuTask,
+  type DoiTrangThaiTaskDauVao,
+  type DongLichSu,
+} from '../luat/chuyenTrangThai'
 import { laChoToiDuyet, laViecCuaToi } from '../luat/kanban'
 import {
   TRANG_THAI_TASK_BAN_DAU,
@@ -203,6 +212,8 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   /** Người trong dự án: duAnId -> tập id tài khoản. */
   const nguoiTheoDuAn = new Map<string, Set<string>>()
   const taskTheoId = new Map<string, BanGhiTask>()
+  /** Lịch sử trạng thái: taskId -> các dòng theo thứ tự ghi; người ghi bằng id. */
+  const lichSuTheoTask = new Map<string, DongLichSu<string>[]>()
   /** Repo GitHub của Dự án: duAnId -> tên repo, theo thứ tự gắn. */
   const repoTheoDuAn = new Map<string, string[]>()
   let demNguoiDung = 0
@@ -725,6 +736,47 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       task.nguoiKiemTraId = moi.nguoiKiemTraId
       task.dauVet = dauVetSauSua(task.dauVet, taiKhoan.hoSo.id, bayGio)
       return thanhCong(docTask(task))
+    },
+
+    async doiTrangThaiTask(phien: Phien | null, taskId: string, dauVao: DoiTrangThaiTaskDauVao, bayGio: Date) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const taiKhoan = xt.giaTri
+      const task = taskTheoId.get(taskId)
+      // Task không tồn tại: người không phải PM nhận KHONG_CO_QUYEN (không lộ gì), PM nhận KHONG_TIM_THAY.
+      if (!task) return taiKhoan.hoSo.vai === 'PM' ? thatBai('KHONG_TIM_THAY') : thatBai('KHONG_CO_QUYEN')
+      const duAn = duAnTheoId.get(task.duAnId)
+      if (!duAn) return thatBai('KHONG_TIM_THAY')
+      const nguoiGoi = nhinTuDuAn(taiKhoan, task.duAnId)
+      const kq = kiemChuyenTrangThai(
+        {
+          ...nguoiGoi,
+          nguoiGoiId: taiKhoan.hoSo.id,
+          nguoiThucHienId: task.nguoiThucHienId,
+          nguoiKiemTraId: task.nguoiKiemTraId,
+          trangThaiDuAn: duAn.trangThai,
+          trangThaiTask: task.trangThai,
+        },
+        dauVao,
+      )
+      if (!kq.ok) return thatBai(kq.ma, kq.thongBao, kq.loiTheoO)
+      const dong = dongLichSuMoi(taiKhoan.hoSo.id, bayGio, kq.buoc, kq.lyDo)
+      task.trangThai = kq.buoc.sang
+      task.soLanTraLai = soLanTraLaiSau(task.soLanTraLai, kq.buoc)
+      task.dauVet = dauVetSauSua(task.dauVet, taiKhoan.hoSo.id, bayGio)
+      lichSuTheoTask.set(taskId, [...(lichSuTheoTask.get(taskId) ?? []), dong])
+      return thanhCong(docTask(task))
+    },
+
+    async lichSuTask(phien: Phien | null, taskId: string) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const task = taskTheoId.get(taskId)
+      if (!task || !duocXemTask(nhinTuDuAn(xt.giaTri, task.duAnId))) return thatBai('KHONG_TIM_THAY')
+      const dong = xepLichSuTask(lichSuTheoTask.get(taskId) ?? []).map(
+        (d): DongLichSuTask => ({ ...d, nguoiDoi: nguoiDauVet(d.nguoiDoi), luc: new Date(d.luc.getTime()) }),
+      )
+      return thanhCong(dong)
     },
 
     async danhSachTaskNguoiDangGiu(phien: Phien | null, duAnId: string, nguoiDungId: string) {

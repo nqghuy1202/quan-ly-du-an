@@ -27,6 +27,7 @@ import type {
   TrangThaiTask,
 } from '../luat/task'
 import type { GanRepoDauVao, LienKetGitHub, ThemLienKetDauVao } from '../luat/github'
+import type { DoiTrangThaiTaskDauVao, DongLichSu } from '../luat/chuyenTrangThai'
 
 export interface HoSo {
   id: string
@@ -101,6 +102,9 @@ export interface Task {
   soLanTraLai: number
   dauVet: DauVet<NguoiDauVet>
 }
+
+/** Một dòng lịch sử trạng thái của Task: người đổi kèm tên hiển thị hiện tại của tài khoản lúc đọc. */
+export type DongLichSuTask = DongLichSu<NguoiDauVet>
 
 /** Một repo GitHub gắn vào Dự án: tên dạng `chu-so-huu/ten-repo`, giữ chữ hoa chữ thường như lúc gắn. */
 export interface RepoDuAn {
@@ -243,6 +247,25 @@ export interface KhoDuLieu {
    * gọi không thấy Dự án của nó: không lộ là có tồn tại).
    */
   layTask(phien: Phien | null, taskId: string): Promise<KetQua<Task>>
+  /**
+   * Đổi trạng thái Task theo ma trận của spec (`luat/chuyenTrangThai.ts`): ghi đúng một dòng lịch
+   * sử (người gọi, `bayGio`, trạng thái cũ, trạng thái mới, lý do), tăng bộ đếm Trả lại khi sang
+   * Trả lại, và cập nhật người và ngày chỉnh sửa gần nhất như một lần chỉnh sửa. Người thực hiện,
+   * Người kiểm tra, Support của Dự án và PM, theo bảng của spec. Lỗi (không đổi gì, không ghi lịch
+   * sử), theo thứ tự: `KHONG_CO_QUYEN` (người gọi không giữ vai nào trên Task; Task không tồn tại với
+   * người không phải PM), `KHONG_TIM_THAY` (PM, Task không tồn tại), `DU_AN_DA_LUU_TRU`,
+   * `TASK_DA_CHOT` (mọi bước từ Hoàn thành hay Huỷ), `KHONG_HOP_LE` (trạng thái đích không có thật,
+   * lý do quá dài), `BUOC_KHONG_HOP_LE` (không có trong ma trận), `KHONG_CO_QUYEN` (có trong ma trận
+   * nhưng vai của người gọi không được làm), `LY_DO_BAT_BUOC` (Trả lại, Bị lỗi, Huỷ mà lý do rỗng
+   * hay chỉ khoảng trắng).
+   */
+  doiTrangThaiTask(phien: Phien | null, taskId: string, dauVao: DoiTrangThaiTaskDauVao, bayGio: Date): Promise<KetQua<Task>>
+  /**
+   * Lịch sử trạng thái của Task, theo thứ tự thời gian tăng dần (cùng lúc thì theo thứ tự ghi); Task
+   * chưa đổi trạng thái lần nào thì rỗng. Ai thấy Dự án của Task thì xem được. Lỗi: `KHONG_TIM_THAY`
+   * (như `layTask`).
+   */
+  lichSuTask(phien: Phien | null, taskId: string): Promise<KetQua<DongLichSuTask[]>>
   /**
    * Gắn repo GitHub vào Dự án bằng tên `chu-so-huu/ten-repo` (không phân biệt hoa thường khi so
    * trùng). PM hoặc Support của Dự án. Chỉ ghi tên, không gọi GitHub. Lỗi (không đổi gì), theo thứ

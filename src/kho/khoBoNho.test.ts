@@ -3,6 +3,7 @@ import { chayBangCaQuyen, chayBoTestHopDong, type BanCaiHopDong } from './hopDon
 import { chayHopDongLienKet } from './hopDongLienKet'
 import { chayHopDongRepo } from './hopDongRepo'
 import { chayHopDongSuaTask } from './hopDongSuaTask'
+import { chayHopDongChuyenTrangThai } from './hopDongChuyenTrangThai'
 import { taoKhoBoNho, type ThuMoPhong } from './khoBoNho'
 import { CAC_VAI } from '../luat/taiKhoan'
 
@@ -38,6 +39,7 @@ chayBangCaQuyen('bản bộ nhớ', taoBanCai)
 
 chayHopDongRepo('bản bộ nhớ', taoBanCai)
 chayHopDongSuaTask('bản bộ nhớ', taoBanCai)
+chayHopDongChuyenTrangThai('bản bộ nhớ', taoBanCai)
 
 chayHopDongLienKet('bản bộ nhớ', taoBanCai)
 

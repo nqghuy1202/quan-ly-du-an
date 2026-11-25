@@ -127,6 +127,10 @@ const MA_TU_CSDL: readonly MaLoi[] = [
   'TRUNG_NGUOI',
 ]
 
+/** Đổi trạng thái và lịch sử Task chưa có trên bản Supabase (hàm cơ sở dữ liệu làm ở ticket 14). */
+export const THONG_BAO_TRANG_THAI_CHUA_CO_TREN_SUPABASE =
+  'Máy chủ chưa hỗ trợ đổi trạng thái và xem lịch sử Task. Chức năng này sẽ có khi cơ sở dữ liệu được cập nhật.'
+
 /** Lệnh repo GitHub chưa có trên bản Supabase (bảng và phân quyền từng dòng làm ở ticket 17). */
 export const THONG_BAO_REPO_CHUA_CO_TREN_SUPABASE =
   'Máy chủ chưa hỗ trợ gắn repo GitHub. Chức năng này sẽ có khi cơ sở dữ liệu được cập nhật.'
@@ -376,6 +380,13 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     const mo = phien ? phienDangMo.get(phien.maPhien) : undefined
     if (!phien || !mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
     return thatBai('LOI_HE_THONG', THONG_BAO_REPO_CHUA_CO_TREN_SUPABASE)
+  }
+
+  /** Đổi trạng thái và lịch sử Task trên bản này (ticket 14 cài): báo chưa hỗ trợ. Không gọi mạng. */
+  function trangThaiChuaCo(phien: Phien | null): KetQua<never> {
+    const mo = phien ? phienDangMo.get(phien.maPhien) : undefined
+    if (!phien || !mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
+    return thatBai('LOI_HE_THONG', THONG_BAO_TRANG_THAI_CHUA_CO_TREN_SUPABASE)
   }
 
   /** Lệnh link GitHub của Task trên bản này: như `repoChuaCo`, báo chưa hỗ trợ. Không gọi mạng. */
@@ -720,6 +731,15 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
 
     // Lệnh Task (ticket 07, 08, 09): bản Supabase ở khoSupabaseTask.ts.
     ...lenhTask,
+
+    // CHƯA CÀI (ticket 14): đổi trạng thái và lịch sử trên Supabase (hàm cơ sở dữ liệu kiểm luật).
+    async doiTrangThaiTask(phien: Phien | null) {
+      return trangThaiChuaCo(phien)
+    },
+
+    async lichSuTask(phien: Phien | null) {
+      return trangThaiChuaCo(phien)
+    },
 
     // CHƯA CÀI (ticket 17): repo GitHub trên Supabase. Người chưa đăng nhập vẫn nhận CHUA_DANG_NHAP.
     async ganRepoVaoDuAn(phien: Phien | null) {

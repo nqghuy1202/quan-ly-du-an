@@ -36,6 +36,10 @@ export type MaLoi =
   | 'LINK_REPO_CHUA_GAN'
   /** Link đã có trên Task. */
   | 'LINK_TRUNG'
+  /** Bước đổi trạng thái Task không có trong ma trận (vd. Mới sang Hoàn thành). */
+  | 'BUOC_KHONG_HOP_LE'
+  /** Trả lại, Bị lỗi hay Huỷ mà lý do rỗng hoặc chỉ khoảng trắng. */
+  | 'LY_DO_BAT_BUOC'
 
 export interface LoiKho {
   ma: MaLoi
@@ -88,4 +92,6 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   LINK_REPO_CHUA_GAN:
     'Link này thuộc repo chưa gắn vào Dự án. Hãy nhờ PM hoặc Support gắn repo trước, hoặc dán link của repo đã gắn.',
   LINK_TRUNG: 'Link này đã có trên Task.',
+  BUOC_KHONG_HOP_LE: 'Bước đổi trạng thái này không có trong vòng duyệt của Task.',
+  LY_DO_BAT_BUOC: 'Hãy nhập lý do. Trả lại, báo Bị lỗi và Huỷ Task đều bắt buộc có lý do.',
 }
