@@ -5,16 +5,12 @@ import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Heading } from '@astryxdesign/core/Heading'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Spinner } from '@astryxdesign/core/Spinner'
-import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
 import { Text } from '@astryxdesign/core/Text'
-import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { Phien, Task } from '../kho/khoDuLieu'
-import { dinhDangNgayGio } from '../luat/duAn'
-import { TEN_TRANG_THAI_TASK, dinhDangNgay, xepTask, type TrangThaiTask } from '../luat/task'
+import { BangKanbanTask } from './BangKanbanTask'
 import { useKho } from './khoContext'
-import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 
 interface Props {
   phien: Phien
@@ -26,30 +22,7 @@ interface Props {
   onHetPhien: () => void
 }
 
-/** Một dòng của bảng (kiểu đối tượng thuần, như Table đòi). */
-type Dong = {
-  id: string
-  tieuDe: string
-  trangThai: TrangThaiTask
-  nguoiThucHien: string
-  nguoiKiemTra: string
-  han: string
-  taoBoi: string
-}
-
-function thanhDong(task: Task): Dong {
-  return {
-    id: task.id,
-    tieuDe: task.tieuDe,
-    trangThai: task.trangThai,
-    nguoiThucHien: task.nguoiThucHien.tenHienThi,
-    nguoiKiemTra: task.nguoiKiemTra.tenHienThi,
-    han: task.han === null ? 'Không có hạn' : dinhDangNgay(task.han),
-    taoBoi: `${task.dauVet.taoBoi.tenHienThi}, ${dinhDangNgayGio(task.dauVet.taoLuc)}`,
-  }
-}
-
-/** Phần "Task" của màn chi tiết Dự án: bảng Task đơn giản, nút tạo Task (hoặc lý do không tạo được). */
+/** Phần "Task" của màn chi tiết Dự án: bảng Kanban kèm bộ lọc, nút tạo Task (hoặc lý do không tạo được). */
 export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
@@ -68,37 +41,6 @@ export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHe
       huy = true
     }
   }, [kho, phien, duAnId, lanTai, onHetPhien])
-
-  const cot: TableColumn<Dong>[] = [
-    {
-      key: 'tieuDe',
-      header: 'Tiêu đề',
-      width: proportional(2),
-      renderCell: (dong) => <Button label={dong.tieuDe} variant="ghost" onClick={() => onMo(dong.id)} />,
-    },
-    {
-      key: 'trangThai',
-      header: 'Trạng thái',
-      width: proportional(1),
-      renderCell: (dong) => (
-        <Token label={TEN_TRANG_THAI_TASK[dong.trangThai]} color={MAU_TRANG_THAI_TASK[dong.trangThai]} />
-      ),
-    },
-    {
-      key: 'nguoiThucHien',
-      header: 'Người thực hiện',
-      width: proportional(1),
-      renderCell: (dong) => <Text>{dong.nguoiThucHien}</Text>,
-    },
-    {
-      key: 'nguoiKiemTra',
-      header: 'Người kiểm tra',
-      width: proportional(1),
-      renderCell: (dong) => <Text>{dong.nguoiKiemTra}</Text>,
-    },
-    { key: 'han', header: 'Hạn', width: proportional(1), renderCell: (dong) => <Text>{dong.han}</Text> },
-    { key: 'taoBoi', header: 'Người tạo, ngày tạo', width: proportional(1), renderCell: (dong) => <Text>{dong.taoBoi}</Text> },
-  ]
 
   let noiDung: ReactNode
   if (tai === null) {
@@ -126,9 +68,7 @@ export function PhanTaskCuaDuAn({ phien, duAnId, lyDoKhongTao, onTao, onMo, onHe
       />
     )
   } else {
-    noiDung = (
-      <Table aria-label="Danh sách Task" data={xepTask(tai.giaTri).map(thanhDong)} columns={cot} idKey="id" />
-    )
+    noiDung = <BangKanbanTask tasks={tai.giaTri} onMo={onMo} />
   }
 
   return (

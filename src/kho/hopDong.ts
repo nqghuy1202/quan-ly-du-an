@@ -8,7 +8,13 @@ import type { KetQua, MaLoi } from './ketQua'
 import type { KhoDuLieu, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
 import { CAC_VAI, THONG_BAO, type VaiHeThong } from '../luat/taiKhoan'
 import { DO_DAI_TEN_DU_AN_TOI_DA, THONG_BAO_DU_AN } from '../luat/duAn'
-import { DO_DAI_TIEU_DE_TASK_TOI_DA, THONG_BAO_TASK, type TaoTaskDauVao } from '../luat/task'
+import {
+  CAC_TRANG_THAI_TASK,
+  DO_DAI_TIEU_DE_TASK_TOI_DA,
+  THONG_BAO_TASK,
+  type TaoTaskDauVao,
+  type TrangThaiTask,
+} from '../luat/task'
 import { BANG_CA_QUYEN, laHanhDongTask, type CaQuyen, type KetQuaMongDoi } from './bangCaQuyen'
 
 export interface BanCaiHopDong {
@@ -27,6 +33,12 @@ export interface BanCaiHopDong {
    * tự đặt PM đầu tiên trên kho thật; bản bộ nhớ: `chuDuAn.datVaiPM`).
    */
   datVaiPM(email: string): Promise<void>
+  /**
+   * Đặt thẳng trạng thái của Task, ngoài luồng của ứng dụng (dựng sẵn Task ở trạng thái bất kỳ;
+   * bản bộ nhớ: `chuDuAn.datTrangThaiTask`). Bản cài chưa có thì bỏ trống: các ca cần Task ở
+   * trạng thái khác Mới (Kanban, "Việc của tôi", "Chờ tôi duyệt") bị bỏ qua, mang tên "CHƯA KIỂM".
+   */
+  datTrangThaiTask?(taskId: string, trangThai: TrangThaiTask): Promise<void>
 }
 
 export interface TuyChonHopDong {
@@ -53,6 +65,11 @@ export interface TuyChonHopDong {
    * (bản Supabase trước ticket 10): các ca Task và dòng Task của bảng ca bị bỏ qua, mang tên "CHƯA KIỂM".
    */
   coTask?: boolean
+  /**
+   * Bản cài có `BanCaiHopDong.datTrangThaiTask` để dựng sẵn Task ở trạng thái bất kỳ. Mặc định đúng.
+   * Đặt `false` khi chưa có: các ca Kanban, "Việc của tôi", "Chờ tôi duyệt" bị bỏ qua, mang tên "CHƯA KIỂM".
+   */
+  coDatTrangThaiTask?: boolean
 }
 
 const MAT_KHAU = 'matkhau-dung-1'
@@ -85,6 +102,7 @@ export function chayBoTestHopDong(
   const dongHoCuaKho = tuyChon.dongHoCuaKho ?? false
   const gopLoiMaDatLai = tuyChon.gopLoiMaDatLai ?? false
   const coTask = tuyChon.coTask ?? true
+  const coDatTrangThai = tuyChon.coDatTrangThaiTask ?? true
   /** Ngày mong đợi trong dấu vết: đúng giờ truyền vào, hoặc chỉ là một ngày nếu kho tự lấy giờ. */
   const luc = (moc: Date): Date => (dongHoCuaKho ? expect.any(Date) : moc)
 
@@ -1474,6 +1492,204 @@ export function chayBoTestHopDong(
         expect(maLoi(await kho.layTask(chiOKia, oDay.id))).toBe('KHONG_TIM_THAY')
         expect(await idCacTask(chiOKia, duAnKhac.id)).toEqual([oKia.id])
       })
+    })
+
+    describe.skipIf(!coTask || !coDatTrangThai)('Task: Kanban, "Việc của tôi" và "Chờ tôi duyệt"', () => {
+      const LUC_TAO_TASK = sau(LUC_TAO_DU_AN, 4 * 60 * 60 * 1000)
+
+      interface BoiCanh {
+        pm: Phien
+        duAnId: string
+        an: Phien
+        binh: Phien
+        chi: Phien
+      }
+
+      async function them(pm: Phien, duAnId: string, phien: Phien): Promise<void> {
+        giaTri(await kho.themNguoiVaoDuAn(pm, duAnId, { email: giaTri(await kho.layHoSoCuaToi(phien)).email }))
+      }
+
+      /** Một PM, một Dự án "Cửa hàng" và ba Thành viên trong đó: An, Bình, Chi. */
+      async function dungBoiCanh(ten: string): Promise<BoiCanh> {
+        const pm = await taoPM(`pm-${ten}`, 'An PM')
+        const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC_TAO_DU_AN))
+        const an = await dangKyVaDangNhap(`an-${ten}`, 'An')
+        const binh = await dangKyVaDangNhap(`binh-${ten}`, 'Bình')
+        const chi = await dangKyVaDangNhap(`chi-${ten}`, 'Chi')
+        for (const phien of [an, binh, chi]) await them(pm, duAn.id, phien)
+        return { pm, duAnId: duAn.id, an, binh, chi }
+      }
+
+      /** Tạo một Task rồi đặt thẳng trạng thái. */
+      async function taoTaskO(
+        duAnId: string,
+        pm: Phien,
+        tieuDe: string,
+        thucHien: Phien,
+        kiemTra: Phien,
+        trangThai: TrangThaiTask,
+      ): Promise<string> {
+        const task = giaTri(
+          await kho.taoTask(
+            pm,
+            duAnId,
+            { tieuDe, nguoiThucHienId: thucHien.nguoiDungId, nguoiKiemTraId: kiemTra.nguoiDungId },
+            LUC_TAO_TASK,
+          ),
+        )
+        if (trangThai !== 'MOI') await datTrangThaiTask(task.id, trangThai)
+        return task.id
+      }
+
+      async function datTrangThaiTask(taskId: string, trangThai: TrangThaiTask): Promise<void> {
+        if (!banCai.datTrangThaiTask) throw new Error('Bản cài không có datTrangThaiTask')
+        await banCai.datTrangThaiTask(taskId, trangThai)
+      }
+
+      async function tieuDeViecCuaToi(phien: Phien): Promise<string[]> {
+        return giaTri(await kho.viecCuaToi(phien))
+          .map((task) => task.tieuDe)
+          .sort()
+      }
+
+      async function tieuDeChoDuyet(phien: Phien): Promise<string[]> {
+        return giaTri(await kho.choToiDuyet(phien))
+          .map((task) => task.tieuDe)
+          .sort()
+      }
+
+      it('Task ở mỗi trạng thái hiện đúng trạng thái đã đặt trong danh sách Task của Dự án', async () => {
+        const bc = await dungBoiCanh('kb1')
+        for (const trangThai of CAC_TRANG_THAI_TASK) {
+          await taoTaskO(bc.duAnId, bc.pm, `Việc ${trangThai}`, bc.an, bc.binh, trangThai)
+        }
+        const danhSach = giaTri(await kho.danhSachTask(bc.chi, bc.duAnId))
+        expect(danhSach.map((task) => [task.tieuDe, task.trangThai]).sort()).toEqual(
+          CAC_TRANG_THAI_TASK.map((trangThai) => [`Việc ${trangThai}`, trangThai]).sort(),
+        )
+      })
+
+      it('"Việc của tôi": chỉ Task chưa Hoàn thành, chưa Huỷ mà mình là Người thực hiện, kèm tên Dự án', async () => {
+        const bc = await dungBoiCanh('vct1')
+        for (const trangThai of CAC_TRANG_THAI_TASK) {
+          await taoTaskO(bc.duAnId, bc.pm, `An ${trangThai}`, bc.an, bc.binh, trangThai)
+        }
+        // Task mà An chỉ là Người kiểm tra không phải việc của An.
+        await taoTaskO(bc.duAnId, bc.pm, 'An kiểm', bc.binh, bc.an, 'DANG_LAM')
+
+        const viec = giaTri(await kho.viecCuaToi(bc.an))
+        expect(viec.map((task) => task.tieuDe).sort()).toEqual(
+          ['MOI', 'DANG_LAM', 'CHO_DUYET', 'TRA_LAI', 'BI_LOI'].map((trangThai) => `An ${trangThai}`).sort(),
+        )
+        for (const task of viec) {
+          expect(task.tenDuAn).toBe('Cửa hàng')
+          expect(task.duAnId).toBe(bc.duAnId)
+          expect(task.nguoiThucHien.id).toBe(bc.an.nguoiDungId)
+        }
+      })
+
+      it('"Việc của tôi" của người này không có Task của người khác, và ngược lại', async () => {
+        const bc = await dungBoiCanh('vct2')
+        await taoTaskO(bc.duAnId, bc.pm, 'Của An', bc.an, bc.binh, 'DANG_LAM')
+        await taoTaskO(bc.duAnId, bc.pm, 'Của Bình', bc.binh, bc.an, 'MOI')
+
+        expect(await tieuDeViecCuaToi(bc.an)).toEqual(['Của An'])
+        expect(await tieuDeViecCuaToi(bc.binh)).toEqual(['Của Bình'])
+        expect(await tieuDeViecCuaToi(bc.chi)).toEqual([])
+        expect(await tieuDeViecCuaToi(bc.pm)).toEqual([])
+      })
+
+      it('"Việc của tôi" gom Task của mọi Dự án mình ở trong, kể cả Dự án đã Lưu trữ, mỗi Task kèm tên Dự án của nó', async () => {
+        const bc = await dungBoiCanh('vct3')
+        const duAnKho = giaTri(await kho.taoDuAn(bc.pm, { ten: 'Kho hàng' }, LUC_TAO_DU_AN))
+        await them(bc.pm, duAnKho.id, bc.an)
+        await them(bc.pm, duAnKho.id, bc.binh)
+        await taoTaskO(bc.duAnId, bc.pm, 'Ở cửa hàng', bc.an, bc.binh, 'MOI')
+        await taoTaskO(duAnKho.id, bc.pm, 'Ở kho', bc.an, bc.binh, 'DANG_LAM')
+        giaTri(await kho.luuTruDuAn(bc.pm, duAnKho.id, LUC_TAO_TASK))
+
+        const viec = giaTri(await kho.viecCuaToi(bc.an))
+        expect(viec.map((task) => [task.tieuDe, task.tenDuAn]).sort()).toEqual([
+          ['Ở cửa hàng', 'Cửa hàng'],
+          ['Ở kho', 'Kho hàng'],
+        ])
+      })
+
+      it('"Việc của tôi" chỉ trong Dự án mình còn ở trong: bị gỡ khỏi Dự án thì Task của Dự án đó biến mất khỏi danh sách', async () => {
+        const bc = await dungBoiCanh('vct4')
+        await taoTaskO(bc.duAnId, bc.pm, 'Việc của An', bc.an, bc.binh, 'DANG_LAM')
+        await taoTaskO(bc.duAnId, bc.pm, 'Việc cần duyệt', bc.chi, bc.an, 'CHO_DUYET')
+        expect(await tieuDeViecCuaToi(bc.an)).toEqual(['Việc của An'])
+        expect(await tieuDeChoDuyet(bc.an)).toEqual(['Việc cần duyệt'])
+
+        giaTri(await kho.goNguoiKhoiDuAn(bc.pm, bc.duAnId, bc.an.nguoiDungId))
+        expect(await tieuDeViecCuaToi(bc.an)).toEqual([])
+        expect(await tieuDeChoDuyet(bc.an)).toEqual([])
+      })
+
+      it('"Chờ tôi duyệt": chỉ Task đang Chờ duyệt mà mình là Người kiểm tra, kèm tên Dự án', async () => {
+        const bc = await dungBoiCanh('cd1')
+        for (const trangThai of CAC_TRANG_THAI_TASK) {
+          await taoTaskO(bc.duAnId, bc.pm, `Bình ${trangThai}`, bc.an, bc.binh, trangThai)
+        }
+        // Task Chờ duyệt mà Bình là Người thực hiện không phải việc Bình duyệt.
+        await taoTaskO(bc.duAnId, bc.pm, 'Bình làm', bc.binh, bc.an, 'CHO_DUYET')
+
+        const cho = giaTri(await kho.choToiDuyet(bc.binh))
+        expect(cho.map((task) => task.tieuDe)).toEqual(['Bình CHO_DUYET'])
+        expect(cho[0]?.tenDuAn).toBe('Cửa hàng')
+        expect(cho[0]?.nguoiKiemTra.id).toBe(bc.binh.nguoiDungId)
+        expect(await tieuDeChoDuyet(bc.an)).toEqual(['Bình làm'])
+        expect(await tieuDeChoDuyet(bc.chi)).toEqual([])
+        expect(await tieuDeChoDuyet(bc.pm)).toEqual([])
+      })
+
+      it('"Chờ tôi duyệt" gom Task của mọi Dự án mình ở trong', async () => {
+        const bc = await dungBoiCanh('cd2')
+        const duAnKho = giaTri(await kho.taoDuAn(bc.pm, { ten: 'Kho hàng' }, LUC_TAO_DU_AN))
+        await them(bc.pm, duAnKho.id, bc.an)
+        await them(bc.pm, duAnKho.id, bc.binh)
+        await taoTaskO(bc.duAnId, bc.pm, 'Duyệt một', bc.an, bc.binh, 'CHO_DUYET')
+        await taoTaskO(duAnKho.id, bc.pm, 'Duyệt hai', bc.an, bc.binh, 'CHO_DUYET')
+        const cho = giaTri(await kho.choToiDuyet(bc.binh))
+        expect(cho.map((task) => [task.tieuDe, task.tenDuAn]).sort()).toEqual([
+          ['Duyệt hai', 'Kho hàng'],
+          ['Duyệt một', 'Cửa hàng'],
+        ])
+      })
+
+      it('Dự án đã Lưu trữ vẫn cho xem bảng Task đủ trạng thái; người ngoài Dự án nhận không tìm thấy', async () => {
+        const bc = await dungBoiCanh('lt')
+        await taoTaskO(bc.duAnId, bc.pm, 'Đang làm dở', bc.an, bc.binh, 'DANG_LAM')
+        await taoTaskO(bc.duAnId, bc.pm, 'Đã xong', bc.an, bc.binh, 'HOAN_THANH')
+        giaTri(await kho.luuTruDuAn(bc.pm, bc.duAnId, LUC_TAO_TASK))
+        for (const phien of [bc.an, bc.binh, bc.chi, bc.pm]) {
+          const danhSach = giaTri(await kho.danhSachTask(phien, bc.duAnId))
+          expect(danhSach.map((task) => task.trangThai).sort()).toEqual(['DANG_LAM', 'HOAN_THANH'])
+        }
+        const nguoiLa = await dangKyVaDangNhap('nguoi-la-lt')
+        expect(maLoi(await kho.danhSachTask(nguoiLa, bc.duAnId))).toBe('KHONG_TIM_THAY')
+        expect(giaTri(await kho.viecCuaToi(nguoiLa))).toEqual([])
+        expect(giaTri(await kho.choToiDuyet(nguoiLa))).toEqual([])
+      })
+
+      it('chưa đăng nhập thì "Việc của tôi" và "Chờ tôi duyệt" trả CHUA_DANG_NHAP', async () => {
+        expect(maLoi(await kho.viecCuaToi(null))).toBe('CHUA_DANG_NHAP')
+        expect(maLoi(await kho.choToiDuyet(null))).toBe('CHUA_DANG_NHAP')
+      })
+
+      it('hai danh sách cá nhân chỉ đọc: không đổi Task nào', async () => {
+        const bc = await dungBoiCanh('docchi')
+        await taoTaskO(bc.duAnId, bc.pm, 'Việc', bc.an, bc.binh, 'CHO_DUYET')
+        const truoc = giaTri(await kho.danhSachTask(bc.pm, bc.duAnId))
+        giaTri(await kho.viecCuaToi(bc.an))
+        giaTri(await kho.choToiDuyet(bc.binh))
+        expect(giaTri(await kho.danhSachTask(bc.pm, bc.duAnId))).toEqual(truoc)
+      })
+    })
+
+    describe.skipIf(!coTask || coDatTrangThai)('Task: Kanban và danh sách cá nhân — bản cài này', () => {
+      it.skip('CHƯA KIỂM: bản cài không dựng sẵn được Task ở trạng thái bất kỳ (coDatTrangThaiTask: false)', () => {})
     })
 
     describe.skipIf(coTask)('Task — bản cài này', () => {

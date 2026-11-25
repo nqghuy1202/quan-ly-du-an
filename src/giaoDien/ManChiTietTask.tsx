@@ -19,6 +19,8 @@ interface Props {
   taskId: string
   /** Tên Dự án chứa Task, cho nút quay lại. */
   tenDuAn: string
+  /** Nhãn nút quay lại khi không quay về Dự án (vd. quay về "Việc của tôi"); mặc định "Về Dự án <tên>". */
+  nhanQuayLai?: string
   /** Thông báo thành công mang sang từ màn trước (vd. vừa tạo xong). */
   thongBaoBanDau: string | null
   onQuayLai: () => void
@@ -26,7 +28,7 @@ interface Props {
 }
 
 /** Chi tiết một Task: người được giao, hạn, trạng thái, số lần bị Trả lại và dấu vết. Chỉ xem. */
-export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayLai, onHetPhien }: Props) {
+export function ManChiTietTask({ phien, taskId, tenDuAn, nhanQuayLai, thongBaoBanDau, onQuayLai, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task> } | null>(null)
@@ -46,7 +48,7 @@ export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayL
 
   const nutVe = (
     <HStack gap={2}>
-      <Button label={`Về Dự án ${tenDuAn}`} variant="ghost" onClick={onQuayLai} />
+      <Button label={nhanQuayLai ?? `Về Dự án ${tenDuAn}`} variant="ghost" onClick={onQuayLai} />
     </HStack>
   )
 

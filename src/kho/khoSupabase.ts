@@ -741,5 +741,13 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     async danhSachRepoCuaDuAn(phien: Phien | null) {
       return repoChuaCo(phien)
     },
+
+    async viecCuaToi(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
+    async choToiDuyet(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
   }
 }

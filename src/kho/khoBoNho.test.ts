@@ -23,6 +23,10 @@ function taoBanCai(): BanCaiHopDong {
       const kq = await kho.chuDuAn.datVaiPM(email)
       if (!kq.ok) throw new Error(kq.loi.thongBao)
     },
+    datTrangThaiTask: async (taskId, trangThai) => {
+      const kq = await kho.chuDuAn.datTrangThaiTask(taskId, trangThai)
+      if (!kq.ok) throw new Error(kq.loi.thongBao)
+    },
   }
 }
 

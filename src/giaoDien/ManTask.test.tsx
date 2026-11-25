@@ -156,9 +156,9 @@ describe('Task trong trang Dự án: tạo và xem', () => {
     ])
 
     await user.click(screen.getByRole('button', { name: 'Về Dự án Cửa hàng' }))
-    const bang = within(await vungTask().findByRole('table', { name: 'Danh sách Task' }))
+    const bang = within(await vungTask().findByRole('group', { name: 'Bảng Kanban' }))
     expect(bang.getByRole('button', { name: 'Làm trang chủ' })).toBeInTheDocument()
-    expect(bang.getByText('Mới')).toBeInTheDocument()
+    expect(within(bang.getByRole('group', { name: 'Cột Mới' })).getByRole('button', { name: 'Làm trang chủ' })).toBeInTheDocument()
   })
 
   it('tạo thiếu tiêu đề và thiếu người: báo lỗi tiếng Việt ở đúng ô, không tạo gì', async () => {
@@ -234,10 +234,10 @@ describe('Task trong trang Dự án: tạo và xem', () => {
     await dangNhap(user, 'binh@vi-du.vn')
     await moDuAnCuaToi(user, 'Cửa hàng')
 
-    const bang = within(await vungTask().findByRole('table', { name: 'Danh sách Task' }))
-    expect(bang.getByText('An')).toBeInTheDocument()
-    expect(bang.getByText('Bình')).toBeInTheDocument()
-    expect(bang.getByText('31/12/2026')).toBeInTheDocument()
+    const bang = within(await vungTask().findByRole('group', { name: 'Bảng Kanban' }))
+    expect(bang.getByText('Người thực hiện: An')).toBeInTheDocument()
+    expect(bang.getByText('Người kiểm tra: Bình')).toBeInTheDocument()
+    expect(bang.getByText('Hạn: 31/12/2026')).toBeInTheDocument()
     expect(vungTask().queryByRole('button', { name: 'Tạo Task' })).not.toBeInTheDocument()
     expect(vungTask().getByText(THONG_BAO_TASK.khongQuanLy)).toBeInTheDocument()
 

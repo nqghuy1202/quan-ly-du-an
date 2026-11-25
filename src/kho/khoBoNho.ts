@@ -16,9 +16,11 @@ import type {
   Phien,
   RepoDuAn,
   Task,
+  TaskKemDuAn,
   ThongBaoChung,
 } from './khoDuLieu'
 import { khoaRepo, kiemTraRepo, type GanRepoDauVao } from '../luat/github'
+import { laChoToiDuyet, laViecCuaToi } from '../luat/kanban'
 import {
   TRANG_THAI_TASK_BAN_DAU,
   duocXemTask,
@@ -97,6 +99,12 @@ export interface MoPhongChuDuAn {
    * tự đặt PM đầu tiên trên Supabase). Lỗi: `KHONG_TIM_THAY`.
    */
   datVaiPM(email: string): Promise<KetQua<null>>
+  /**
+   * Đặt thẳng trạng thái của Task, không qua luật chuyển trạng thái, không ghi dấu vết hay bộ đếm
+   * Trả lại (thay cho việc dựng sẵn Task ở trạng thái bất kỳ khi test và chạy thử; luồng đổi
+   * trạng thái thật làm ở ticket 10). Lỗi: `KHONG_TIM_THAY`.
+   */
+  datTrangThaiTask(taskId: string, trangThai: TrangThaiTask): Promise<KetQua<null>>
 }
 
 export interface KhoBoNho extends KhoDuLieu {
@@ -335,6 +343,25 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       taiKhoan.hoSo.vai = 'PM'
       return thanhCong(null)
     },
+
+    async datTrangThaiTask(taskId: string, trangThai: TrangThaiTask) {
+      const task = taskTheoId.get(taskId)
+      if (!task) return thatBai('KHONG_TIM_THAY')
+      task.trangThai = trangThai
+      return thanhCong(null)
+    },
+  }
+
+  /** Task của các Dự án người gọi đang ở trong, thoả `thoa`, kèm tên Dự án. */
+  function taskCaNhan(taiKhoan: TaiKhoan, thoa: (task: Task) => boolean): TaskKemDuAn[] {
+    const ketQua: TaskKemDuAn[] = []
+    for (const banGhi of taskTheoId.values()) {
+      if (!nhinTuDuAn(taiKhoan, banGhi.duAnId).laNguoiTrongDuAn) continue
+      const duAn = duAnTheoId.get(banGhi.duAnId)
+      const task = docTask(banGhi)
+      if (duAn && thoa(task)) ketQua.push({ ...task, tenDuAn: duAn.ten })
+    }
+    return ketQua
   }
 
   return {
@@ -675,6 +702,20 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       const xt = xemDuAn(phien, duAnId)
       if (!xt.ok) return xt
       return thanhCong((repoTheoDuAn.get(duAnId) ?? []).map((tenRepo): RepoDuAn => ({ tenRepo })))
+    },
+
+    async viecCuaToi(phien: Phien | null) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const id = xt.giaTri.hoSo.id
+      return thanhCong(taskCaNhan(xt.giaTri, (task) => laViecCuaToi(task, id)))
+    },
+
+    async choToiDuyet(phien: Phien | null) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const id = xt.giaTri.hoSo.id
+      return thanhCong(taskCaNhan(xt.giaTri, (task) => laChoToiDuyet(task, id)))
     },
   }
 }

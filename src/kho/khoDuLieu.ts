@@ -96,6 +96,11 @@ export interface RepoDuAn {
   tenRepo: string
 }
 
+/** Một Task kèm tên Dự án chứa nó, cho các danh sách cá nhân qua mọi Dự án. */
+export interface TaskKemDuAn extends Task {
+  tenDuAn: string
+}
+
 /** Kết quả của các lệnh không được lộ email có tài khoản hay không: luôn cùng một thông báo. */
 export interface ThongBaoChung {
   thongBao: string
@@ -239,4 +244,15 @@ export interface KhoDuLieu {
    * này, kể cả Dự án đã Lưu trữ. Lỗi: `KHONG_TIM_THAY` (như `layDuAn`).
    */
   danhSachRepoCuaDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<RepoDuAn[]>>
+  /**
+   * "Việc của tôi": mọi Task chưa Hoàn thành và chưa Huỷ mà người gọi là Người thực hiện, qua mọi
+   * Dự án, kèm tên Dự án; chỉ trong những Dự án người gọi đang ở trong (kể cả đã Lưu trữ, kể cả PM);
+   * thứ tự không bảo đảm. Không có việc nào thì rỗng. Không lộ Task của người khác.
+   */
+  viecCuaToi(phien: Phien | null): Promise<KetQua<TaskKemDuAn[]>>
+  /**
+   * "Chờ tôi duyệt": mọi Task đang Chờ duyệt mà người gọi là Người kiểm tra, qua mọi Dự án, kèm
+   * tên Dự án; cùng phạm vi Dự án như `viecCuaToi`; thứ tự không bảo đảm.
+   */
+  choToiDuyet(phien: Phien | null): Promise<KetQua<TaskKemDuAn[]>>
 }
