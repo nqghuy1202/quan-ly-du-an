@@ -10,7 +10,11 @@ if (!root) throw new Error('Không thấy phần tử #root trong index.html')
 
 // Chọn bản cài Kho theo biến môi trường: có VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY thì dùng
 // Supabase, không có thì dùng bản bộ nhớ (chỉ để chạy thử). Chỉ biến VITE_* xuống trình duyệt.
-const khoDaChon = chonKho(import.meta.env, { duongDanQuayLai: window.location.origin })
+const khoDaChon = chonKho(import.meta.env, {
+  duongDanQuayLai: window.location.origin,
+  // Chạy thử trên máy (npm run dev) với bản bộ nhớ thì có sẵn 3 Dự án mẫu; bản dựng không có.
+  duLieuMau: import.meta.env.DEV,
+})
 
 createRoot(root).render(
   <StrictMode>

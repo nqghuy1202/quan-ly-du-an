@@ -8,6 +8,7 @@
 import { docCauHinhKho, type MoiTruong } from './cauHinh'
 import { PM_CHAY_THU, taoKhoBoNho, type MoPhongThu } from './khoBoNho'
 import type { KhoDuLieu } from './khoDuLieu'
+import { napDuLieuMau } from './duLieuMau'
 import { taoKhoSupabase } from './khoSupabase'
 import type { CongGitHub } from '../github/congGitHub'
 import { loiGia, taoCongGiaGitHub } from '../github/congGiaGitHub'
@@ -23,6 +24,8 @@ export interface TuyChonChonKho {
   duongDanQuayLai?: string
   /** `fetch` cho bản Supabase và Cổng GitHub gọi hàm (test truyền bản cấm gọi mạng). */
   fetch?: typeof fetch
+  /** Bản bộ nhớ: nạp dữ liệu mẫu (3 Dự án) sau khi dựng. Chỉ để chạy thử (`npm run dev`). */
+  duLieuMau?: boolean
 }
 
 export function chonKho(env: MoiTruong, tuyChon: TuyChonChonKho = {}): KhoDaChon {
@@ -32,6 +35,9 @@ export function chonKho(env: MoiTruong, tuyChon: TuyChonChonKho = {}): KhoDaChon
       return cauHinh
     case 'BO_NHO': {
       const boNho = taoKhoBoNho({ pmBanDau: PM_CHAY_THU })
+      if (tuyChon.duLieuMau) {
+        napDuLieuMau(boNho).catch((loi: unknown) => console.warn('Không nạp được dữ liệu mẫu:', loi))
+      }
       // Bản giả: mọi link báo không kết nối được GitHub; Task vẫn dùng được.
       return {
         loai: 'BO_NHO',
