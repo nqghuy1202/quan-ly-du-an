@@ -13,7 +13,7 @@ const DO_RONG_THE = '36rem'
 /** Màn hiện khi cấu hình môi trường sai (vd. có khoá service): ứng dụng không chạy. */
 export function ManLoiCauHinh({ thongBao }: { thongBao: string }) {
   return (
-    <Theme theme={themes[defaultThemeSlug]}>
+    <Theme theme={themes[defaultThemeSlug]} mode="light">
       <Center padding={6}>
         <Card width="100%" maxWidth={DO_RONG_THE}>
           <VStack gap={4}>

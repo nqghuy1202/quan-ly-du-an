@@ -55,7 +55,7 @@ export function App({
   const hetPhien = useCallback(() => setPhien(null), [])
 
   return (
-    <Theme theme={themes[defaultThemeSlug]}>
+    <Theme theme={themes[defaultThemeSlug]} mode="light">
       <KhoContext value={kho}>
         <CongGitHubContext value={congGitHub}>
           {phien ? (

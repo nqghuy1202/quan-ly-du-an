@@ -1,0 +1,117 @@
+{
+  "name": "sdvico",
+  "like": "neutral",
+  "mode": "both",
+  "settings": [
+    {
+      "thing": "accent",
+      "value": "#0B3865",
+      "source": "dial"
+    },
+    {
+      "thing": "neutral",
+      "value": "#5B6B7C",
+      "source": "dial"
+    },
+    {
+      "thing": "--color-accent",
+      "value": "#13DAEC",
+      "source": "token",
+      "mode": "dark"
+    },
+    {
+      "thing": "--color-background-body",
+      "value": "#F5F7F9",
+      "source": "token",
+      "mode": "light"
+    },
+    {
+      "thing": "--color-background-body",
+      "value": "#080F17",
+      "source": "token",
+      "mode": "dark"
+    },
+    {
+      "thing": "--color-text-primary",
+      "value": "#0D1A26",
+      "source": "token",
+      "mode": "light"
+    },
+    {
+      "thing": "--color-text-accent",
+      "value": "#13DAEC",
+      "source": "token",
+      "mode": "dark"
+    },
+    {
+      "thing": "--color-icon-accent",
+      "value": "#13DAEC",
+      "source": "token",
+      "mode": "dark"
+    },
+    {
+      "thing": "--color-icon-accent",
+      "value": "#0A7C89",
+      "source": "token",
+      "mode": "light"
+    },
+    {
+      "thing": "background-color",
+      "value": "var(--color-accent-muted)",
+      "source": "property",
+      "on": "side-nav-item",
+      "state": "selected"
+    },
+    {
+      "thing": "background-color",
+      "value": "var(--color-accent-muted)",
+      "source": "property",
+      "on": "pagination-item",
+      "state": "selected"
+    },
+    {
+      "thing": "background-color",
+      "value": "var(--color-accent-muted)",
+      "source": "property",
+      "on": "top-nav-item",
+      "state": "selected"
+    },
+    {
+      "thing": "background-color",
+      "value": "var(--color-neutral)",
+      "source": "property",
+      "on": "button",
+      "when": "variant:primary",
+      "state": "disabled"
+    },
+    {
+      "thing": "color",
+      "value": "var(--color-text-primary)",
+      "source": "property",
+      "on": "button",
+      "when": "variant:primary",
+      "state": "disabled"
+    },
+    {
+      "thing": "border-color",
+      "value": "light-dark(#76848f, #6b7c8d)",
+      "source": "property",
+      "on": "inputs"
+    },
+    {
+      "thing": "--color-text-primary",
+      "value": "#EEF2F6",
+      "source": "token",
+      "mode": "dark"
+    },
+    {
+      "thing": "color",
+      "value": "#ffffff",
+      "source": "property",
+      "on": "toast",
+      "when": "type:error"
+    }
+  ],
+  "lifted": [],
+  "palette": "d0b4bb9ed354fe3b63b2d8cdbad4d98c115a8ab597a838dd3bb42c841ef436af"
+}
