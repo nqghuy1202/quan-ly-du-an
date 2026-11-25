@@ -729,6 +729,15 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       return taskChuaCo(phien)
     },
 
+    // CHƯA CÀI (ticket 14): đổi trạng thái và lịch sử trên Supabase (hàm cơ sở dữ liệu kiểm luật).
+    async doiTrangThaiTask(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
+    async lichSuTask(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
     // CHƯA CÀI (ticket 17): repo GitHub trên Supabase. Người chưa đăng nhập vẫn nhận CHUA_DANG_NHAP.
     async ganRepoVaoDuAn(phien: Phien | null) {
       return repoChuaCo(phien)

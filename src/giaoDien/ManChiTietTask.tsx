@@ -14,6 +14,8 @@ import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay } from '../luat/t
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
+import { PhanChuyenTrangThaiTask } from './PhanChuyenTrangThaiTask'
+import { PhanLichSuTask } from './PhanLichSuTask'
 import { PhanSuaTask } from './PhanSuaTask'
 
 interface Props {
@@ -65,6 +67,8 @@ export function ManChiTietTask({
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task> } | null>(null)
   const tai = daTai && daTai.lan === lanTai ? daTai.kq : null
   const [thongBaoSua, setThongBaoSua] = useState<string | null>(null)
+  /** Tăng mỗi khi trạng thái Task đổi, để lịch sử đọc lại. */
+  const [lanLichSu, setLanLichSu] = useState(0)
 
   useEffect(() => {
     let huy = false
@@ -130,6 +134,20 @@ export function ManChiTietTask({
         <Text>{`Số lần bị Trả lại: ${task.soLanTraLai}`}</Text>
       </VStack>
 
+      <PhanChuyenTrangThaiTask
+        phien={phien}
+        vai={vai}
+        task={task}
+        trangThaiDuAn={trangThaiDuAn}
+        dongHo={dongHo}
+        onDaCapNhat={(moi, thongBao) => {
+          setDaTai({ lan: lanTai, kq: { ok: true, giaTri: moi } })
+          if (thongBao !== null) setThongBaoSua(thongBao)
+          setLanLichSu((n) => n + 1)
+        }}
+        onHetPhien={onHetPhien}
+      />
+
       <VStack gap={1} role="group" aria-label="Mô tả">
         <Heading level={3}>Mô tả</Heading>
         <Text>{task.moTa === '' ? 'Không có mô tả.' : task.moTa}</Text>
@@ -149,6 +167,8 @@ export function ManChiTietTask({
         )}
         <Text>Ngày giờ theo giờ Việt Nam.</Text>
       </VStack>
+
+      <PhanLichSuTask phien={phien} taskId={task.id} lanDoc={lanLichSu} onHetPhien={onHetPhien} />
 
       <PhanSuaTask
         key={task.id}

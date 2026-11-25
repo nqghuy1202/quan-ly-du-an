@@ -8,6 +8,7 @@
 import { describe, it } from 'vitest'
 import { chayBangCaQuyen, chayBoTestHopDong } from './hopDong'
 import { chayHopDongSuaTask } from './hopDongSuaTask'
+import { chayHopDongChuyenTrangThai } from './hopDongChuyenTrangThai'
 import { cauHinhTestSupabase, taoBoBanCaiSupabase } from './hopDongSupabase'
 
 // Đọc biến môi trường của tiến trình test mà không cần kiểu của Node trong mã ứng dụng.
@@ -24,6 +25,10 @@ switch (ketQua.trangThai) {
       it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh repo GitHub (ticket 17 cài và chạy chayHopDongRepo)', () => {})
     })
     chayHopDongSuaTask('bản Supabase', taoBanCai, tuyChon)
+    // Đổi trạng thái và lịch sử chưa có trên bản Supabase (ticket 14), kể cả khi ticket 10 đã cài Task:
+    // ép `coTask: false` để bộ này bỏ qua và báo "CHƯA KIỂM". Ticket 14 cài hàm cơ sở dữ liệu rồi
+    // truyền thẳng `tuyChon`.
+    chayHopDongChuyenTrangThai('bản Supabase', taoBanCai, { ...tuyChon, coTask: false })
     break
   }
   case 'THIEU_CAU_HINH': {

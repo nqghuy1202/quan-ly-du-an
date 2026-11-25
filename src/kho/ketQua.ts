@@ -30,6 +30,10 @@ export type MaLoi =
   | 'REPO_KHONG_HOP_LE'
   /** Repo đã gắn vào Dự án (không phân biệt hoa thường). */
   | 'REPO_DA_GAN'
+  /** Bước đổi trạng thái Task không có trong ma trận (vd. Mới sang Hoàn thành). */
+  | 'BUOC_KHONG_HOP_LE'
+  /** Trả lại, Bị lỗi hay Huỷ mà lý do rỗng hoặc chỉ khoảng trắng. */
+  | 'LY_DO_BAT_BUOC'
 
 export interface LoiKho {
   ma: MaLoi
@@ -77,4 +81,6 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   LOI_HE_THONG: 'Không kết nối được máy chủ hoặc máy chủ đang lỗi. Hãy thử lại sau ít phút.',
   REPO_KHONG_HOP_LE: 'Tên repo phải có dạng chu-so-huu/ten-repo, ví dụ vercel/next.js.',
   REPO_DA_GAN: 'Repo này đã được gắn vào Dự án.',
+  BUOC_KHONG_HOP_LE: 'Bước đổi trạng thái này không có trong vòng duyệt của Task.',
+  LY_DO_BAT_BUOC: 'Hãy nhập lý do. Trả lại, báo Bị lỗi và Huỷ Task đều bắt buộc có lý do.',
 }
