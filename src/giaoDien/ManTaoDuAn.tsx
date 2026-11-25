@@ -50,7 +50,7 @@ export function ManTaoDuAn({ phien, vai, dongHo, onDaTao, onQuayLai, onHetPhien 
       </HStack>
       <Heading level={2}>Tạo Dự án</Heading>
       {!duocTao ? (
-        <Banner status="info" title={THONG_BAO_DU_AN.chiPMSua} role="status" />
+        <Banner status="info" title={THONG_BAO_DU_AN.chiPMTao} role="status" />
       ) : (
         <>
           {loi && <Banner status="error" title="Chưa tạo được Dự án." description={loi.thongBao} role="alert" />}

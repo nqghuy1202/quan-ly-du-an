@@ -14,6 +14,8 @@ export type MaLoi =
   | 'PHAI_CON_PM'
   | 'DU_AN_DA_LUU_TRU'
   | 'DU_AN_DANG_HOAT_DONG'
+  | 'CHUA_DANG_KY'
+  | 'DA_TRONG_DU_AN'
 
 export interface LoiKho {
   ma: MaLoi
@@ -50,4 +52,7 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
     'Không hạ được vai: hệ thống phải luôn còn ít nhất một PM. Hãy đặt một người khác làm PM trước.',
   DU_AN_DA_LUU_TRU: 'Dự án đã Lưu trữ nên chỉ xem được. Mở lại Dự án để sửa.',
   DU_AN_DANG_HOAT_DONG: 'Dự án đang hoạt động, không cần mở lại.',
+  CHUA_DANG_KY:
+    'Email này chưa đăng ký. Hãy nhờ người đó tự đăng ký tài khoản trước rồi thêm lại (hệ thống không gửi thư mời).',
+  DA_TRONG_DU_AN: 'Người này đã ở trong Dự án.',
 }

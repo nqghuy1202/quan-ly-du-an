@@ -12,7 +12,14 @@ import type {
   SuaHoSoDauVao,
   VaiHeThong,
 } from '../luat/taiKhoan'
-import type { DauVet, LocDuAnDauVao, SuaDuAnDauVao, TaoDuAnDauVao, TrangThaiDuAn } from '../luat/duAn'
+import type {
+  DauVet,
+  LocDuAnDauVao,
+  SuaDuAnDauVao,
+  TaoDuAnDauVao,
+  ThemNguoiDauVao,
+  TrangThaiDuAn,
+} from '../luat/duAn'
 
 export interface HoSo {
   id: string
@@ -39,7 +46,14 @@ export interface Phien {
 export interface DuAnTomTat {
   id: string
   ten: string
+  trangThai: TrangThaiDuAn
 }
+
+/**
+ * Một người trong dự án: tên, email và vai hệ thống hiện tại của tài khoản. Gỡ người khỏi Dự án
+ * không đụng tới tài khoản hay hồ sơ của họ.
+ */
+export type NguoiTrongDuAn = NguoiDungTomTat
 
 /** Người ghi trong dấu vết: tên hiển thị là tên hiện tại của tài khoản lúc đọc. */
 export interface NguoiDauVet {
@@ -96,7 +110,10 @@ export interface KhoDuLieu {
   layHoSoCuaToi(phien: Phien | null): Promise<KetQua<HoSo>>
   /** Sửa tên hiển thị và GitHub username; chỉ hồ sơ của chính mình. */
   suaHoSo(phien: Phien | null, nguoiDungId: string, dauVao: SuaHoSoDauVao): Promise<KetQua<HoSo>>
-  /** Các Dự án người gọi được thấy. */
+  /**
+   * Các Dự án người gọi đang ở trong (kể cả đã Lưu trữ), với mọi vai, kể cả PM; thứ tự không bảo
+   * đảm. Người chưa ở Dự án nào nhận danh sách rỗng.
+   */
   danhSachDuAnCuaToi(phien: Phien | null): Promise<KetQua<DuAnTomTat[]>>
   /**
    * Mọi tài khoản (tên, email, vai); thứ tự không bảo đảm, giao diện tự xếp. Chỉ PM.
@@ -116,25 +133,49 @@ export interface KhoDuLieu {
    */
   taoDuAn(phien: Phien | null, dauVao: TaoDuAnDauVao, bayGio: Date): Promise<KetQua<DuAn>>
   /**
-   * Mọi Dự án, lọc theo trạng thái nếu có; thứ tự không bảo đảm, giao diện tự xếp. Chỉ PM (người
-   * trong dự án ở ticket 05). Lỗi: `KHONG_CO_QUYEN`, `KHONG_HOP_LE` (trạng thái lọc sai).
+   * Các Dự án người gọi được thấy, lọc theo trạng thái nếu có; thứ tự không bảo đảm, giao diện tự
+   * xếp. PM thấy mọi Dự án; Support và Thành viên chỉ thấy Dự án mình ở trong (người chưa ở Dự án
+   * nào nhận danh sách rỗng). Lỗi: `KHONG_HOP_LE` (trạng thái lọc sai).
    */
   danhSachDuAn(phien: Phien | null, loc?: LocDuAnDauVao): Promise<KetQua<DuAn[]>>
-  /** Một Dự án, kể cả đã Lưu trữ. Chỉ PM. Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`. */
+  /**
+   * Một Dự án, kể cả đã Lưu trữ. PM mở được mọi Dự án; người khác chỉ Dự án mình ở trong.
+   * Lỗi: `KHONG_TIM_THAY` (không tồn tại, hoặc không thuộc về người gọi: không lộ là có tồn tại).
+   */
   layDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<DuAn>>
   /**
-   * Sửa tên và/hoặc mô tả; cập nhật người và ngày chỉnh sửa gần nhất (`bayGio`). Chỉ PM.
-   * Lỗi (không đổi gì): `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DA_LUU_TRU`, `KHONG_HOP_LE`.
+   * Sửa tên và/hoặc mô tả; cập nhật người và ngày chỉnh sửa gần nhất (`bayGio`). PM hoặc Support
+   * của Dự án. Lỗi (không đổi gì): `KHONG_CO_QUYEN` (kể cả Dự án không tồn tại, với người không
+   * phải PM), `KHONG_TIM_THAY` (PM, Dự án không tồn tại), `DU_AN_DA_LUU_TRU`, `KHONG_HOP_LE`.
    */
   suaDuAn(phien: Phien | null, duAnId: string, dauVao: SuaDuAnDauVao, bayGio: Date): Promise<KetQua<DuAn>>
   /**
    * Lưu trữ Dự án: từ đó mọi lệnh ghi lên nó trả `DU_AN_DA_LUU_TRU`, nhưng vẫn đọc được. Cập nhật
-   * dấu vết chỉnh sửa. Chỉ PM. Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DA_LUU_TRU`.
+   * dấu vết chỉnh sửa. PM hoặc Support của Dự án.
+   * Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DA_LUU_TRU` (như `suaDuAn`).
    */
   luuTruDuAn(phien: Phien | null, duAnId: string, bayGio: Date): Promise<KetQua<DuAn>>
   /**
-   * Mở lại Dự án đã Lưu trữ: sửa được trở lại. Cập nhật dấu vết chỉnh sửa. Chỉ PM.
-   * Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY`, `DU_AN_DANG_HOAT_DONG`.
+   * Mở lại Dự án đã Lưu trữ: sửa được trở lại. Cập nhật dấu vết chỉnh sửa. PM hoặc Support của
+   * Dự án. Lỗi: `KHONG_CO_QUYEN`, `KHONG_TIM_THAY` (như `suaDuAn`), `DU_AN_DANG_HOAT_DONG`.
    */
   moLaiDuAn(phien: Phien | null, duAnId: string, bayGio: Date): Promise<KetQua<DuAn>>
+  /**
+   * Người trong một Dự án (tên, email, vai hệ thống); thứ tự không bảo đảm. Ai thấy Dự án thì
+   * thấy danh sách này. Lỗi: `KHONG_TIM_THAY` (như `layDuAn`).
+   */
+  danhSachNguoiTrongDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<NguoiTrongDuAn[]>>
+  /**
+   * Thêm tài khoản có email `dauVao.email` (không phân biệt hoa thường) vào Dự án. Người đó phải
+   * đã đăng ký; không gửi thư mời. PM hoặc Support của Dự án. Lỗi (không đổi gì):
+   * `KHONG_CO_QUYEN`, `KHONG_TIM_THAY` (như `suaDuAn`), `DU_AN_DA_LUU_TRU`, `KHONG_HOP_LE` (email
+   * sai định dạng), `CHUA_DANG_KY`, `DA_TRONG_DU_AN`.
+   */
+  themNguoiVaoDuAn(phien: Phien | null, duAnId: string, dauVao: ThemNguoiDauVao): Promise<KetQua<NguoiTrongDuAn>>
+  /**
+   * Gỡ tài khoản `nguoiDungId` khỏi Dự án; tài khoản và hồ sơ của họ giữ nguyên. PM hoặc Support
+   * của Dự án (Support gỡ được cả chính mình). Lỗi (không đổi gì): `KHONG_CO_QUYEN`,
+   * `KHONG_TIM_THAY` (như `suaDuAn`, hoặc người đó không ở trong Dự án), `DU_AN_DA_LUU_TRU`.
+   */
+  goNguoiKhoiDuAn(phien: Phien | null, duAnId: string, nguoiDungId: string): Promise<KetQua<null>>
 }

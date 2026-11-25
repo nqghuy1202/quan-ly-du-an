@@ -7,13 +7,15 @@ import {
   dinhDangNgayGio,
   duocQuanLyDuAn,
   duocTaoDuAn,
+  duocXemDuAn,
+  duocXemMoiDuAn,
   kiemGhiDuAn,
   kiemMoLaiDuAn,
   kiemTraDuAn,
   lyDoKhongSuaDuAn,
   xepDuAn,
 } from './duAn'
-import { CAC_VAI } from './taiKhoan'
+import { CAC_VAI, THONG_BAO, type VaiHeThong } from './taiKhoan'
 
 describe('ngày giờ theo múi giờ Việt Nam', () => {
   it('hiện giờ Việt Nam (UTC+7) dù mốc được cho theo giờ UTC', () => {
@@ -60,30 +62,60 @@ describe('kiểm dữ liệu Dự án ở ranh giới', () => {
 })
 
 describe('quyền và Lưu trữ', () => {
-  it('chỉ PM thấy, tạo và sửa được Dự án ở ticket này', () => {
-    expect(CAC_VAI.filter(duocQuanLyDuAn)).toEqual(['PM'])
+  const trong = (vaiNguoiGoi: VaiHeThong) => ({ vaiNguoiGoi, laNguoiTrongDuAn: true })
+  const ngoai = (vaiNguoiGoi: VaiHeThong) => ({ vaiNguoiGoi, laNguoiTrongDuAn: false })
+
+  it('chỉ PM tạo Dự án và thấy mọi Dự án', () => {
     expect(CAC_VAI.filter(duocTaoDuAn)).toEqual(['PM'])
+    expect(CAC_VAI.filter(duocXemMoiDuAn)).toEqual(['PM'])
   })
 
-  it('ghi lên Dự án: không phải PM thì không có quyền; đã Lưu trữ thì bị từ chối', () => {
-    expect(kiemGhiDuAn({ vaiNguoiGoi: 'PM', trangThai: 'HOAT_DONG' })).toBeNull()
-    expect(kiemGhiDuAn({ vaiNguoiGoi: 'PM', trangThai: 'LUU_TRU' })).toBe('DU_AN_DA_LUU_TRU')
+  it('xem: PM thấy mọi Dự án; người khác chỉ Dự án mình ở trong', () => {
+    expect(CAC_VAI.filter((vai) => duocXemDuAn(trong(vai)))).toEqual(['PM', 'SUPPORT', 'THANH_VIEN'])
+    expect(CAC_VAI.filter((vai) => duocXemDuAn(ngoai(vai)))).toEqual(['PM'])
+  })
+
+  it('quản lý: PM ở mọi Dự án; Support chỉ Dự án mình ở trong; Thành viên không', () => {
+    expect(CAC_VAI.filter((vai) => duocQuanLyDuAn(trong(vai)))).toEqual(['PM', 'SUPPORT'])
+    expect(CAC_VAI.filter((vai) => duocQuanLyDuAn(ngoai(vai)))).toEqual(['PM'])
+  })
+
+  it('ghi lên Dự án: không quản lý được thì không có quyền (trước cả trạng thái); đã Lưu trữ thì bị từ chối', () => {
+    for (const nguoiGoi of [trong('PM'), ngoai('PM'), trong('SUPPORT')]) {
+      expect(kiemGhiDuAn({ ...nguoiGoi, trangThai: 'HOAT_DONG' })).toBeNull()
+      expect(kiemGhiDuAn({ ...nguoiGoi, trangThai: 'LUU_TRU' })).toBe('DU_AN_DA_LUU_TRU')
+    }
     for (const trangThai of CAC_TRANG_THAI_DU_AN) {
-      expect(kiemGhiDuAn({ vaiNguoiGoi: 'SUPPORT', trangThai })).toBe('KHONG_CO_QUYEN')
-      expect(kiemGhiDuAn({ vaiNguoiGoi: 'THANH_VIEN', trangThai })).toBe('KHONG_CO_QUYEN')
+      for (const nguoiGoi of [ngoai('SUPPORT'), trong('THANH_VIEN'), ngoai('THANH_VIEN')]) {
+        expect(kiemGhiDuAn({ ...nguoiGoi, trangThai })).toBe('KHONG_CO_QUYEN')
+      }
     }
   })
 
-  it('mở lại: chỉ PM, chỉ Dự án đang Lưu trữ', () => {
-    expect(kiemMoLaiDuAn({ vaiNguoiGoi: 'PM', trangThai: 'LUU_TRU' })).toBeNull()
-    expect(kiemMoLaiDuAn({ vaiNguoiGoi: 'PM', trangThai: 'HOAT_DONG' })).toBe('DU_AN_DANG_HOAT_DONG')
-    expect(kiemMoLaiDuAn({ vaiNguoiGoi: 'SUPPORT', trangThai: 'LUU_TRU' })).toBe('KHONG_CO_QUYEN')
+  it('mở lại: người quản lý được, chỉ Dự án đang Lưu trữ', () => {
+    expect(kiemMoLaiDuAn({ ...ngoai('PM'), trangThai: 'LUU_TRU' })).toBeNull()
+    expect(kiemMoLaiDuAn({ ...trong('SUPPORT'), trangThai: 'LUU_TRU' })).toBeNull()
+    expect(kiemMoLaiDuAn({ ...ngoai('PM'), trangThai: 'HOAT_DONG' })).toBe('DU_AN_DANG_HOAT_DONG')
+    expect(kiemMoLaiDuAn({ ...ngoai('SUPPORT'), trangThai: 'LUU_TRU' })).toBe('KHONG_CO_QUYEN')
+    expect(kiemMoLaiDuAn({ ...trong('THANH_VIEN'), trangThai: 'LUU_TRU' })).toBe('KHONG_CO_QUYEN')
   })
 
   it('lý do tiếng Việt cho giao diện khi nút ghi bị ẩn', () => {
-    expect(lyDoKhongSuaDuAn({ vaiNguoiGoi: 'PM', trangThai: 'HOAT_DONG' })).toBeNull()
-    expect(lyDoKhongSuaDuAn({ vaiNguoiGoi: 'PM', trangThai: 'LUU_TRU' })).toBe(THONG_BAO_DU_AN.daLuuTru)
-    expect(lyDoKhongSuaDuAn({ vaiNguoiGoi: 'THANH_VIEN', trangThai: 'HOAT_DONG' })).toBe(THONG_BAO_DU_AN.chiPMSua)
+    expect(lyDoKhongSuaDuAn({ ...ngoai('PM'), trangThai: 'HOAT_DONG' })).toBeNull()
+    expect(lyDoKhongSuaDuAn({ ...trong('SUPPORT'), trangThai: 'HOAT_DONG' })).toBeNull()
+    expect(lyDoKhongSuaDuAn({ ...ngoai('PM'), trangThai: 'LUU_TRU' })).toBe(THONG_BAO_DU_AN.daLuuTru)
+    expect(lyDoKhongSuaDuAn({ ...trong('THANH_VIEN'), trangThai: 'HOAT_DONG' })).toBe(THONG_BAO_DU_AN.khongQuanLy)
+    expect(lyDoKhongSuaDuAn({ ...ngoai('SUPPORT'), trangThai: 'LUU_TRU' })).toBe(THONG_BAO_DU_AN.khongQuanLy)
+  })
+})
+
+describe('thêm người vào Dự án: kiểm email ở ranh giới', () => {
+  it('bỏ khoảng trắng và chuyển chữ thường', () => {
+    expect(kiemTraDuAn.themNguoi({ email: '  An@Vi-Du.VN ' })).toEqual({ ok: true, giaTri: { email: 'an@vi-du.vn' } })
+  })
+
+  it.each(['', 'khong-phai-email', 'a@'])('email "%s" bị từ chối', (email) => {
+    expect(kiemTraDuAn.themNguoi({ email })).toEqual({ ok: false, loiTheoO: { email: THONG_BAO.emailSai } })
   })
 })
 

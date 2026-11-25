@@ -12,7 +12,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import { thanhCong, type KetQua } from '../kho/ketQua'
 import type { HoSo, Phien } from '../kho/khoDuLieu'
 import { TEN_VAI, duocQuanLyNguoiDung, type VaiHeThong } from '../luat/taiKhoan'
-import { duocQuanLyDuAn } from '../luat/duAn'
+import { duocXemMoiDuAn } from '../luat/duAn'
 import { useKho } from './khoContext'
 import { ManDuAn } from './ManDuAn'
 import { ManHoSo } from './ManHoSo'
@@ -87,8 +87,8 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   const hoSo = tai.giaTri
   // Cùng luật quyền với Kho: chỉ PM thấy mục Người dùng.
   const thayNguoiDung = duocQuanLyNguoiDung(hoSo.vai)
-  // Cùng luật với Kho: ở ticket này chỉ PM thấy mục Tất cả Dự án.
-  const thayTatCaDuAn = duocQuanLyDuAn(hoSo.vai)
+  // Cùng luật với Kho: chỉ PM thấy mọi Dự án, nên chỉ PM có mục Tất cả Dự án.
+  const thayTatCaDuAn = duocXemMoiDuAn(hoSo.vai)
   const trangHien: Trang =
     (trang === 'nguoiDung' && !thayNguoiDung) || (trang === 'tatCaDuAn' && !thayTatCaDuAn) ? 'duAn' : trang
 
@@ -98,7 +98,7 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
 
   let noiDung: ReactNode
   if (trangHien === 'duAn') {
-    noiDung = <TrangDuAnCuaToi phien={phien} onHetPhien={onHetPhien} />
+    noiDung = <TrangDuAnCuaToi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'tatCaDuAn') {
     noiDung = <ManDuAn phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'hoSo') {

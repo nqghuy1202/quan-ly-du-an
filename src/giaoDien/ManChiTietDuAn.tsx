@@ -11,7 +11,7 @@ import { TextInput } from '@astryxdesign/core/TextInput'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua, LoiKho } from '../kho/ketQua'
-import type { DuAn, Phien } from '../kho/khoDuLieu'
+import type { DuAn, NguoiTrongDuAn, Phien } from '../kho/khoDuLieu'
 import {
   DO_DAI_TEN_DU_AN_TOI_DA,
   TEN_TRANG_THAI_DU_AN,
@@ -21,6 +21,7 @@ import {
 } from '../luat/duAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
+import { PhanNguoiTrongDuAn } from './PhanNguoiTrongDuAn'
 import { trangThaiO } from './trangThaiO'
 
 interface Props {
@@ -50,12 +51,21 @@ const DA_XONG: Record<Viec, string> = {
   moLai: 'Đã mở lại Dự án. Bạn có thể sửa tiếp.',
 }
 
-/** Chi tiết một Dự án: dấu vết, sửa tên và mô tả, Lưu trữ và mở lại. */
+/** Quyền của Support phụ thuộc danh sách người trong dự án; chưa có danh sách thì chưa rõ quyền. */
+const LY_DO_CHUA_RO_QUYEN = {
+  dangTai: 'Đang kiểm quyền của bạn trên Dự án này…',
+  loi: 'Chưa kiểm được quyền của bạn vì không tải được người trong dự án.',
+} as const
+
+/** Chi tiết một Dự án: dấu vết, sửa tên và mô tả, Lưu trữ và mở lại, người trong dự án. */
 export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQuayLai, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<DuAn> } | null>(null)
   const tai = daTai && daTai.lan === lanTai ? daTai.kq : null
+  const [lanTaiNguoi, setLanTaiNguoi] = useState(0)
+  const [daTaiNguoi, setDaTaiNguoi] = useState<{ lan: number; kq: KetQua<NguoiTrongDuAn[]> } | null>(null)
+  const taiNguoi = daTaiNguoi && daTaiNguoi.lan === lanTaiNguoi ? daTaiNguoi.kq : null
   const [ten, setTen] = useState('')
   const [moTa, setMoTa] = useState('')
   const [dangLam, setDangLam] = useState<Viec | null>(null)
@@ -81,6 +91,37 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       huy = true
     }
   }, [kho, phien, duAnId, lanTai, onHetPhien])
+
+  useEffect(() => {
+    let huy = false
+    kho.danhSachNguoiTrongDuAn(phien, duAnId).then((kq) => {
+      if (huy) return
+      if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') {
+        onHetPhien()
+        return
+      }
+      setDaTaiNguoi({ lan: lanTaiNguoi, kq })
+    })
+    return () => {
+      huy = true
+    }
+  }, [kho, phien, duAnId, lanTaiNguoi, onHetPhien])
+
+  function taiLaiTatCa() {
+    setLanTai((n) => n + 1)
+    setLanTaiNguoi((n) => n + 1)
+  }
+
+  function doiDanhSachNguoi(capNhat: (cu: NguoiTrongDuAn[]) => NguoiTrongDuAn[]) {
+    setDaTaiNguoi((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq: { ok: true, giaTri: capNhat(cu.kq.giaTri) } } : cu))
+  }
+
+  /** Dự án hay quyền đã đổi ở nơi khác: đọc lại Dự án và người trong dự án. */
+  async function docLai() {
+    setLanTaiNguoi((n) => n + 1)
+    const docLaiDuAn = await kho.layDuAn(phien, duAnId)
+    if (docLaiDuAn.ok) setDaTai({ lan: lanTai, kq: docLaiDuAn })
+  }
 
   function hienDuAn(duAn: DuAn) {
     setTen(duAn.ten)
@@ -110,12 +151,14 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       return
     }
     setThongBao({ loai: 'loi', tieuDe: TIEU_DE_LOI[viec], loi: kq.loi })
-    // Dự án đã đổi ở nơi khác (vd. vừa bị Lưu trữ): đọc lại để nút và lý do khớp với Kho.
-    if (kq.loi.ma === 'DU_AN_DA_LUU_TRU' || kq.loi.ma === 'DU_AN_DANG_HOAT_DONG') {
-      const docLai = await kho.layDuAn(phien, duAnId)
-      if (docLai.ok) {
-        setDaTai({ lan: lanTai, kq: docLai })
-      }
+    // Dự án hay quyền đã đổi ở nơi khác (vd. vừa bị Lưu trữ, bị gỡ khỏi Dự án): đọc lại để nút và
+    // lý do khớp với Kho.
+    if (
+      kq.loi.ma === 'DU_AN_DA_LUU_TRU' ||
+      kq.loi.ma === 'DU_AN_DANG_HOAT_DONG' ||
+      kq.loi.ma === 'KHONG_CO_QUYEN'
+    ) {
+      await docLai()
     }
   }
 
@@ -143,7 +186,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
           title="Không tải được Dự án."
           description={tai.loi.thongBao}
           role="alert"
-          endContent={<Button label="Thử lại" variant="secondary" onClick={() => setLanTai((n) => n + 1)} />}
+          endContent={<Button label="Thử lại" variant="secondary" onClick={taiLaiTatCa} />}
         />
       </VStack>
     )
@@ -151,9 +194,21 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
 
   const duAn = tai.giaTri
   const { taoBoi, taoLuc, suaBoi, suaLuc } = duAn.dauVet
-  // Cùng luật với Kho: không có quyền hoặc đã Lưu trữ thì ẩn nút ghi và nói lý do.
-  const lyDoKhongSua = lyDoKhongSuaDuAn({ vaiNguoiGoi: vai, trangThai: duAn.trangThai })
-  const moLaiDuoc = kiemMoLaiDuAn({ vaiNguoiGoi: vai, trangThai: duAn.trangThai }) === null
+  // Cùng luật với Kho: không có quyền hoặc đã Lưu trữ thì ẩn nút ghi và nói lý do. Quyền của
+  // Support tuỳ việc có nằm trong danh sách người trong dự án hay không.
+  const tinhHuong = {
+    vaiNguoiGoi: vai,
+    laNguoiTrongDuAn:
+      taiNguoi !== null && taiNguoi.ok && taiNguoi.giaTri.some((nguoi) => nguoi.id === phien.nguoiDungId),
+    trangThai: duAn.trangThai,
+  }
+  const quyenDaRo = vai !== 'SUPPORT' || taiNguoi?.ok === true
+  const lyDoKhongSua = quyenDaRo
+    ? lyDoKhongSuaDuAn(tinhHuong)
+    : taiNguoi === null
+      ? LY_DO_CHUA_RO_QUYEN.dangTai
+      : LY_DO_CHUA_RO_QUYEN.loi
+  const moLaiDuoc = quyenDaRo && kiemMoLaiDuAn(tinhHuong) === null
 
   return (
     <VStack gap={4}>
@@ -219,6 +274,17 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
           <Button label="Mở lại Dự án" variant="primary" isLoading={dangLam === 'moLai'} onClick={() => lam('moLai')} />
         )}
       </HStack>
+
+      <PhanNguoiTrongDuAn
+        phien={phien}
+        duAnId={duAnId}
+        tai={taiNguoi}
+        lyDoKhongGhi={lyDoKhongSua}
+        onThuLai={() => setLanTaiNguoi((n) => n + 1)}
+        onDoiDanhSach={doiDanhSachNguoi}
+        onCanDocLai={docLai}
+        onHetPhien={onHetPhien}
+      />
     </VStack>
   )
 }

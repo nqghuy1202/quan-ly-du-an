@@ -71,7 +71,7 @@ function thanhDong(duAn: DuAn): Dong {
   }
 }
 
-/** Danh sách mọi Dự án (PM), lọc giữa đang hoạt động và Lưu trữ. */
+/** Danh sách Dự án người dùng được thấy (PM: mọi Dự án), lọc giữa đang hoạt động và Lưu trữ. */
 export function ManDanhSachDuAn({ phien, vai, boLoc, onDoiBoLoc, onTao, onMo, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
@@ -145,7 +145,7 @@ export function ManDanhSachDuAn({ phien, vai, boLoc, onDoiBoLoc, onTao, onMo, on
         <Heading level={2}>Tất cả Dự án</Heading>
         {duocTao && <Button label="Tạo Dự án" variant="primary" onClick={onTao} />}
       </HStack>
-      {!duocTao && <Text>{THONG_BAO_DU_AN.chiPMSua}</Text>}
+      {!duocTao && <Text>{THONG_BAO_DU_AN.chiPMTao}</Text>}
       <Text>Ngày giờ hiển thị theo giờ Việt Nam.</Text>
       <SegmentedControl
         label="Lọc Dự án theo trạng thái"

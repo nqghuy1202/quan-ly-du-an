@@ -1,5 +1,7 @@
-import { chayBoTestHopDong } from './hopDong'
+import { BANG_CA_QUYEN, CAC_HANH_DONG } from './bangCaQuyen'
+import { chayBangCaQuyen, chayBoTestHopDong, type BanCaiHopDong } from './hopDong'
 import { taoKhoBoNho, type ThuMoPhong } from './khoBoNho'
+import { CAC_VAI } from '../luat/taiKhoan'
 
 const MUOI_LAM_PHUT = 15 * 60 * 1000
 
@@ -9,7 +11,7 @@ function maDatLaiMoiNhat(thu: ThuMoPhong[]): string | null {
   return moiNhat && moiNhat.loai === 'DAT_LAI_MAT_KHAU' ? moiNhat.ma : null
 }
 
-chayBoTestHopDong('bản bộ nhớ', () => {
+function taoBanCai(): BanCaiHopDong {
   const kho = taoKhoBoNho({ thoiHanMaDatLaiMs: MUOI_LAM_PHUT })
   return {
     kho,
@@ -21,6 +23,31 @@ chayBoTestHopDong('bản bộ nhớ', () => {
       if (!kq.ok) throw new Error(kq.loi.thongBao)
     },
   }
+}
+
+chayBoTestHopDong('bản bộ nhớ', taoBanCai)
+
+chayBangCaQuyen('bản bộ nhớ', taoBanCai)
+
+describe('bảng ca dùng chung cho quyền (dữ liệu)', () => {
+  it('mọi hành động có đủ dòng cho từng vai, trong và ngoài Dự án, khi Dự án đang hoạt động', () => {
+    for (const hanhDong of CAC_HANH_DONG) {
+      for (const vai of CAC_VAI) {
+        for (const trongDuAn of [true, false]) {
+          const dong = BANG_CA_QUYEN.filter(
+            (ca) =>
+              ca.hanhDong === hanhDong && ca.vai === vai && ca.trongDuAn === trongDuAn && ca.trangThaiDuAn === 'HOAT_DONG',
+          )
+          expect(dong, `${hanhDong} / ${vai} / trong Dự án: ${trongDuAn}`).toHaveLength(1)
+        }
+      }
+    }
+  })
+
+  it('không có hai dòng cho cùng một tình huống', () => {
+    const khoa = BANG_CA_QUYEN.map((ca) => `${ca.vai}|${ca.trongDuAn}|${ca.trangThaiDuAn}|${ca.hanhDong}`)
+    expect(new Set(khoa).size).toBe(khoa.length)
+  })
 })
 
 describe('PM ban đầu của bản bộ nhớ (chỉ cho dev và test)', () => {

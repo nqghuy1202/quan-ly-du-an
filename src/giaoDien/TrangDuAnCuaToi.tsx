@@ -4,24 +4,40 @@ import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Heading } from '@astryxdesign/core/Heading'
 import { Spinner } from '@astryxdesign/core/Spinner'
-import { Text } from '@astryxdesign/core/Text'
+import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
+import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { DuAnTomTat, Phien } from '../kho/khoDuLieu'
+import { TEN_TRANG_THAI_DU_AN, type TrangThaiDuAn } from '../luat/duAn'
+import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
+import { ManChiTietDuAn } from './ManChiTietDuAn'
 
 interface Props {
   phien: Phien
+  vai: VaiHeThong
+  /** Đồng hồ cho dấu vết khi sửa Dự án ở màn chi tiết. */
+  dongHo: () => Date
   onHetPhien: () => void
 }
 
-/** Danh sách Dự án người dùng được thấy; trống thì hướng dẫn nhờ PM hoặc Support. */
-export function TrangDuAnCuaToi({ phien, onHetPhien }: Props) {
+/** Một dòng của bảng (kiểu đối tượng thuần, như Table đòi). */
+type Dong = {
+  id: string
+  ten: string
+  trangThai: TrangThaiDuAn
+}
+
+/** Các Dự án người dùng đang ở trong; trống thì hướng dẫn nhờ PM hoặc Support. Mở được chi tiết. */
+export function TrangDuAnCuaToi({ phien, vai, dongHo, onHetPhien }: Props) {
   const kho = useKho()
   const [tai, setTai] = useState<KetQua<DuAnTomTat[]> | null>(null)
   const [lanTai, setLanTai] = useState(0)
+  const [duAnDangMo, setDuAnDangMo] = useState<string | null>(null)
 
   useEffect(() => {
+    if (duAnDangMo !== null) return
     let huy = false
     kho.danhSachDuAnCuaToi(phien).then((kq) => {
       if (huy) return
@@ -31,12 +47,48 @@ export function TrangDuAnCuaToi({ phien, onHetPhien }: Props) {
     return () => {
       huy = true
     }
-  }, [kho, phien, lanTai, onHetPhien])
+  }, [kho, phien, lanTai, duAnDangMo, onHetPhien])
 
   function taiLai() {
     setTai(null)
     setLanTai((n) => n + 1)
   }
+
+  if (duAnDangMo !== null) {
+    return (
+      <ManChiTietDuAn
+        key={duAnDangMo}
+        phien={phien}
+        vai={vai}
+        duAnId={duAnDangMo}
+        thongBaoBanDau={null}
+        dongHo={dongHo}
+        onQuayLai={() => {
+          // Quay lại thì đọc lại danh sách: có thể vừa Lưu trữ, đổi tên hay tự gỡ mình ra.
+          setTai(null)
+          setDuAnDangMo(null)
+        }}
+        onHetPhien={onHetPhien}
+      />
+    )
+  }
+
+  const cot: TableColumn<Dong>[] = [
+    {
+      key: 'ten',
+      header: 'Tên Dự án',
+      width: proportional(2),
+      renderCell: (dong) => <Button label={dong.ten} variant="ghost" onClick={() => setDuAnDangMo(dong.id)} />,
+    },
+    {
+      key: 'trangThai',
+      header: 'Trạng thái',
+      width: proportional(1),
+      renderCell: (dong) => (
+        <Token label={TEN_TRANG_THAI_DU_AN[dong.trangThai]} color={dong.trangThai === 'LUU_TRU' ? 'gray' : 'green'} />
+      ),
+    },
+  ]
 
   let noiDung: ReactNode
   if (tai === null) {
@@ -60,13 +112,10 @@ export function TrangDuAnCuaToi({ phien, onHetPhien }: Props) {
       />
     )
   } else {
-    noiDung = (
-      <VStack gap={2}>
-        {tai.giaTri.map((duAn) => (
-          <Text key={duAn.id}>{duAn.ten}</Text>
-        ))}
-      </VStack>
-    )
+    const dong: Dong[] = [...tai.giaTri]
+      .sort((a, b) => a.ten.localeCompare(b.ten, 'vi'))
+      .map(({ id, ten, trangThai }) => ({ id, ten, trangThai }))
+    noiDung = <Table aria-label="Dự án của tôi" data={dong} columns={cot} idKey="id" />
   }
 
   return (
