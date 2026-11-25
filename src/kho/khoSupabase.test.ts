@@ -29,10 +29,8 @@ switch (ketQua.trangThai) {
     describe('Link issue hoặc PR trên Task — bản Supabase', () => {
       it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh link GitHub của Task (ticket 17 cài và chạy chayHopDongLienKet)', () => {})
     })
-    // Đổi trạng thái và lịch sử chưa có trên bản Supabase (ticket 14), kể cả khi ticket 10 đã cài Task:
-    // ép `coTask: false` để bộ này bỏ qua và báo "CHƯA KIỂM". Ticket 14 cài hàm cơ sở dữ liệu rồi
-    // truyền thẳng `tuyChon`.
-    chayHopDongChuyenTrangThai('bản Supabase', taoBanCai, { ...tuyChon, coTask: false })
+    // Vòng duyệt (ticket 11, 14): hàm chuyển trạng thái và lịch sử đã có trên bản Supabase.
+    chayHopDongChuyenTrangThai('bản Supabase', taoBanCai, tuyChon)
     break
   }
   case 'THIEU_CAU_HINH': {

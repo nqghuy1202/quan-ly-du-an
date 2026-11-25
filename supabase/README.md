@@ -1,4 +1,4 @@
-# Supabase cho lát 1 và lát 2 (ticket 06, ticket 10)
+# Supabase cho lát 1, lát 2 và vòng duyệt (ticket 06, 10, 14)
 
 Bản cài Supabase của Kho dữ liệu: `src/kho/khoSupabase.ts`. Ứng dụng chọn bản cài theo biến môi
 trường (`src/kho/cauHinh.ts`, `src/kho/chonKho.ts`):
@@ -53,6 +53,76 @@ Khác bản bộ nhớ (do Supabase quyết):
   (mặc định của Supabase là 1000; đừng hạ *Max rows* dưới 500).
 - Hai người dùng sửa cùng lúc: bản cài đọc rồi mới ghi, nên nếu Task vừa bị chốt giữa hai bước thì
   trigger ném `TASK_DA_CHOT` (đã ánh xạ về mã của Kho); cửa sổ này rất nhỏ, không có khoá lạc quan.
+
+## Vòng duyệt trên Supabase (ticket 14)
+
+Migration `migrations/20261125000300_lat_3_vong_duyet.sql` (chạy SAU lát 2; bản xuống
+`down/20261125000300_lat_3_vong_duyet.down.sql`, chạy TRƯỚC bản xuống của lát 2) tạo bảng
+`lich_su_trang_thai_task`, hàm `public.doi_trang_thai_task` và `public.lich_su_task`, và cài phía cơ sở
+dữ liệu cùng bộ luật với `src/luat/chuyenTrangThai.ts`. Lệnh của Kho cho bản Supabase:
+`src/kho/khoSupabaseVongDuyet.ts` (`doiTrangThaiTask`, `lichSuTask`).
+
+Cơ sở dữ liệu ép (không tin trình duyệt):
+
+- **Đổi trạng thái chỉ qua `doi_trang_thai_task(p_task_id, p_sang, p_ly_do)`**: `security definer`, người
+  gọi lấy từ `auth.uid()` (không có tham số người gọi). Hàm tự kiểm đúng thứ tự của luật thuần
+  (`kiemChuyenTrangThai`): không giữ vai nào (`KHONG_CO_QUYEN`), Dự án Lưu trữ (`DU_AN_DA_LUU_TRU`), Task
+  đã chốt (`TASK_DA_CHOT`), dữ liệu sai (`KHONG_HOP_LE`), bước ngoài ma trận (`BUOC_KHONG_HOP_LE`), vai
+  không được làm bước (`KHONG_CO_QUYEN`), thiếu lý do (`LY_DO_BAT_BUOC`). Task không tồn tại: PM nhận
+  `KHONG_TIM_THAY`, người khác `KHONG_CO_QUYEN`. Qua hết mới bật cờ giao dịch
+  `rieng.dang_chuyen_trang_thai` (hợp đồng của ticket 10), đổi trạng thái, tăng bộ đếm Trả lại (đúng 1 khi
+  sang Trả lại), tắt cờ, rồi ghi đúng một dòng lịch sử, tất cả một giao dịch; trigger của lát 2 đặt
+  người và ngày chỉnh sửa gần nhất theo `auth.uid()` và `now()`. Khoá dòng Task (`for update`) nên hai lần
+  đổi cùng lúc xếp hàng.
+- **Ma trận** nằm trong SQL ở dạng dữ liệu (`rieng.ma_tran_chuyen_trang_thai()`, 12 bước), và bảng lịch
+  sử có ràng buộc chỉ nhận bước nằm trong ma trận, Trả lại, Bị lỗi, Huỷ bắt buộc có lý do.
+- **Lịch sử**: ai thấy Dự án của Task thì đọc được (RLS `lich_su_doc`; Kho đọc qua `lich_su_task`, hàm này
+  còn trả tên hiển thị hiện tại của người đổi, kể cả người đã rời Dự án). Client không có policy ghi và
+  không có quyền bảng; trigger chặn sửa. Xoá tài khoản đã từng đổi trạng thái bị chặn (khoá ngoại), như
+  người tạo Task.
+- **Tiến độ và Trễ hạn**: KHÔNG viết lại luật bằng SQL. Hai thứ này tính bằng hàm thuần của ticket 13 trên
+  danh sách Task mà `danhSachTask` đọc (đủ trạng thái và hạn, đọc hết các trang). Migration chỉ thêm hai
+  chỉ mục (`task_du_an_trang_thai_idx`, `task_han_chua_chot_idx`) cho các truy vấn đó.
+
+Khác bản bộ nhớ (do Supabase quyết): thời điểm của dòng lịch sử và ngày chỉnh sửa là giờ máy chủ, `bayGio`
+bị bỏ qua (bộ test chạy với `dongHoCuaKho`; ca "lịch sử xếp theo thời điểm truyền vào" bị bỏ qua). Giới hạn
+lý do 1000 ký tự tính theo ký tự Unicode ở cơ sở dữ liệu, theo đơn vị UTF-16 ở luật thuần: chỉ khác nhau
+với ký tự ngoài bảng chữ cơ bản (emoji), nên cơ sở dữ liệu có thể nhận lý do mà luật thuần đã từ chối, không
+ngược lại.
+
+Cổng **có kiểm** (`src/kho/khoSupabaseVongDuyet.test.ts`, không mạng, không DB): với một `fetch` giả trong bộ
+nhớ, luật thuần từ chối trước khi gọi hàm (không ghi gì), lý do được cắt khoảng trắng, lỗi hàm ném được đổi
+về đúng mã của Kho, lịch sử được xếp lại đúng; và cấu trúc file migration bằng cách đọc chữ: ma trận trong
+SQL giống hệt `MA_TRAN_CHUYEN_TRANG_THAI`, mọi mã lỗi hàm ném là mã của Kho, hàm không nhận người gọi qua
+tham số, cờ giao dịch chỉ bật sau mọi lệnh kiểm, bảng lịch sử không mở quyền ghi cho client, bản xuống bỏ
+đủ đối tượng. `fetch` giả KHÔNG mô phỏng SQL, nên không thay cho việc chạy trên Supabase thật.
+
+**Cổng không kiểm** (chủ dự án phải chạy tay): toàn bộ SQL của lát 3 (hàm, bảng, ràng buộc, trigger, RLS);
+bộ test hợp đồng và bảng ca chuyển trạng thái (`src/kho/hopDongChuyenTrangThai.ts`, mọi dòng của
+`BANG_CA_CHUYEN_TRANG_THAI`) trên Supabase thật; các mục kiểm tay dưới đây.
+
+Việc chủ dự án làm tay: áp migration lát 3 (sau lát 2) trong SQL Editor hoặc `supabase db push`
+(Table Editor có thêm bảng `lich_su_trang_thai_task`, hiện "RLS enabled"), rồi chạy
+`npx vitest run --config vitest.supabase.config.ts` (phần "vòng duyệt" của lệnh này không còn bị bỏ qua) và
+kiểm tay (giả người gọi như mục "Giả người gọi trong SQL Editor"):
+
+- Gọi `select public.doi_trang_thai_task('<uuid Task>', 'DANG_LAM')` bằng phiên của: Người thực hiện (được),
+  Người kiểm tra (`KHONG_CO_QUYEN`), Thành viên khác trong Dự án (`KHONG_CO_QUYEN`), người ngoài Dự án
+  (`KHONG_CO_QUYEN`), PM ngoài Dự án (được). Task không tồn tại: PM `KHONG_TIM_THAY`, người khác `KHONG_CO_QUYEN`.
+- Từ `CHO_DUYET`: sang `TRA_LAI` hay `BI_LOI` không lý do (hoặc chỉ khoảng trắng) lỗi `LY_DO_BAT_BUOC`; có lý
+  do thì `trang_thai` đổi, `so_lan_tra_lai` tăng 1 chỉ ở `TRA_LAI`, `sua_boi` là người gọi, `sua_luc` là giờ
+  máy chủ, và `lich_su_trang_thai_task` có đúng một dòng mới (người đổi, từ, sang, lý do đã cắt khoảng trắng).
+- Một lần bị từ chối (mọi mã lỗi) không đổi gì: `trang_thai`, `so_lan_tra_lai`, `sua_boi`, `sua_luc` và số
+  dòng lịch sử giữ nguyên.
+- Task `HOAN_THANH` hoặc `HUY`: mọi bước `TASK_DA_CHOT`. Dự án Lưu trữ: `DU_AN_DA_LUU_TRU`. Trạng thái đích
+  `'KHAC'`: `KHONG_HOP_LE`. Bước ngoài ma trận (vd. `MOI` sang `HOAN_THANH`): `BUOC_KHONG_HOP_LE`.
+- Không ghi thẳng được: `update task set trang_thai = ...` bằng phiên PM lỗi quyền cột;
+  `insert/update/delete` trên `lich_su_trang_thai_task` bằng phiên bất kỳ lỗi quyền (không có quyền bảng);
+  `select * from lich_su_trang_thai_task` bằng phiên người ngoài Dự án không thấy dòng nào của Dự án đó.
+- Gọi hàm khi chưa đăng nhập (khoá anon, không phiên): bị từ chối (không có quyền thực thi).
+- Hai phiên cùng đổi một Task cùng lúc (vd. cùng bấm `DANG_LAM`): đúng một phiên thành công, phiên kia nhận
+  `BUOC_KHONG_HOP_LE`; lịch sử có đúng một dòng.
+- Thử chạy bản xuống lát 3 trên project thử: Task giữ nguyên, bảng lịch sử biến mất, hai chỉ mục biến mất.
 
 ## Cổng chưa kiểm (phải kiểm tay)
 
