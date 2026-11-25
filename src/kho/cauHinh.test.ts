@@ -108,6 +108,9 @@ describe('chọn bản cài Kho theo cấu hình môi trường', () => {
         await kho.ganRepoVaoDuAn(phien, 'du-an', { repo: 'a/b' }),
         await kho.goRepoKhoiDuAn(phien, 'du-an', 'a/b'),
         await kho.danhSachRepoCuaDuAn(phien, 'du-an'),
+        await kho.themLienKetVaoTask(phien, 'task', { duongDan: 'https://github.com/a/b/issues/1' }, LUC),
+        await kho.goLienKetKhoiTask(phien, 'task', { repo: 'a/b', loai: 'ISSUE', so: 1 }, LUC),
+        await kho.danhSachLienKetCuaTask(phien, 'task'),
         await kho.dangXuat(phien),
       ]) {
         expect(kq.ok || kq.loi.ma).toBe('CHUA_DANG_NHAP')

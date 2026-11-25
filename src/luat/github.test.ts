@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   THONG_BAO_GITHUB_MAC_DINH,
+  THONG_BAO_LIEN_KET,
+  duongDanLienKet,
+  kiemGhiLienKet,
+  kiemTraLienKet,
+  lyDoKhongGhiLienKet,
+  tenLienKet,
+  thuocRepoDaGan,
   chuyenPhanHoiGitHub,
   kiemTraRepo,
   khoaLienKet,
@@ -206,5 +213,56 @@ describe('tên repo gắn vào Dự án', () => {
   it('khoá repo không phân biệt hoa thường; xếp repo theo tên', () => {
     expect(khoaRepo(' Acme/Web ')).toBe('acme/web')
     expect(xepRepo(['b/z', 'A/y', 'a/x'])).toEqual(['a/x', 'A/y', 'b/z'])
+  })
+})
+
+describe('link issue hoặc PR trên Task', () => {
+  it('kiểm dữ liệu dán link: ra (repo, loại, số); sai thì lỗi ở ô duongDan bằng tiếng Việt', () => {
+    expect(kiemTraLienKet.them({ duongDan: ' https://github.com/acme/web/pull/34/ ' })).toEqual({
+      ok: true,
+      giaTri: { repo: 'acme/web', loai: 'PR', so: 34 },
+    })
+    for (const dauVao of [{ duongDan: 'sai' }, { duongDan: '' }, { duongDan: 12 }, {}]) {
+      expect(kiemTraLienKet.them(dauVao)).toEqual({ ok: false, loiTheoO: { duongDan: THONG_BAO_LIEN_KET.sai } })
+    }
+    for (const dauVao of [null, 'https://github.com/a/b/issues/1']) {
+      const kt = kiemTraLienKet.them(dauVao)
+      expect(kt.ok).toBe(false)
+      if (!kt.ok) expect(Object.values(kt.loiTheoO)).toEqual([THONG_BAO_LIEN_KET.sai])
+    }
+  })
+
+  it('đường dẫn chuẩn và tên hiển thị của link', () => {
+    expect(duongDanLienKet({ repo: 'Acme/Web', loai: 'ISSUE', so: 12 })).toBe('https://github.com/Acme/Web/issues/12')
+    expect(duongDanLienKet({ repo: 'acme/web', loai: 'PR', so: 34 })).toBe('https://github.com/acme/web/pull/34')
+    expect(tenLienKet({ repo: 'acme/web', loai: 'ISSUE', so: 12 })).toBe('acme/web · Issue #12')
+    expect(tenLienKet({ repo: 'acme/web', loai: 'PR', so: 34 })).toBe('acme/web · PR #34')
+    // Đường dẫn chuẩn phân tích ngược ra đúng link.
+    const lienKet = { repo: 'acme/web', loai: 'PR', so: 34 } as const
+    expect(phanTichLienKet(duongDanLienKet(lienKet))).toEqual({ ok: true, giaTri: lienKet })
+  })
+
+  it('link thuộc repo đã gắn không phân biệt hoa thường', () => {
+    const lienKet = { repo: 'Acme/Web', loai: 'ISSUE', so: 1 } as const
+    expect(thuocRepoDaGan(lienKet, ['acme/web'])).toBe(true)
+    expect(thuocRepoDaGan(lienKet, ['acme/api', 'ACME/WEB'])).toBe(true)
+    expect(thuocRepoDaGan(lienKet, ['acme/api'])).toBe(false)
+    expect(thuocRepoDaGan(lienKet, [])).toBe(false)
+  })
+
+  it('quyền ghi link: mọi người thấy Dự án ghi được, trừ Dự án đã Lưu trữ; người không thấy nhận KHONG_TIM_THAY', () => {
+    for (const vai of ['PM', 'SUPPORT', 'THANH_VIEN'] as const) {
+      expect(kiemGhiLienKet({ vaiNguoiGoi: vai, laNguoiTrongDuAn: true, trangThai: 'HOAT_DONG' }), vai).toBeNull()
+      expect(kiemGhiLienKet({ vaiNguoiGoi: vai, laNguoiTrongDuAn: true, trangThai: 'LUU_TRU' }), vai).toBe('DU_AN_DA_LUU_TRU')
+    }
+    // PM thấy mọi Dự án dù không nằm trong danh sách.
+    expect(kiemGhiLienKet({ vaiNguoiGoi: 'PM', laNguoiTrongDuAn: false, trangThai: 'HOAT_DONG' })).toBeNull()
+    for (const vai of ['SUPPORT', 'THANH_VIEN'] as const) {
+      for (const trangThai of ['HOAT_DONG', 'LUU_TRU'] as const) {
+        expect(kiemGhiLienKet({ vaiNguoiGoi: vai, laNguoiTrongDuAn: false, trangThai })).toBe('KHONG_TIM_THAY')
+      }
+    }
+    expect(lyDoKhongGhiLienKet({ vaiNguoiGoi: 'THANH_VIEN', laNguoiTrongDuAn: true, trangThai: 'HOAT_DONG' })).toBeNull()
+    expect(lyDoKhongGhiLienKet({ vaiNguoiGoi: 'THANH_VIEN', laNguoiTrongDuAn: true, trangThai: 'LUU_TRU' })).toBe(THONG_BAO_LIEN_KET.daLuuTru)
   })
 })

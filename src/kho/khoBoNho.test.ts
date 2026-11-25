@@ -1,5 +1,6 @@
 import { BANG_CA_QUYEN, CAC_HANH_DONG } from './bangCaQuyen'
 import { chayBangCaQuyen, chayBoTestHopDong, type BanCaiHopDong } from './hopDong'
+import { chayHopDongLienKet } from './hopDongLienKet'
 import { chayHopDongRepo } from './hopDongRepo'
 import { chayHopDongSuaTask } from './hopDongSuaTask'
 import { taoKhoBoNho, type ThuMoPhong } from './khoBoNho'
@@ -37,6 +38,8 @@ chayBangCaQuyen('bản bộ nhớ', taoBanCai)
 
 chayHopDongRepo('bản bộ nhớ', taoBanCai)
 chayHopDongSuaTask('bản bộ nhớ', taoBanCai)
+
+chayHopDongLienKet('bản bộ nhớ', taoBanCai)
 
 describe('bảng ca dùng chung cho quyền (dữ liệu)', () => {
   it('mọi hành động có đủ dòng cho từng vai, trong và ngoài Dự án, khi Dự án đang hoạt động', () => {

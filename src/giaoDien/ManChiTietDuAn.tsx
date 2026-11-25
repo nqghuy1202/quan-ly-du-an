@@ -19,7 +19,7 @@ import {
   kiemMoLaiDuAn,
   lyDoKhongSuaDuAn,
 } from '../luat/duAn'
-import { lyDoKhongGanRepo } from '../luat/github'
+import { lyDoKhongGanRepo, lyDoKhongGhiLienKet } from '../luat/github'
 import { lyDoKhongTaoTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
@@ -258,6 +258,8 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         dongHo={dongHo}
         tenDuAn={duAn.ten}
         thongBaoBanDau={manTask.thongBao}
+        // Ai mở được Task thì thấy Dự án nên ở trong Dự án (hoặc là PM): chỉ còn trạng thái Lưu trữ.
+        lyDoKhongGhiLienKet={lyDoKhongGhiLienKet({ ...tinhHuong, laNguoiTrongDuAn: true })}
         onQuayLai={() => setManTask(null)}
         onHetPhien={onHetPhien}
       />

@@ -2,7 +2,7 @@
 // chuyển phản hồi thô của GitHub thành trạng thái hiển thị. Không I/O, không đọc đồng hồ, không
 // ném lỗi trần: dữ liệu lạ trả lỗi có mã. Kho dữ liệu, Cổng GitHub và giao diện cùng dùng file này.
 import { z } from 'zod'
-import { THONG_BAO_DU_AN, kiemGhiDuAn, type NguoiGoiDuAn, type TrangThaiDuAn } from './duAn'
+import { THONG_BAO_DU_AN, duocXemDuAn, kiemGhiDuAn, type NguoiGoiDuAn, type TrangThaiDuAn } from './duAn'
 import { kiemTra } from './taiKhoan'
 
 // ---------------------------------------------------------------------------------------------
@@ -228,4 +228,78 @@ export function chuyenPhanHoiGitHub(loai: LoaiLienKetGitHub, phanHoi: unknown): 
   } catch {
     return la()
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Link issue hoặc PR trên Task (ticket 16).
+// ---------------------------------------------------------------------------------------------
+
+export const THONG_BAO_LIEN_KET = {
+  /** Ô dán link để trống hoặc không phải link issue, PR của github.com. */
+  sai: THONG_BAO_GITHUB_MAC_DINH.LINK_KHONG_HOP_LE,
+  chuaGan: 'Link này thuộc repo chưa gắn vào Dự án. Hãy nhờ PM hoặc Support gắn repo trước, hoặc dán link của repo đã gắn.',
+  trung: 'Link này đã có trên Task.',
+  daLuuTru: 'Dự án đã Lưu trữ nên không thêm hay gỡ link được. Mở lại Dự án để sửa.',
+} as const
+
+/** Đường dẫn chuẩn của một issue hoặc PR trên github.com (dùng để hiện và mở link). */
+export function duongDanLienKet(lienKet: LienKetGitHub): string {
+  return `https://github.com/${lienKet.repo}/${lienKet.loai === 'PR' ? 'pull' : 'issues'}/${lienKet.so}`
+}
+
+/** Chữ hiện cho một link: `acme/web · Issue #12` hoặc `acme/web · PR #34`. */
+export function tenLienKet(lienKet: LienKetGitHub): string {
+  return `${lienKet.repo} · ${lienKet.loai === 'PR' ? 'PR' : 'Issue'} #${lienKet.so}`
+}
+
+const themLienKetSchema = z.object(
+  {
+    duongDan: z
+      .string({ error: THONG_BAO_LIEN_KET.sai })
+      .transform((duongDan, ctx): LienKetGitHub => {
+        const kq = phanTichLienKet(duongDan)
+        if (kq.ok) return kq.giaTri
+        ctx.issues.push({ code: 'custom', message: THONG_BAO_LIEN_KET.sai, input: duongDan })
+        return z.NEVER
+      }),
+  },
+  { error: THONG_BAO_LIEN_KET.sai },
+)
+
+/** Dán link vào Task: một đường dẫn issue hoặc PR của github.com. */
+export type ThemLienKetDauVao = z.input<typeof themLienKetSchema>
+
+/** Kiểm dữ liệu dán link ở ranh giới (biểu mẫu, Kho); lỗi theo ô `duongDan` bằng tiếng Việt. */
+export const kiemTraLienKet = {
+  them: (dauVao: unknown) => {
+    const kt = kiemTra(themLienKetSchema, dauVao)
+    return kt.ok ? ({ ok: true, giaTri: kt.giaTri.duongDan } as const) : kt
+  },
+}
+
+/** Link có thuộc một trong các repo đã gắn vào Dự án không (tên repo không phân biệt hoa thường). */
+export function thuocRepoDaGan(lienKet: LienKetGitHub, cacRepoDaGan: readonly string[]): boolean {
+  const khoa = khoaRepo(lienKet.repo)
+  return cacRepoDaGan.some((repo) => khoaRepo(repo) === khoa)
+}
+
+export type LyDoKhongGhiLienKet = 'KHONG_TIM_THAY' | 'DU_AN_DA_LUU_TRU'
+
+/**
+ * Có thêm hay gỡ link trên Task của một Dự án được không; trả lý do từ chối, hoặc null nếu được.
+ * Mọi người trong dự án (và PM, thấy mọi Dự án) thêm và gỡ được, kể cả Task đã ở trạng thái cuối;
+ * chỉ Dự án đã Lưu trữ thì không. Người không thấy Dự án nhận `KHONG_TIM_THAY`, không lộ gì.
+ */
+export function kiemGhiLienKet(tinhHuong: NguoiGoiDuAn & { trangThai: TrangThaiDuAn }): LyDoKhongGhiLienKet | null {
+  if (!duocXemDuAn(tinhHuong)) return 'KHONG_TIM_THAY'
+  if (tinhHuong.trangThai === 'LUU_TRU') return 'DU_AN_DA_LUU_TRU'
+  return null
+}
+
+/** Lý do (tiếng Việt) để hiện thay cho ô thêm link; null nếu được thêm và gỡ. */
+export function lyDoKhongGhiLienKet(tinhHuong: NguoiGoiDuAn & { trangThai: TrangThaiDuAn }): string | null {
+  const lyDo = kiemGhiLienKet(tinhHuong)
+  if (lyDo === 'DU_AN_DA_LUU_TRU') return THONG_BAO_LIEN_KET.daLuuTru
+  if (lyDo === 'KHONG_TIM_THAY') return 'Bạn không thấy Dự án này nên không thêm hay gỡ link được.'
+  return null
 }

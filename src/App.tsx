@@ -3,6 +3,9 @@ import { Theme } from '@astryxdesign/core/theme'
 import { themes, defaultThemeSlug } from './astryx-themes'
 import type { KhoDuLieu, Phien } from './kho/khoDuLieu'
 import { PM_CHAY_THU, taoKhoBoNho, type MoPhongThu } from './kho/khoBoNho'
+import type { CongGitHub } from './github/congGitHub'
+import { loiGia, taoCongGiaGitHub } from './github/congGiaGitHub'
+import { CongGitHubContext } from './giaoDien/congGitHubContext'
 import { KhoContext } from './giaoDien/khoContext'
 import { KhungUngDung } from './giaoDien/KhungUngDung'
 import { ManXacThuc } from './giaoDien/ManXacThuc'
@@ -23,11 +26,25 @@ interface Props {
    * của máy. Test truyền đồng hồ cố định.
    */
   dongHo?: () => Date
+  /**
+   * Cổng GitHub (chỉ đọc) để đọc trạng thái link issue và PR trên Task. Chưa có bản gọi Edge
+   * Function (ticket 17), nên khi không truyền thì dùng bản giả báo mất mạng cho mọi link: Task vẫn
+   * dùng được, chỉ không có trạng thái GitHub. Test truyền bản giả theo kịch bản.
+   */
+  congGitHub?: CongGitHub
 }
 
 const gioCuaMay = () => new Date()
 
-export function App({ kho: khoTruyenVao, moPhong: moPhongTruyenVao, dongHo = gioCuaMay }: Props) {
+/** Cổng tạm cho tới khi có Edge Function: mọi link đều báo không kết nối được GitHub. */
+const CONG_CHUA_NOI: CongGitHub = taoCongGiaGitHub({ macDinh: loiGia('MAT_MANG') }).cong
+
+export function App({
+  kho: khoTruyenVao,
+  moPhong: moPhongTruyenVao,
+  dongHo = gioCuaMay,
+  congGitHub = CONG_CHUA_NOI,
+}: Props) {
   const [{ kho, moPhong }] = useState<{ kho: KhoDuLieu; moPhong: MoPhongThu | null }>(() => {
     if (khoTruyenVao) return { kho: khoTruyenVao, moPhong: moPhongTruyenVao ?? null }
     const boNho = taoKhoBoNho({ pmBanDau: PM_CHAY_THU })
@@ -39,11 +56,13 @@ export function App({ kho: khoTruyenVao, moPhong: moPhongTruyenVao, dongHo = gio
   return (
     <Theme theme={themes[defaultThemeSlug]}>
       <KhoContext value={kho}>
-        {phien ? (
-          <KhungUngDung key={phien.maPhien} phien={phien} onHetPhien={hetPhien} dongHo={dongHo} />
-        ) : (
-          <ManXacThuc onDaDangNhap={setPhien} moPhong={moPhong} dongHo={dongHo} />
-        )}
+        <CongGitHubContext value={congGitHub}>
+          {phien ? (
+            <KhungUngDung key={phien.maPhien} phien={phien} onHetPhien={hetPhien} dongHo={dongHo} />
+          ) : (
+            <ManXacThuc onDaDangNhap={setPhien} moPhong={moPhong} dongHo={dongHo} />
+          )}
+        </CongGitHubContext>
       </KhoContext>
     </Theme>
   )

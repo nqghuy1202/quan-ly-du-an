@@ -13,6 +13,7 @@ import { dinhDangNgayGio } from '../luat/duAn'
 import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
+import { PhanLienKetTask } from './PhanLienKetTask'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 import { PhanSuaTask } from './PhanSuaTask'
 
@@ -30,6 +31,8 @@ interface Props {
   nhanQuayLai?: string
   /** Thông báo thành công mang sang từ màn trước (vd. vừa tạo xong). */
   thongBaoBanDau: string | null
+  /** Lý do không thêm, gỡ được link GitHub (Dự án đã Lưu trữ); null nếu được. */
+  lyDoKhongGhiLienKet: string | null
   onQuayLai: () => void
   onHetPhien: () => void
 }
@@ -53,6 +56,7 @@ export function ManChiTietTask({
   vai,
   taskId,
   nhanQuayLai,
+  lyDoKhongGhiLienKet,
   trangThaiDuAn,
   dongHo,
   tenDuAn,
@@ -77,6 +81,12 @@ export function ManChiTietTask({
       huy = true
     }
   }, [kho, phien, taskId, lanTai, onHetPhien])
+
+  /** Link vừa đổi nên dấu vết chỉnh sửa của Task đã đổi: đọc lại Task mà không về màn đang tải. */
+  async function docLaiTask() {
+    const kq = await kho.layTask(phien, taskId)
+    if (kq.ok) setDaTai({ lan: lanTai, kq })
+  }
 
   const nutVe = (
     <HStack gap={2}>
@@ -134,6 +144,15 @@ export function ManChiTietTask({
         <Heading level={3}>Mô tả</Heading>
         <Text>{task.moTa === '' ? 'Không có mô tả.' : task.moTa}</Text>
       </VStack>
+
+      <PhanLienKetTask
+        phien={phien}
+        taskId={taskId}
+        lyDoKhongGhi={lyDoKhongGhiLienKet}
+        dongHo={dongHo}
+        onDaDoi={docLaiTask}
+        onHetPhien={onHetPhien}
+      />
 
       <VStack gap={1} role="group" aria-label="Dấu vết">
         <Heading level={3}>Dấu vết</Heading>

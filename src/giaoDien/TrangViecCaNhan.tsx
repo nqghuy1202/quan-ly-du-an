@@ -12,6 +12,7 @@ import type { KetQua } from '../kho/ketQua'
 import type { DuAn, Phien, TaskKemDuAn } from '../kho/khoDuLieu'
 import { xepViecCaNhan } from '../luat/kanban'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { lyDoKhongGhiLienKet } from '../luat/github'
 import { TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
 import { useKho } from './khoContext'
 import { ManChiTietTask } from './ManChiTietTask'
@@ -85,6 +86,11 @@ function ChiTietTaskCaNhan({ phien, vai, dongHo, task, nhanQuayLai, onQuayLai, o
       vai={vai}
       taskId={task.id}
       trangThaiDuAn={duAn.giaTri.trangThai}
+      lyDoKhongGhiLienKet={lyDoKhongGhiLienKet({
+        vaiNguoiGoi: vai,
+        laNguoiTrongDuAn: true,
+        trangThai: duAn.giaTri.trangThai,
+      })}
       dongHo={dongHo}
       tenDuAn={task.tenDuAn}
       nhanQuayLai={nhanQuayLai}

@@ -12,6 +12,7 @@ import type {
   HoSo,
   KhoDuLieu,
   NguoiCuaTask,
+  LienKetTask,
   NguoiDauVet,
   NguoiDungTomTat,
   Phien,
@@ -20,7 +21,19 @@ import type {
   TaskKemDuAn,
   ThongBaoChung,
 } from './khoDuLieu'
-import { khoaRepo, kiemTraRepo, type GanRepoDauVao } from '../luat/github'
+import {
+  THONG_BAO_LIEN_KET,
+  duongDanLienKet,
+  khoaLienKet,
+  khoaRepo,
+  kiemGhiLienKet,
+  kiemTraLienKet,
+  kiemTraRepo,
+  thuocRepoDaGan,
+  type GanRepoDauVao,
+  type LienKetGitHub,
+  type ThemLienKetDauVao,
+} from '../luat/github'
 import { laChoToiDuyet, laViecCuaToi } from '../luat/kanban'
 import {
   TRANG_THAI_TASK_BAN_DAU,
@@ -194,6 +207,8 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   const repoTheoDuAn = new Map<string, string[]>()
   let demNguoiDung = 0
   let demPhien = 0
+  /** Link GitHub của Task: taskId -> liên kết, theo thứ tự thêm. */
+  const lienKetTheoTask = new Map<string, LienKetGitHub[]>()
   let demMa = 0
   let demDuAn = 0
   let demTask = 0
@@ -787,6 +802,65 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (!xt.ok) return xt
       const id = xt.giaTri.hoSo.id
       return thanhCong(taskCaNhan(xt.giaTri, (task) => laChoToiDuyet(task, id)))
+    },
+
+    async themLienKetVaoTask(phien: Phien | null, taskId: string, dauVao: ThemLienKetDauVao, bayGio: Date) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const task = taskTheoId.get(taskId)
+      if (!task) return thatBai('KHONG_TIM_THAY')
+      const duAn = duAnTheoId.get(task.duAnId)
+      if (!duAn) return thatBai('KHONG_TIM_THAY')
+      const lyDo = kiemGhiLienKet({ ...nhinTuDuAn(xt.giaTri, duAn.id), trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraLienKet.them(dauVao)
+      if (!kt.ok) return thatBai('LINK_KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const lienKet = kt.giaTri
+      if (!thuocRepoDaGan(lienKet, repoTheoDuAn.get(duAn.id) ?? [])) {
+        return thatBai('LINK_REPO_CHUA_GAN', undefined, { duongDan: THONG_BAO_LIEN_KET.chuaGan })
+      }
+      const danhSach = lienKetTheoTask.get(taskId) ?? []
+      if (danhSach.some((da) => khoaLienKet(da) === khoaLienKet(lienKet))) {
+        return thatBai('LINK_TRUNG', undefined, { duongDan: THONG_BAO_LIEN_KET.trung })
+      }
+      lienKetTheoTask.set(taskId, [...danhSach, lienKet])
+      task.dauVet = dauVetSauSua(task.dauVet, xt.giaTri.hoSo.id, bayGio)
+      const ketQua: LienKetTask = { ...lienKet, duongDan: duongDanLienKet(lienKet) }
+      return thanhCong(ketQua)
+    },
+
+    async goLienKetKhoiTask(phien: Phien | null, taskId: string, lienKet: LienKetGitHub, bayGio: Date) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const task = taskTheoId.get(taskId)
+      if (!task) return thatBai('KHONG_TIM_THAY')
+      const duAn = duAnTheoId.get(task.duAnId)
+      if (!duAn) return thatBai('KHONG_TIM_THAY')
+      const lyDo = kiemGhiLienKet({ ...nhinTuDuAn(xt.giaTri, duAn.id), trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const danhSach = lienKetTheoTask.get(taskId) ?? []
+      const coLienKet =
+        typeof lienKet === 'object' &&
+        lienKet !== null &&
+        typeof lienKet.repo === 'string' &&
+        danhSach.some((da) => khoaLienKet(da) === khoaLienKet(lienKet))
+      if (!coLienKet) return thatBai('KHONG_TIM_THAY')
+      lienKetTheoTask.set(
+        taskId,
+        danhSach.filter((da) => khoaLienKet(da) !== khoaLienKet(lienKet)),
+      )
+      task.dauVet = dauVetSauSua(task.dauVet, xt.giaTri.hoSo.id, bayGio)
+      return thanhCong(null)
+    },
+
+    async danhSachLienKetCuaTask(phien: Phien | null, taskId: string) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const task = taskTheoId.get(taskId)
+      if (!task || !duocXemTask(nhinTuDuAn(xt.giaTri, task.duAnId))) return thatBai('KHONG_TIM_THAY')
+      return thanhCong(
+        (lienKetTheoTask.get(taskId) ?? []).map((lienKet): LienKetTask => ({ ...lienKet, duongDan: duongDanLienKet(lienKet) })),
+      )
     },
   }
 }
