@@ -1,4 +1,298 @@
-# Supabase cho lát 1, lát 2, vòng duyệt và GitHub (ticket 06, 10, 14, 17)
+# Supabase: hướng dẫn thiết lập và danh sách kiểm tay RLS
+
+Tài liệu này dành cho **chủ dự án**. Đi từ trên xuống: Phần A dựng Supabase từng bước, Phần B là
+**danh sách kiểm tay bắt buộc** trước khi đưa ứng dụng lên mạng, Phần C nói rõ cổng test (`npm test`)
+không kiểm được gì. Phần D là tham chiếu chi tiết theo từng lát (ticket 06, 10, 14, 17) cho người
+duyệt SQL. Tổng quan ứng dụng nằm ở `README.md` ở thư mục gốc; từ vựng ở `GLOSSARY.md`.
+
+Mọi lệnh, đường dẫn và tên bảng dưới đây có trong repo. Ở đâu cần Supabase CLI thì ghi rõ là tuỳ
+chọn; cách luôn dùng được là SQL Editor trên trang quản trị của Supabase.
+
+## Phần A. Thiết lập theo thứ tự
+
+Quy ước: **Ai làm** là người phải tự tay làm (AI trong Bảng ticket không áp migration, không đặt
+secret, không đụng Supabase thật). **Kiểm** là cách biết bước đã đúng.
+
+### Bước 1. Chuẩn bị máy và tạo project Supabase
+
+- **Ai làm:** chủ dự án.
+- **Làm gì:** cài Node 22 trở lên, chạy `npm install` trong thư mục repo. Trên trang quản trị Supabase,
+  tạo **hai** project: một project thật cho ứng dụng và một project **riêng cho test** (hoặc dùng
+  `supabase start` trên máy). Bộ test ở Bước 11 tạo vài trăm tài khoản và đặt vai PM cho nhiều tài
+  khoản, không dọn đi được, nên không bao giờ chạy trên project thật.
+- **Kiểm:** `npm test` xanh trên máy; ở mỗi project, Project Settings > API hiện *Project URL* và khoá
+  công khai (anon hoặc `sb_publishable_...`).
+
+### Bước 2. Bật đăng ký email có xác nhận
+
+- **Ai làm:** chủ dự án, trên trang quản trị Supabase của project thật (và project test).
+- **Làm gì:** Authentication > Providers > Email: bật *Enable Email provider* và *Confirm email*. Đặt
+  *Site URL* là địa chỉ của ứng dụng (khi chạy thử trên máy: địa chỉ `npm run dev` in ra).
+- **Kiểm:** hai công tắc trên hiện bật. Kiểm thật ở Bước 6: tự đăng ký một tài khoản và thư xác nhận
+  phải về hộp thư.
+
+### Bước 3. Dán mẫu thư đặt lại mật khẩu có mã
+
+- **Ai làm:** chủ dự án.
+- **Làm gì:** Authentication > Email Templates > *Reset Password*, dán nội dung file
+  `templates/dat-lai-mat-khau.html` (thư phải có `{{ .Token }}`: ứng dụng hỏi mã, không dùng đường
+  dẫn). Thời hạn mã chỉnh ở Authentication > Providers > Email > *Email OTP Expiration* (mặc định
+  3600 giây).
+- **Kiểm:** ở Bước 6, bấm "Quên mật khẩu?" trên ứng dụng: thư về có mã, nhập mã đặt được mật khẩu mới.
+
+### Bước 4. Áp migration theo đúng thứ tự
+
+- **Ai làm:** chủ dự án, trong SQL Editor của project thật (rồi lặp lại cho project test). Dán và chạy
+  **từng file một, theo thứ tự tên file** (tên đã mang số thứ tự):
+  1. `migrations/20261125000100_lat_1_ho_so_du_an.sql`: bảng `ho_so`, `du_an`, `nguoi_trong_du_an`.
+  2. `migrations/20261125000200_lat_2_task.sql`: bảng `task`.
+  3. `migrations/20261125000300_lat_3_vong_duyet.sql`: bảng `lich_su_trang_thai_task`, hàm
+     `public.doi_trang_thai_task` và `public.lich_su_task`.
+  4. `migrations/20261125000400_lat_4_github.sql`: bảng `repo_du_an` và `lien_ket_task`.
+- Tuỳ chọn: nếu đã liên kết Supabase CLI với project, `supabase db push` áp các file trong
+  `migrations/` theo thứ tự tên. Thư mục `down/` nằm ngoài `migrations/` nên CLI không tự áp.
+- **Lỗi đã biết ở lát 4 (cần sửa ở migration, ghi lại ở đây cho đến khi sửa xong):** lát 3 và lát 4
+  cùng khai `create function rieng.duoc_xem_task(uuid)` (hai bản giống hệt nhau). Chạy lát 4 sau lát 3
+  sẽ lỗi `function "duoc_xem_task" already exists`. Cách vượt tạm khi chạy tay: trong lát 4, đổi đúng
+  câu lệnh đó thành `create or replace function rieng.duoc_xem_task(...)` rồi chạy. Khi **gỡ**, bản
+  xuống của lát 4 có dòng `drop function if exists rieng.duoc_xem_task(uuid)` sẽ lỗi vì policy của
+  bảng lịch sử (lát 3) còn dùng hàm này: bỏ dòng đó khi lát 3 còn đang áp.
+- **Kiểm:** sau mỗi file không có lỗi; Table Editor hiện đủ các bảng nêu trên và **mọi bảng đều hiện
+  "RLS enabled"**. Gỡ lại (xoá dữ liệu của lát tương ứng): chạy file trong `down/` theo thứ tự
+  **ngược**: lát 4, lát 3, lát 2, lát 1.
+
+### Bước 5. Cấu hình ứng dụng
+
+- **Ai làm:** chủ dự án.
+- **Làm gì:** chép `.env.example` thành `.env.local`, điền `VITE_SUPABASE_URL` và
+  `VITE_SUPABASE_ANON_KEY` (Project Settings > API). **Không bao giờ** điền khoá `service_role` hay
+  `sb_secret_...` vào biến `VITE_*`: mọi biến `VITE_*` đi vào gói chạy trên trình duyệt, và ứng dụng từ
+  chối chạy nếu thấy khoá service.
+- **Kiểm:** `npm run dev` mở ra màn Đăng nhập (không phải màn báo lỗi cấu hình).
+
+### Bước 6. Tự đăng ký tài khoản của chủ dự án
+
+- **Ai làm:** chủ dự án, trên ứng dụng.
+- **Làm gì:** bấm "Chưa có tài khoản? Đăng ký", nhập email, mật khẩu (ít nhất 8 ký tự), tên hiển thị;
+  mở thư xác nhận và bấm đường dẫn; rồi đăng nhập.
+- **Kiểm:** đăng nhập được; trang đầu hiện "Bạn chưa ở dự án nào, hãy nhờ PM hoặc Support thêm bạn."
+  và vai hiện cạnh tên là **Thành viên** (người mới luôn là Thành viên).
+
+### Bước 7. Đặt PM đầu tiên
+
+- **Ai làm:** chủ dự án, một lần, trong SQL Editor (vai `postgres`). Không có luật "người đầu tiên
+  thành PM".
+
+  ```sql
+  update public.ho_so set vai = 'PM' where email = lower('email-cua-ban@vi-du.vn');
+  select email, vai from public.ho_so where vai = 'PM';
+  ```
+
+- **Kiểm:** câu `select` trả đúng dòng của bạn. Đăng nhập lại (phiên chỉ giữ trong bộ nhớ của trang) thì
+  vai là **PM** và thanh điều hướng có thêm "Tất cả Dự án" và "Người dùng". Từ đó chỉ PM đổi được vai
+  trên màn Người dùng, và cơ sở dữ liệu không cho hạ hay xoá PM cuối cùng.
+
+### Bước 8. Tạo token GitHub chỉ đọc
+
+- **Ai làm:** chủ dự án, trên GitHub.
+- **Làm gì:** GitHub > Settings > Developer settings > Fine-grained personal access tokens. Chọn đúng
+  các repo cần đọc. Quyền repository: *Issues: Read-only* và *Pull requests: Read-only* (cùng
+  *Metadata: Read-only*, tự có). **Không cấp quyền ghi nào**: hệ thống không bao giờ ghi lên GitHub.
+- **Kiểm:** màn xem lại token liệt kê chỉ các quyền *Read-only*. Token chỉ nằm ở bước tiếp theo, không
+  dán vào mã, `.env.local`, tin nhắn hay biến `VITE_*`.
+
+### Bước 9. Đặt secret cho Edge Function
+
+- **Ai làm:** chủ dự án, trên máy có Supabase CLI.
+- **Làm gì:**
+
+  ```sh
+  supabase secrets set GITHUB_TOKEN_CHI_DOC=<token> --project-ref <ref>
+  ```
+
+  (bỏ `--project-ref` nếu đã liên kết project). Token nằm trong secret của Supabase, không lưu trong
+  cơ sở dữ liệu và không bao giờ xuống trình duyệt.
+- **Kiểm:** tên `GITHUB_TOKEN_CHI_DOC` có trong danh sách secret của project (giá trị bị che). Kiểm đầy
+  đủ ở mục kiểm 7.
+
+### Bước 10. Triển khai Edge Function `doc-github`
+
+- **Ai làm:** chủ dự án, trên máy có Supabase CLI.
+- **Làm gì:**
+
+  ```sh
+  supabase functions deploy doc-github --project-ref <ref>
+  ```
+
+  Giữ kiểm JWT mặc định của Supabase (hàm còn tự kiểm đăng nhập lần nữa). Thư mục
+  `functions/_shared/` được đóng gói cùng hàm. Hàm cần `SUPABASE_URL` và `SUPABASE_ANON_KEY`, do
+  Supabase tự cấp.
+- **Kiểm:** hàm `doc-github` hiện trong trang Edge Functions của project. Mở một Task có link issue
+  hoặc PR của repo đã gắn: trạng thái hiện cạnh link. Gỡ secret thì ứng dụng báo "Chưa đọc được
+  trạng thái GitHub" mà phần còn lại của Task vẫn dùng được.
+
+### Bước 11. Chạy bộ test hợp đồng và bảng ca dùng chung trên Supabase thật
+
+- **Ai làm:** chủ dự án, trên project **test** (Bước 1).
+- **Làm gì:** điền `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON_KEY`, `SUPABASE_TEST_SERVICE_ROLE_KEY` vào
+  `.env.test.local` (đã nằm trong `.gitignore`; khoá service chỉ nằm đây, không có tiền tố `VITE_`),
+  nâng giới hạn của Auth như mục "Lệnh chạy bộ test trên Supabase thật" bên dưới, rồi chạy:
+
+  ```sh
+  npx vitest run --config vitest.supabase.config.ts
+  ```
+
+- **Kiểm:** lệnh kết thúc **xanh** và không có ca nào mang chữ "CHƯA KIỂM". Thiếu cấu hình thì lệnh
+  thất bại với lý do bắt đầu bằng "CHƯA KIỂM", không bao giờ báo đạt.
+
+### Bước 12. Chạy danh sách kiểm tay (Phần B)
+
+- **Ai làm:** chủ dự án, trên project thật hoặc một project dựng đúng như project thật.
+- **Kiểm:** cả bảy mục kiểm của Phần B đạt.
+
+### Bước 13. Chỉ khi bảy mục đạt mới đưa lên mạng
+
+- **Ai làm:** chủ dự án. Đưa ứng dụng lên mạng nằm ngoài phạm vi các ticket; tài liệu này chỉ nói điều
+  kiện: **chưa kiểm xong danh sách ở Phần B thì chưa đưa lên mạng.**
+- **Kiểm:** bảy mục đạt, ghi lại ngày kiểm và người kiểm.
+
+## Phần B. Danh sách kiểm tay bắt buộc
+
+Đăng ký đang mở cho mọi người, nên **phân quyền từng dòng (RLS) là hàng rào duy nhất** giữa một người
+lạ và dữ liệu của PM. Cổng test không chạy SQL thật, nên chỉ kiểm tay mới chứng minh được hàng rào này.
+Chạy trên Supabase thật và phải đạt cả bảy mục.
+
+**Giả một người gọi trong SQL Editor.** SQL Editor chạy bằng vai `postgres` (bỏ qua RLS), nên muốn thử
+như một người dùng thì giả phiên của họ trong MỘT lần chạy (xem mục "Giả người gọi trong SQL Editor"
+bên dưới để biết thêm):
+
+```sql
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<uuid của người đó, lấy ở ho_so.id>","role":"authenticated"}', true);
+-- Các lệnh thử
+rollback;
+```
+
+**Chuẩn bị tài khoản thử** (tự đăng ký và xác nhận trên ứng dụng): một PM; hai tài khoản Thành viên
+`An` và `Bình`; một Support `Chi`; một người lạ `Lạ` chưa được thêm vào đâu. PM tạo một Dự án, thêm
+`An`, `Bình`, `Chi` vào Dự án đó, và tạo một Task giao `An` làm, `Bình` kiểm tra.
+
+### Mục kiểm 1: Người lạ vừa đăng ký không đọc được gì của ai ngoài hồ sơ của mình
+
+- **Cách kiểm:** giả phiên của `Lạ`. Chạy `select * from public.ho_so;` rồi `select * from` từng bảng
+  `public.du_an`, `public.nguoi_trong_du_an`, `public.task`, `public.lich_su_trang_thai_task`,
+  `public.repo_du_an`, `public.lien_ket_task`. Rồi gọi REST của project chỉ bằng khoá anon, không phiên.
+- **Kết quả mong đợi:** `ho_so` chỉ có **một** dòng, hồ sơ của chính `Lạ`; sáu bảng còn lại **không có
+  dòng nào**; không có phiên thì không đọc được dòng nào của bảng nào.
+
+### Mục kiểm 2: Thành viên không sửa được Dự án hay Task của người khác và không tự nâng vai
+
+- **Cách kiểm:** giả phiên của `An` (Thành viên, kể cả khi là Người thực hiện). Thử:
+  `update public.ho_so set vai = 'PM' where id = auth.uid();`
+  `update public.du_an set ten = 'x' where id = '<uuid Dự án>';`
+  `update public.task set tieu_de = 'x' where id = '<uuid Task>';`
+  `insert` một Task vào Dự án. Lặp lại `update` Dự án và Task của một Dự án mà `An` không ở trong.
+  Thử thêm `update public.du_an set trang_thai = 'LUU_TRU' ...` và `delete from public.task ...`.
+- **Kết quả mong đợi:** nâng vai lỗi `KHONG_CO_QUYEN`; `insert` Task lỗi `KHONG_CO_QUYEN`; `update` Dự
+  án và Task **không đổi dòng nào** (hoặc bị từ chối); đổi `trang_thai` của Dự án lỗi quyền cột; `delete`
+  Task bị từ chối (không có quyền xoá). Với Support: `Chi` ở Dự án khác (hoặc không ở Dự án nào)
+  không tạo, không sửa được Task của Dự án này.
+
+### Mục kiểm 3: Người ngoài Dự án không đọc và không ghi được Task của Dự án đó
+
+- **Cách kiểm:** giả phiên của `Lạ`, rồi của một Thành viên chỉ ở Dự án khác. Thử
+  `select * from public.task where du_an_id = '<uuid Dự án>';`, `insert` một Task vào Dự án đó,
+  `update public.task set tieu_de = 'x' where id = '<uuid Task>';`, và
+  `select public.doi_trang_thai_task('<uuid Task>', 'DANG_LAM');`.
+- **Kết quả mong đợi:** `select` **không có dòng nào**; `insert` và `update` bị từ chối hoặc không
+  đụng dòng nào; hàm chuyển trạng thái trả `KHONG_CO_QUYEN` và Task không đổi gì (PM ngoài Dự án thì
+  được, vì PM làm được ở mọi Dự án). Repo và link GitHub của Dự án cũng không thấy: `select` từ
+  `public.repo_du_an` và `public.lien_ket_task` không có dòng nào của Dự án đó.
+
+### Mục kiểm 4: Không ghi thẳng được cột trạng thái, mọi lần đổi đi qua hàm kiểm luật
+
+- **Cách kiểm:** giả phiên của PM của Dự án. Thử `update public.task set trang_thai = 'HOAN_THANH'
+  where id = '<uuid Task>';`, `update public.task set so_lan_tra_lai = 5 where id = ...;`,
+  `update public.du_an set trang_thai = 'LUU_TRU' where id = ...;`, `insert`, `update`, `delete` trên
+  `public.lich_su_trang_thai_task`. Gọi `/rest/v1/rpc/set_config`. Rồi đổi trạng thái đúng cách:
+  `select public.doi_trang_thai_task('<uuid Task>', 'DANG_LAM');` bằng phiên `An`, và thử bước ngoài
+  ma trận (vd. `MOI` sang `HOAN_THANH`), bước cần lý do mà không có lý do (vd. `CHO_DUYET` sang
+  `TRA_LAI`), và Task `HOAN_THANH` hoặc `HUY`.
+- **Kết quả mong đợi:** mọi lệnh ghi thẳng lỗi **quyền cột** hoặc **quyền bảng** (`permission denied`);
+  `/rest/v1/rpc/set_config` ra 404 (client không tự bật được cờ `rieng.dang_chuyen_trang_thai`). Qua
+  hàm: bước hợp lệ đổi `trang_thai`, `so_lan_tra_lai` tăng 1 chỉ ở `TRA_LAI`, `sua_boi` là người gọi,
+  và `lich_su_trang_thai_task` có đúng **một** dòng mới; bước ngoài ma trận `BUOC_KHONG_HOP_LE`; thiếu
+  lý do `LY_DO_BAT_BUOC`; Task đã chốt `TASK_DA_CHOT`; Dự án Lưu trữ `DU_AN_DA_LUU_TRU`. Một lần bị
+  từ chối không đổi gì (trạng thái, bộ đếm, người sửa, ngày sửa và số dòng lịch sử giữ nguyên). Gọi
+  hàm khi chưa đăng nhập (khoá anon, không phiên) bị từ chối.
+
+### Mục kiểm 5: Người kiểm tra trùng Người thực hiện bị từ chối ở cơ sở dữ liệu
+
+- **Cách kiểm:** giả phiên của PM của Dự án, `insert` một Task với `nguoi_kiem_tra_id` bằng
+  `nguoi_thuc_hien_id`; rồi `update` Task đã có sao cho hai cột bằng nhau. Thử cả bằng SQL Editor
+  (vai `postgres`, không có người gọi): `update public.task set nguoi_kiem_tra_id = nguoi_thuc_hien_id
+  where id = '<uuid Task>';`. Thử thêm chọn người không ở trong Dự án và bỏ trống một người.
+- **Kết quả mong đợi:** lỗi `TRUNG_NGUOI` (hoặc ràng buộc `task_nguoi_khac_nhau`) ở **cả ba** đường, kể
+  cả không có người gọi; người ngoài Dự án lỗi `NGUOI_NGOAI_DU_AN`; bỏ trống một người lỗi
+  `THIEU_NGUOI`; Task không đổi.
+
+### Mục kiểm 6: Chạy toàn bộ bảng ca dùng chung trên Supabase thật và đạt
+
+- **Cách kiểm:** trên project test, chạy `npx vitest run --config vitest.supabase.config.ts` (Bước 11).
+  Lệnh chạy bộ test hợp đồng và mọi dòng của hai bảng ca dùng chung: `BANG_CA_QUYEN`
+  (`src/kho/bangCaQuyen.ts`) và `BANG_CA_CHUYEN_TRANG_THAI` (`src/kho/bangCaChuyenTrangThai.ts`), cùng
+  phần Repo GitHub và Link issue hoặc PR.
+- **Kết quả mong đợi:** mọi ca **đạt**; không có ca nào mang chữ "CHƯA KIỂM". Các ca bị bỏ qua có chủ ý
+  (vì Supabase khác bản bộ nhớ) kiểm tay thay thế: (a) hai ca "PM cuối cùng": trên project chỉ có một PM,
+  `update public.ho_so set vai = 'SUPPORT' where vai = 'PM';` phải lỗi `PHAI_CON_PM`; (b) ca "mã hết hạn
+  theo đồng hồ": đặt *Email OTP Expiration* ngắn (vd. 60 giây), chờ quá hạn rồi nhập mã, phải bị từ chối;
+  (c) nội dung thư thật: một lần "Quên mật khẩu?" trên ứng dụng, thư có mã.
+
+### Mục kiểm 7: Edge Function từ chối người chưa đăng nhập và repo chưa gắn
+
+- **Cách kiểm:** với hàm đã triển khai (Bước 10), gọi
+  `POST <VITE_SUPABASE_URL>/functions/v1/doc-github` với thân
+  `{"cacLienKet":[{"repo":"chu-so-huu/ten-repo","loai":"ISSUE","so":1}]}`, theo ba cách: (a) không kèm
+  `Authorization`; (b) `Authorization: Bearer <khoá anon>` thay cho mã truy cập của người dùng; (c) mã
+  truy cập thật của một người, với repo **chưa gắn** vào Dự án nào người đó thấy (kể cả repo gắn ở Dự
+  án người đó không ở trong). Rồi với repo đã gắn: thử issue mở và đóng; PR mở, nháp, đã merge và đóng;
+  số không tồn tại; repo riêng tư mà token không thấy. Mở trang Task có link trên ứng dụng; xem log
+  của hàm; xem tab Network và gói `npm run build` (tìm chuỗi `github_pat_`, `ghp_`).
+- **Kết quả mong đợi:** (a) và (b) trả **401**, và trong log của hàm không có yêu cầu nào tới GitHub;
+  (c) trả `KHONG_TIM_THAY` và GitHub không nhận yêu cầu; repo đã gắn hiện đúng trạng thái; số không có
+  `KHONG_TIM_THAY`; repo riêng tư `RIENG_TU` hoặc `KHONG_TIM_THAY`; hết lượt gọi `HET_LUOT_GOI`. Không có
+  token GitHub trong tab Network, trong gói đã dựng, hay trong bất kỳ phản hồi nào (kể cả phản hồi lỗi
+  sau khi gỡ secret).
+
+## Phần C. Cổng test không kiểm được
+
+`npm test` không có mạng, không có cơ sở dữ liệu, nên **không kiểm được**: bản Supabase, file
+migration, phân quyền từng dòng (RLS), hàm cơ sở dữ liệu, Edge Function với GitHub thật, luồng email.
+Cụ thể:
+
+- **Bản Supabase** của Kho dữ liệu (`src/kho/khoSupabase.ts` và các file `khoSupabase*.ts`) chạy trên
+  Supabase thật: mọi lệnh gọi mạng.
+- **File migration** (`migrations/*` và `down/*`): bảng, ràng buộc, trigger, hàm. Cổng chỉ đọc chữ để
+  kiểm cấu trúc (có bật RLS, không mở quyền cột trạng thái cho client, bản xuống bỏ đủ đối tượng), không
+  chạy SQL.
+- **Phân quyền từng dòng và quyền cột** của mọi bảng.
+- **Hàm cơ sở dữ liệu** (`doi_trang_thai_task`, `lich_su_task`, `luu_tru_du_an`, `mo_lai_du_an`,
+  `them_nguoi_vao_du_an`, `them_lien_ket_vao_task`, `go_lien_ket_khoi_task`, ...).
+- **Edge Function** `doc-github` với GitHub thật: chạy trên Deno, xác thực bằng Supabase Auth, tra
+  `repo_du_an`, gọi `api.github.com`, đọc secret, giới hạn lượt gọi, repo riêng tư, lỗi mạng thật. Cổng
+  chỉ kiểm luật của hàm bằng đầu vào giả (`functions/doc-github/xuLy.ts`).
+- **Luồng email**: đăng ký, xác nhận email, đăng nhập, đặt lại mật khẩu, thư gửi đi và mẫu thư.
+
+Những gì cổng **có kiểm**: luật nghiệp vụ thuần, bản bộ nhớ của Kho dữ liệu qua bộ test hợp đồng và các
+bảng ca dùng chung, giao diện trên bản bộ nhớ, cấu hình chọn bản cài, các lệnh của bản Supabase bị chặn
+ở ranh giới khi chưa đăng nhập hay dữ liệu sai (không gọi mạng), Cổng GitHub với `fetch` giả, luật của
+Edge Function với đầu vào giả. Chi tiết theo từng lát ở Phần D.
+
+> **Chưa kiểm xong danh sách ở Phần B thì chưa đưa lên mạng.** Cổng xanh không có nghĩa là phân quyền
+> đúng: chỉ chạy tay trên Supabase thật mới chứng minh được.
+
+## Phần D. Tham chiếu theo từng lát (ticket 06, 10, 14, 17)
 
 Bản cài Supabase của Kho dữ liệu: `src/kho/khoSupabase.ts`. Ứng dụng chọn bản cài theo biến môi
 trường (`src/kho/cauHinh.ts`, `src/kho/chonKho.ts`):
@@ -221,7 +515,7 @@ Việc chủ dự án làm tay cho phần GitHub (theo thứ tự):
   có bật RLS, không mở quyền cột trạng thái cho client, bản xuống bỏ đủ đối tượng), không chạy SQL.
 - Phân quyền từng dòng (RLS) và quyền cột, kể cả của bảng `task`.
 - Mọi lệnh Task của bản Supabase có gọi mạng (bộ test hợp đồng và bảng ca phần Task: chỉ chạy bằng
-  lệnh riêng ở mục cuối; trong `npm test` mang tên "CHƯA KIỂM").
+  lệnh riêng ở mục "Lệnh chạy bộ test trên Supabase thật"; trong `npm test` mang tên "CHƯA KIỂM").
 - Supabase Auth thật: đăng ký, xác nhận email, đăng nhập, đặt lại mật khẩu, thư gửi đi và mẫu thư.
 - Mọi lệnh của bản Supabase có gọi mạng.
 
@@ -243,66 +537,32 @@ chặn ở ranh giới mà không gọi mạng, bộ test trên Supabase thật 
 không báo đạt), và cấu trúc file migration lát 2 như nói ở trên.
 
 Người duyệt: đọc kỹ SQL, rồi chạy tay bộ test hợp đồng và bảng ca dùng chung trên Supabase thật
-(mục cuối).
+(mục "Lệnh chạy bộ test trên Supabase thật").
 
-## Việc chủ dự án làm tay (theo thứ tự)
+## Kiểm tay bổ sung về Dự án và Task (lát 1 và lát 2)
 
-1. **Tạo project** Supabase (nên có thêm một project riêng cho test, hoặc dùng `supabase start`).
-2. **Bật đăng ký email kèm xác nhận**: Authentication > Providers > Email: bật *Enable Email
-   provider* và *Confirm email*. Đặt *Site URL* là địa chỉ của ứng dụng.
-3. **Mẫu thư đặt lại mật khẩu có mã**: Authentication > Email Templates > *Reset Password*, dán nội
-   dung `templates/dat-lai-mat-khau.html` (thư phải có `{{ .Token }}`; ứng dụng hỏi mã, không dùng
-   đường dẫn). Thời hạn mã: Authentication > Providers > Email > *Email OTP Expiration* (mặc định
-   3600 giây).
-4. **Áp migration** `migrations/20261125000100_lat_1_ho_so_du_an.sql`: dán vào SQL Editor và chạy,
-   hoặc `supabase db push` / `supabase migration up`. Kiểm: Table Editor có ba bảng `ho_so`,
-   `du_an`, `nguoi_trong_du_an`, cả ba hiện "RLS enabled".
-   Gỡ lại (xoá hết dữ liệu lát 1): chạy `down/20261125000100_lat_1_ho_so_du_an.down.sql`.
-4b. **Áp migration lát 2** `migrations/20261125000200_lat_2_task.sql` (sau lát 1): dán vào SQL Editor
-   và chạy, hoặc `supabase db push`. Kiểm: Table Editor có thêm bảng `task`, hiện "RLS enabled".
-   Gỡ lại (xoá hết Task): `down/20261125000200_lat_2_task.down.sql`; nếu cần gỡ cả lát 1 thì chạy
-   bản xuống lát 2 TRƯỚC.
-5. **Đặt PM đầu tiên** (một lần, sau khi tự đăng ký và xác nhận email trên ứng dụng), trong SQL
-   Editor:
+Ngoài bảy mục ở Phần B. Mỗi mục thử trực tiếp bằng REST hoặc SQL (bỏ qua Kho) với phiên của đúng người đó.
 
-   ```sql
-   update public.ho_so set vai = 'PM' where email = lower('email-cua-ban@vi-du.vn');
-   select email, vai from public.ho_so where vai = 'PM';
-   ```
-
-   Không có luật "người đầu tiên thành PM". Từ đó chỉ PM đổi được vai trên màn Người dùng, và cơ sở
-   dữ liệu không cho hạ hay xoá PM cuối cùng (kể cả trong SQL Editor).
-6. **Cấu hình ứng dụng**: chép `.env.example` thành `.env.local`, điền `VITE_SUPABASE_URL` và
-   `VITE_SUPABASE_ANON_KEY` (Project Settings > API). Không bao giờ điền khoá service vào biến
-   `VITE_*`.
-7. **Chạy bộ test hợp đồng và bảng ca dùng chung trên Supabase thật** (mục dưới) và kiểm tay:
-   - Người lạ vừa đăng ký không đọc được Dự án hay hồ sơ của ai ngoài hồ sơ của mình (thử
-     `select * from ho_so` / `du_an` bằng khoá anon và phiên của người đó: chỉ thấy một dòng / không
-     dòng nào).
-   - Thành viên không sửa được Dự án, không tự nâng vai (`update ho_so set vai = 'PM' where id = auth.uid()`
-     bằng phiên của họ phải lỗi `KHONG_CO_QUYEN`).
-   - Không ghi thẳng được cột trạng thái của Dự án (`update du_an set trang_thai = ...` lỗi quyền
-     cột); chỉ đổi qua `luu_tru_du_an` / `mo_lai_du_an`.
-   - **Task** (lát 2), mỗi mục thử trực tiếp bằng REST/SQL (bỏ qua Kho) với phiên của đúng người đó
-     (cách giả phiên trong SQL Editor: mục "Giả người gọi trong SQL Editor" bên dưới):
-     - Người ngoài Dự án: `select * from task` không thấy dòng nào của Dự án đó; `insert` và `update`
-       đều bị từ chối hoặc không đụng dòng nào.
-     - Thành viên trong Dự án (kể cả Người thực hiện hay Người kiểm tra của Task): `insert` lỗi
-       `KHONG_CO_QUYEN`, `update task set tieu_de = ...` không đổi dòng nào.
-     - Support ở Dự án khác (hoặc không ở Dự án nào): không tạo, không sửa Task của Dự án này.
-     - PM hoặc Support của Dự án đổi `trang_thai` hoặc `so_lan_tra_lai` trực tiếp: lỗi quyền cột
-       (`permission denied`). Gửi kèm `tao_boi`, `tao_luc`, `sua_boi`, `sua_luc` hay `id` khi tạo: cũng
-       lỗi quyền cột (client không có quyền cột này); dấu vết luôn là người gọi và giờ máy chủ.
-     - Tạo Task với `nguoi_kiem_tra_id` = `nguoi_thuc_hien_id`: `TRUNG_NGUOI`. Chọn người không ở
-       trong Dự án (hoặc không tồn tại ở bảng `ho_so`): `NGUOI_NGOAI_DU_AN`. Bỏ trống một người: `THIEU_NGUOI`.
-     - Tiêu đề rỗng, chỉ khoảng trắng hay quá 200 ký tự: lỗi ràng buộc `task_tieu_de_hop_le`.
-     - Task Hoàn thành hoặc Huỷ (dựng bằng SQL Editor: `update task set trang_thai = 'HOAN_THANH' where id = ...`):
-       `update` bằng phiên PM lỗi `TASK_DA_CHOT`. Dự án Lưu trữ: tạo hay sửa Task lỗi `DU_AN_DA_LUU_TRU`.
-     - Gỡ một Người thực hiện khỏi Dự án: Task của họ giữ nguyên (họ vẫn là Người thực hiện); giao lại
-       cho người trong Dự án thì được, giao cho người đã gỡ thì `NGUOI_NGOAI_DU_AN`.
-     - `delete from task` bằng phiên bất kỳ: bị từ chối (không có quyền xoá).
-     - Không có đường nào để client tự bật cờ `rieng.dang_chuyen_trang_thai`: gọi
-       `/rest/v1/rpc/set_config` phải ra 404, và hàm `rieng.*` không mở cho `authenticated`.
+- Không ghi thẳng được cột trạng thái của Dự án (`update du_an set trang_thai = ...` lỗi quyền cột); chỉ đổi qua `luu_tru_du_an` / `mo_lai_du_an`.
+- **Task** (lát 2); cách giả phiên trong SQL Editor: mục "Giả người gọi trong SQL Editor" bên dưới:
+  - Người ngoài Dự án: `select * from task` không thấy dòng nào của Dự án đó; `insert` và `update`
+    đều bị từ chối hoặc không đụng dòng nào.
+  - Thành viên trong Dự án (kể cả Người thực hiện hay Người kiểm tra của Task): `insert` lỗi
+    `KHONG_CO_QUYEN`, `update task set tieu_de = ...` không đổi dòng nào.
+  - Support ở Dự án khác (hoặc không ở Dự án nào): không tạo, không sửa Task của Dự án này.
+  - PM hoặc Support của Dự án đổi `trang_thai` hoặc `so_lan_tra_lai` trực tiếp: lỗi quyền cột
+    (`permission denied`). Gửi kèm `tao_boi`, `tao_luc`, `sua_boi`, `sua_luc` hay `id` khi tạo: cũng
+    lỗi quyền cột (client không có quyền cột này); dấu vết luôn là người gọi và giờ máy chủ.
+  - Tạo Task với `nguoi_kiem_tra_id` = `nguoi_thuc_hien_id`: `TRUNG_NGUOI`. Chọn người không ở
+    trong Dự án (hoặc không tồn tại ở bảng `ho_so`): `NGUOI_NGOAI_DU_AN`. Bỏ trống một người: `THIEU_NGUOI`.
+  - Tiêu đề rỗng, chỉ khoảng trắng hay quá 200 ký tự: lỗi ràng buộc `task_tieu_de_hop_le`.
+  - Task Hoàn thành hoặc Huỷ (dựng bằng SQL Editor: `update task set trang_thai = 'HOAN_THANH' where id = ...`):
+    `update` bằng phiên PM lỗi `TASK_DA_CHOT`. Dự án Lưu trữ: tạo hay sửa Task lỗi `DU_AN_DA_LUU_TRU`.
+  - Gỡ một Người thực hiện khỏi Dự án: Task của họ giữ nguyên (họ vẫn là Người thực hiện); giao lại
+    cho người trong Dự án thì được, giao cho người đã gỡ thì `NGUOI_NGOAI_DU_AN`.
+  - `delete from task` bằng phiên bất kỳ: bị từ chối (không có quyền xoá).
+  - Không có đường nào để client tự bật cờ `rieng.dang_chuyen_trang_thai`: gọi
+    `/rest/v1/rpc/set_config` phải ra 404, và hàm `rieng.*` không mở cho `authenticated`.
 
 ## Giả người gọi trong SQL Editor (để thử Task bằng tay)
 
