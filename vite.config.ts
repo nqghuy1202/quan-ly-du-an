@@ -6,7 +6,9 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [stylex(), react()],
   test: {
-    environment: 'jsdom',
+    // Mặc định node. Test giao diện khai `// @vitest-environment jsdom` ở dòng đầu file: đặt 'jsdom' ở đây thì
+    // vitest dò gói jsdom ngoài thư mục repo và bị cổng kiểm (sandbox) chặn đọc (EPERM).
+    environment: 'node',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],

@@ -12,6 +12,6 @@
 - [ ] Người gọi chưa đăng nhập gọi lệnh cần danh tính trả lỗi `CHUA_DANG_NHAP`.
 - [ ] Sửa tên hiển thị và GitHub username (tuỳ chọn, phải đúng định dạng username của GitHub, cho phép để trống để xoá) chỉ áp dụng được cho hồ sơ của chính mình; sửa hồ sơ người khác trả lỗi `KHONG_CO_QUYEN` và dữ liệu không đổi.
 - [ ] Sau khi đăng nhập thấy tên và vai ở khung ứng dụng; người chưa ở dự án nào thấy màn trống nói rõ "bạn chưa ở dự án nào, hãy nhờ PM hoặc Support thêm bạn".
-- [ ] Mọi màn mới dựng từ component hoặc template Astryx (đã đọc tài liệu component trước khi dùng), không thẻ `div` thô, không màu hex hay `px` rời; có đủ trạng thái trống, đang tải và lỗi; mọi điều khiển có focus ring nhìn thấy được.
+- [ ] Mọi màn mới dựng từ component hoặc template Astryx, không thẻ `div` hay `span` thô, không `className` hay `style` nội tuyến, không màu hex hay `px` rời (ESLint của repo chặn các lỗi này, `npm run lint` phải sạch); có đủ trạng thái trống, đang tải và lỗi; mọi điều khiển đi tới và dùng được bằng phím Tab (có test điều hướng bằng phím), dùng focus ring mặc định của Astryx và không đặt `outline: none`.
 - [ ] Bộ test hợp đồng của Kho dữ liệu tách riêng để bản cài khác chạy lại; test giao diện render với bản cài bộ nhớ.
 - [ ] Có test tự động cho từng tiêu chí trên, chạy bằng lệnh test của repo, không cần mạng, DB hay file ngoài repo; không đổi danh sách phụ thuộc, không sửa hook của repo.

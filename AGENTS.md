@@ -46,7 +46,7 @@ src/
   test/setup.ts          jest-dom + dọn sau mỗi test
 ```
 
-Test cạnh mã (`*.test.ts[x]` trong `src/`), chạy bằng Vitest (jsdom, Testing Library).
+Test cạnh mã (`*.test.ts[x]` trong `src/`), chạy bằng Vitest và Testing Library. Môi trường test mặc định là `node`; **test giao diện bắt buộc khai `// @vitest-environment jsdom` ở dòng đầu file**. Không đổi mặc định sang `jsdom` trong `vite.config.ts`: cổng kiểm chạy trong sandbox và sẽ báo `EPERM`.
 
 <!-- ASTRYX:START -->
 Astryx v0.7.17 · 174 components
