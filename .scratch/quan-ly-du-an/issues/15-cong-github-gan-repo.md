@@ -14,3 +14,10 @@
 - [ ] Bản giả của Cổng GitHub trả được từng kịch bản lỗi với mã riêng (không tìm thấy, không đọc được vì riêng tư, hết lượt gọi, mất mạng).
 - [ ] Mục "Repo GitHub" trên trang Dự án dựng từ Astryx, đủ trạng thái trống, đang tải và lỗi; nút gắn và gỡ bị ẩn hoặc vô hiệu kèm lý do khi không có quyền.
 - [ ] Có test tự động cho từng tiêu chí trên, chạy bằng lệnh test của repo, không cần mạng, DB hay file ngoài repo; không đổi danh sách phụ thuộc, không sửa hook của repo.
+
+## Ghi chú triển khai
+
+- Luật thuần: `src/luat/github.ts` (tên repo, `phanTichLienKet`, `chuyenPhanHoiGitHub`, lý do không gắn repo, mã lỗi `MaLoiGitHub`). Cổng GitHub (chỉ đọc): `src/github/congGitHub.ts`, bản giả theo kịch bản `src/github/congGiaGitHub.ts`.
+- Kho dữ liệu thêm `ganRepoVaoDuAn`, `goRepoKhoiDuAn`, `danhSachRepoCuaDuAn` (mã lỗi mới `REPO_KHONG_HOP_LE`, `REPO_DA_GAN`); bộ test hợp đồng riêng `src/kho/hopDongRepo.ts` (`chayHopDongRepo`). Giao diện: `src/giaoDien/PhanRepoGitHub.tsx`.
+- Bản Supabase chưa có lệnh repo (trả `LOI_HE_THONG`, chưa đăng nhập thì `CHUA_DANG_NHAP`); ticket 17 cài và chạy `chayHopDongRepo` trên Supabase thật. Cổng không kiểm: bản Supabase của repo.
+- Quyết định: quyền gắn/gỡ repo như quyền quản lý Dự án (không thêm dòng vào bảng ca dùng chung, quyền được kiểm trong `hopDongRepo.ts`); gắn/gỡ repo không đổi dấu vết Dự án; link PR kèm trang con (`/files`) bị từ chối.

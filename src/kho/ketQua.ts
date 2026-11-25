@@ -24,6 +24,10 @@ export type MaLoi =
   | 'TRUNG_NGUOI'
   /** Không gọi được máy chủ (mất mạng, máy chủ lỗi, quá nhiều yêu cầu); chỉ bản cài có I/O trả mã này. */
   | 'LOI_HE_THONG'
+  /** Tên repo GitHub không đúng dạng chủ-sở-hữu/tên-repo. */
+  | 'REPO_KHONG_HOP_LE'
+  /** Repo đã gắn vào Dự án (không phân biệt hoa thường). */
+  | 'REPO_DA_GAN'
 
 export interface LoiKho {
   ma: MaLoi
@@ -68,4 +72,6 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
     'Người được chọn không ở trong Dự án. Chỉ chọn được người đang ở trong Dự án làm Người thực hiện hay Người kiểm tra.',
   TRUNG_NGUOI: 'Người kiểm tra phải khác Người thực hiện: không ai tự duyệt việc của mình.',
   LOI_HE_THONG: 'Không kết nối được máy chủ hoặc máy chủ đang lỗi. Hãy thử lại sau ít phút.',
+  REPO_KHONG_HOP_LE: 'Tên repo phải có dạng chu-so-huu/ten-repo, ví dụ vercel/next.js.',
+  REPO_DA_GAN: 'Repo này đã được gắn vào Dự án.',
 }

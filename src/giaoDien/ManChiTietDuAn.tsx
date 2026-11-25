@@ -19,12 +19,14 @@ import {
   kiemMoLaiDuAn,
   lyDoKhongSuaDuAn,
 } from '../luat/duAn'
+import { lyDoKhongGanRepo } from '../luat/github'
 import { lyDoKhongTaoTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { ManChiTietTask } from './ManChiTietTask'
 import { ManTaoTask } from './ManTaoTask'
 import { PhanNguoiTrongDuAn } from './PhanNguoiTrongDuAn'
+import { PhanRepoGitHub } from './PhanRepoGitHub'
 import { PhanTaskCuaDuAn } from './PhanTaskCuaDuAn'
 import { trangThaiO } from './trangThaiO'
 
@@ -217,6 +219,11 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       ? LY_DO_CHUA_RO_QUYEN.dangTai
       : LY_DO_CHUA_RO_QUYEN.loi
   const moLaiDuoc = quyenDaRo && kiemMoLaiDuAn(tinhHuong) === null
+  const lyDoKhongGanRepoMoi = quyenDaRo
+    ? lyDoKhongGanRepo(tinhHuong)
+    : taiNguoi === null
+      ? LY_DO_CHUA_RO_QUYEN.dangTai
+      : LY_DO_CHUA_RO_QUYEN.loi
   const lyDoKhongTaoTaskMoi = quyenDaRo
     ? lyDoKhongTaoTask(tinhHuong)
     : taiNguoi === null
@@ -323,6 +330,14 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         lyDoKhongGhi={lyDoKhongSua}
         onThuLai={() => setLanTaiNguoi((n) => n + 1)}
         onDoiDanhSach={doiDanhSachNguoi}
+        onCanDocLai={docLai}
+        onHetPhien={onHetPhien}
+      />
+
+      <PhanRepoGitHub
+        phien={phien}
+        duAnId={duAnId}
+        lyDoKhongGhi={lyDoKhongGanRepoMoi}
         onCanDocLai={docLai}
         onHetPhien={onHetPhien}
       />

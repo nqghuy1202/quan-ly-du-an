@@ -18,6 +18,10 @@ switch (ketQua.trangThai) {
     const { taoBanCai, tuyChon } = taoBoBanCaiSupabase(ketQua.cauHinh)
     chayBoTestHopDong('bản Supabase', taoBanCai, tuyChon)
     chayBangCaQuyen('bản Supabase', taoBanCai, tuyChon)
+    // Repo GitHub chưa có trên bản Supabase (ticket 17): chưa chạy `chayHopDongRepo` ở đây.
+    describe('Repo GitHub của Dự án — bản Supabase', () => {
+      it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh repo GitHub (ticket 17 cài và chạy chayHopDongRepo)', () => {})
+    })
     break
   }
   case 'THIEU_CAU_HINH': {
