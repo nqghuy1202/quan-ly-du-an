@@ -13,6 +13,15 @@ trường (`src/kho/cauHinh.ts`, `src/kho/chonKho.ts`):
 - Bất kỳ biến `VITE_*` nào chứa khoá service (`service_role`, `sb_secret_...`): ứng dụng từ chối
   chạy. Khoá service không bao giờ được xuống trình duyệt.
 
+## Task chưa có trên Supabase (ticket 07 → ticket 10)
+
+Ticket 07 thêm các lệnh Task vào Kho dữ liệu (`taoTask`, `danhSachTask`, `layTask`) và cài cho bản
+bộ nhớ. Bản Supabase **chưa có** bảng, phân quyền từng dòng hay hàm nào cho Task: ba lệnh đó chỉ trả
+`LOI_HE_THONG` ("Máy chủ chưa hỗ trợ Task…"), chưa đăng nhập thì `CHUA_DANG_NHAP`. Bộ test hợp đồng
+và bảng ca dùng chung phần Task bị bỏ qua cho bản Supabase (`coTask: false` trong
+`src/kho/hopDongSupabase.ts`) và báo "CHƯA KIỂM". Ticket 10 viết migration, cài các lệnh và bỏ
+`coTask: false`.
+
 ## Cổng chưa kiểm (phải kiểm tay)
 
 `npm test` không có mạng, không có DB, nên **không kiểm**:

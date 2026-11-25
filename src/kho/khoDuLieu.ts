@@ -20,6 +20,7 @@ import type {
   ThemNguoiDauVao,
   TrangThaiDuAn,
 } from '../luat/duAn'
+import type { TaoTaskDauVao, TrangThaiTask } from '../luat/task'
 
 export interface HoSo {
   id: string
@@ -68,6 +69,24 @@ export interface DuAn {
   /** Chuỗi rỗng khi không có mô tả. */
   moTa: string
   trangThai: TrangThaiDuAn
+  dauVet: DauVet<NguoiDauVet>
+}
+
+/**
+ * Một Task: thuộc một Dự án; hạn là một ngày `YYYY-MM-DD` không có giờ (null khi không có hạn).
+ * Người thực hiện và Người kiểm tra kèm tên hiển thị hiện tại của tài khoản lúc đọc.
+ */
+export interface Task {
+  id: string
+  duAnId: string
+  tieuDe: string
+  /** Chuỗi rỗng khi không có mô tả. */
+  moTa: string
+  han: string | null
+  nguoiThucHien: NguoiDauVet
+  nguoiKiemTra: NguoiDauVet
+  trangThai: TrangThaiTask
+  soLanTraLai: number
   dauVet: DauVet<NguoiDauVet>
 }
 
@@ -178,4 +197,23 @@ export interface KhoDuLieu {
    * `KHONG_TIM_THAY` (như `suaDuAn`, hoặc người đó không ở trong Dự án), `DU_AN_DA_LUU_TRU`.
    */
   goNguoiKhoiDuAn(phien: Phien | null, duAnId: string, nguoiDungId: string): Promise<KetQua<null>>
+  /**
+   * Tạo Task trong Dự án: trạng thái Mới, số lần bị Trả lại 0; người tạo là người gọi, ngày tạo là
+   * `bayGio`, chưa có phần chỉnh sửa. PM hoặc Support của Dự án. Lỗi (không tạo gì), theo thứ tự:
+   * `KHONG_CO_QUYEN` (như `suaDuAn`; Thành viên luôn nhận mã này, kể cả khi sẽ là Người thực hiện),
+   * `KHONG_TIM_THAY` (PM, Dự án không tồn tại), `DU_AN_DA_LUU_TRU`, `KHONG_HOP_LE` (tiêu đề rỗng,
+   * chỉ khoảng trắng, quá 200 ký tự; hạn không phải một ngày có thật), `THIEU_NGUOI`,
+   * `NGUOI_NGOAI_DU_AN` (kể cả id không tồn tại), `TRUNG_NGUOI`.
+   */
+  taoTask(phien: Phien | null, duAnId: string, dauVao: TaoTaskDauVao, bayGio: Date): Promise<KetQua<Task>>
+  /**
+   * Mọi Task của một Dự án, kể cả Dự án đã Lưu trữ; thứ tự không bảo đảm. Ai thấy Dự án thì thấy
+   * mọi Task của nó. Lỗi: `KHONG_TIM_THAY` (như `layDuAn`).
+   */
+  danhSachTask(phien: Phien | null, duAnId: string): Promise<KetQua<Task[]>>
+  /**
+   * Một Task. Ai thấy Dự án của Task thì mở được. Lỗi: `KHONG_TIM_THAY` (không tồn tại, hoặc người
+   * gọi không thấy Dự án của nó: không lộ là có tồn tại).
+   */
+  layTask(phien: Phien | null, taskId: string): Promise<KetQua<Task>>
 }

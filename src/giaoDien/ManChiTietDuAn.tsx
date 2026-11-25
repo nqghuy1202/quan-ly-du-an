@@ -19,9 +19,13 @@ import {
   kiemMoLaiDuAn,
   lyDoKhongSuaDuAn,
 } from '../luat/duAn'
+import { lyDoKhongTaoTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
+import { ManChiTietTask } from './ManChiTietTask'
+import { ManTaoTask } from './ManTaoTask'
 import { PhanNguoiTrongDuAn } from './PhanNguoiTrongDuAn'
+import { PhanTaskCuaDuAn } from './PhanTaskCuaDuAn'
 import { trangThaiO } from './trangThaiO'
 
 interface Props {
@@ -38,6 +42,9 @@ interface Props {
 type Viec = 'luu' | 'luuTru' | 'moLai'
 
 type ThongBao = { loai: 'thanhCong'; noiDung: string } | { loai: 'loi'; tieuDe: string; loi: LoiKho }
+
+/** Màn con về Task mở từ trang Dự án: biểu mẫu tạo, hoặc chi tiết một Task. */
+type ManTask = { loai: 'tao' } | { loai: 'chiTiet'; taskId: string; thongBao: string | null }
 
 const TIEU_DE_LOI: Record<Viec, string> = {
   luu: 'Chưa lưu được thay đổi.',
@@ -57,7 +64,7 @@ const LY_DO_CHUA_RO_QUYEN = {
   loi: 'Chưa kiểm được quyền của bạn vì không tải được người trong dự án.',
 } as const
 
-/** Chi tiết một Dự án: dấu vết, sửa tên và mô tả, Lưu trữ và mở lại, người trong dự án. */
+/** Chi tiết một Dự án: dấu vết, sửa tên và mô tả, Lưu trữ và mở lại, người trong dự án, Task. */
 export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQuayLai, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
@@ -72,6 +79,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
   const [thongBao, setThongBao] = useState<ThongBao | null>(
     thongBaoBanDau ? { loai: 'thanhCong', noiDung: thongBaoBanDau } : null,
   )
+  const [manTask, setManTask] = useState<ManTask | null>(null)
 
   useEffect(() => {
     let huy = false
@@ -209,6 +217,39 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       ? LY_DO_CHUA_RO_QUYEN.dangTai
       : LY_DO_CHUA_RO_QUYEN.loi
   const moLaiDuoc = quyenDaRo && kiemMoLaiDuAn(tinhHuong) === null
+  const lyDoKhongTaoTaskMoi = quyenDaRo
+    ? lyDoKhongTaoTask(tinhHuong)
+    : taiNguoi === null
+      ? LY_DO_CHUA_RO_QUYEN.dangTai
+      : LY_DO_CHUA_RO_QUYEN.loi
+
+  if (manTask?.loai === 'tao') {
+    return (
+      <ManTaoTask
+        phien={phien}
+        vai={vai}
+        duAn={duAn}
+        dongHo={dongHo}
+        onDaTao={(task) => setManTask({ loai: 'chiTiet', taskId: task.id, thongBao: `Đã tạo Task ${task.tieuDe}.` })}
+        onQuayLai={() => setManTask(null)}
+        onHetPhien={onHetPhien}
+      />
+    )
+  }
+
+  if (manTask?.loai === 'chiTiet') {
+    return (
+      <ManChiTietTask
+        key={manTask.taskId}
+        phien={phien}
+        taskId={manTask.taskId}
+        tenDuAn={duAn.ten}
+        thongBaoBanDau={manTask.thongBao}
+        onQuayLai={() => setManTask(null)}
+        onHetPhien={onHetPhien}
+      />
+    )
+  }
 
   return (
     <VStack gap={4}>
@@ -283,6 +324,15 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         onThuLai={() => setLanTaiNguoi((n) => n + 1)}
         onDoiDanhSach={doiDanhSachNguoi}
         onCanDocLai={docLai}
+        onHetPhien={onHetPhien}
+      />
+
+      <PhanTaskCuaDuAn
+        phien={phien}
+        duAnId={duAnId}
+        lyDoKhongTao={lyDoKhongTaoTaskMoi}
+        onTao={() => setManTask({ loai: 'tao' })}
+        onMo={(taskId) => setManTask({ loai: 'chiTiet', taskId, thongBao: null })}
         onHetPhien={onHetPhien}
       />
     </VStack>

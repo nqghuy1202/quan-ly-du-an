@@ -8,7 +8,8 @@ import type { KetQua, MaLoi } from './ketQua'
 import type { KhoDuLieu, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
 import { CAC_VAI, THONG_BAO, type VaiHeThong } from '../luat/taiKhoan'
 import { DO_DAI_TEN_DU_AN_TOI_DA, THONG_BAO_DU_AN } from '../luat/duAn'
-import { BANG_CA_QUYEN, type CaQuyen, type KetQuaMongDoi } from './bangCaQuyen'
+import { DO_DAI_TIEU_DE_TASK_TOI_DA, THONG_BAO_TASK, type TaoTaskDauVao } from '../luat/task'
+import { BANG_CA_QUYEN, laHanhDongTask, type CaQuyen, type KetQuaMongDoi } from './bangCaQuyen'
 
 export interface BanCaiHopDong {
   kho: KhoDuLieu
@@ -47,6 +48,11 @@ export interface TuyChonHopDong {
    * đúng, dùng lại mã đã dùng phải trả `MA_KHONG_HOP_LE` thay cho `MA_DA_DUNG`. Mặc định sai.
    */
   gopLoiMaDatLai?: boolean
+  /**
+   * Bản cài đã có các lệnh Task (ticket 07). Mặc định đúng. Đặt `false` khi bản cài chưa cài Task
+   * (bản Supabase trước ticket 10): các ca Task và dòng Task của bảng ca bị bỏ qua, mang tên "CHƯA KIỂM".
+   */
+  coTask?: boolean
 }
 
 const MAT_KHAU = 'matkhau-dung-1'
@@ -78,6 +84,7 @@ export function chayBoTestHopDong(
   const khoChuaCoPM = tuyChon.khoChuaCoPM ?? true
   const dongHoCuaKho = tuyChon.dongHoCuaKho ?? false
   const gopLoiMaDatLai = tuyChon.gopLoiMaDatLai ?? false
+  const coTask = tuyChon.coTask ?? true
   /** Ngày mong đợi trong dấu vết: đúng giờ truyền vào, hoặc chỉ là một ngày nếu kho tự lấy giờ. */
   const luc = (moc: Date): Date => (dongHoCuaKho ? expect.any(Date) : moc)
 
@@ -410,6 +417,10 @@ export function chayBoTestHopDong(
           expect(maLoi(await kho.danhSachNguoiTrongDuAn(phien, 'du-an'))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.themNguoiVaoDuAn(phien, 'du-an', { email: 'ai@vi-du.vn' }))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.goNguoiKhoiDuAn(phien, 'du-an', 'ai-do'))).toBe('CHUA_DANG_NHAP')
+          const taskMau = { tieuDe: 'X', nguoiThucHienId: 'a', nguoiKiemTraId: 'b' }
+          expect(maLoi(await kho.taoTask(phien, 'du-an', taskMau, LUC_TAO_DU_AN))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.danhSachTask(phien, 'du-an'))).toBe('CHUA_DANG_NHAP')
+          expect(maLoi(await kho.layTask(phien, 'task'))).toBe('CHUA_DANG_NHAP')
           expect(maLoi(await kho.dangXuat(phien))).toBe('CHUA_DANG_NHAP')
         }
       })
@@ -1126,6 +1137,348 @@ export function chayBoTestHopDong(
         expect(maLoi(await kho.suaDuAn(nguoi, duAn.id, { ten: 'Y' }, LUC_SUA))).toBe('KHONG_CO_QUYEN')
       })
     })
+
+    describe.skipIf(!coTask)('Task: tạo, giao việc, xem và dấu vết', () => {
+      const LUC_TAO_TASK = sau(LUC_TAO_DU_AN, 3 * 60 * 60 * 1000)
+
+      interface BoiCanh {
+        pm: Phien
+        duAnId: string
+        /** Thành viên trong Dự án, dùng làm Người thực hiện. */
+        an: Phien
+        /** Thành viên trong Dự án, dùng làm Người kiểm tra. */
+        binh: Phien
+      }
+
+      async function emailCua(phien: Phien): Promise<string> {
+        return giaTri(await kho.layHoSoCuaToi(phien)).email
+      }
+
+      async function them(pm: Phien, duAnId: string, phien: Phien): Promise<void> {
+        giaTri(await kho.themNguoiVaoDuAn(pm, duAnId, { email: await emailCua(phien) }))
+      }
+
+      /** Một PM, một Dự án đang hoạt động và hai Thành viên trong Dự án. */
+      async function dungBoiCanh(ten = 'tk', tenDuAn = 'Cửa hàng'): Promise<BoiCanh> {
+        const pm = await taoPM(`pm-${ten}`, 'An PM')
+        const duAn = giaTri(await kho.taoDuAn(pm, { ten: tenDuAn }, LUC_TAO_DU_AN))
+        const an = await dangKyVaDangNhap(`an-${ten}`, 'An')
+        const binh = await dangKyVaDangNhap(`binh-${ten}`, 'Bình')
+        await them(pm, duAn.id, an)
+        await them(pm, duAn.id, binh)
+        return { pm, duAnId: duAn.id, an, binh }
+      }
+
+      /** Dữ liệu tạo Task hợp lệ (An làm, Bình duyệt), đè bằng `sua`. */
+      function giao(bc: BoiCanh, sua: Partial<TaoTaskDauVao> = {}): TaoTaskDauVao {
+        return {
+          tieuDe: 'Làm trang chủ',
+          nguoiThucHienId: bc.an.nguoiDungId,
+          nguoiKiemTraId: bc.binh.nguoiDungId,
+          ...sua,
+        }
+      }
+
+      async function idCacTask(phien: Phien, duAnId: string): Promise<string[]> {
+        return giaTri(await kho.danhSachTask(phien, duAnId))
+          .map((task) => task.id)
+          .sort()
+      }
+
+      it('PM tạo Task: tiêu đề bỏ khoảng trắng, trạng thái Mới, 0 lần Trả lại, hai người kèm tên, dấu vết theo người gọi và đồng hồ truyền vào', async () => {
+        const bc = await dungBoiCanh()
+        const task = giaTri(
+          await kho.taoTask(
+            bc.pm,
+            bc.duAnId,
+            {
+              tieuDe: '  Làm trang chủ  ',
+              moTa: '  Theo bản thiết kế mới  ',
+              han: '2026-12-31',
+              nguoiThucHienId: bc.an.nguoiDungId,
+              nguoiKiemTraId: bc.binh.nguoiDungId,
+            },
+            LUC_TAO_TASK,
+          ),
+        )
+        expect(task).toEqual({
+          id: expect.any(String),
+          duAnId: bc.duAnId,
+          tieuDe: 'Làm trang chủ',
+          moTa: 'Theo bản thiết kế mới',
+          han: '2026-12-31',
+          nguoiThucHien: { id: bc.an.nguoiDungId, tenHienThi: 'An' },
+          nguoiKiemTra: { id: bc.binh.nguoiDungId, tenHienThi: 'Bình' },
+          trangThai: 'MOI',
+          soLanTraLai: 0,
+          dauVet: {
+            taoBoi: { id: bc.pm.nguoiDungId, tenHienThi: 'An PM' },
+            taoLuc: luc(LUC_TAO_TASK),
+            suaBoi: null,
+            suaLuc: null,
+          },
+        })
+        // Đọc lại (chi tiết và danh sách) thấy đúng như vậy.
+        expect(giaTri(await kho.layTask(bc.pm, task.id))).toEqual(task)
+        expect(giaTri(await kho.danhSachTask(bc.pm, bc.duAnId))).toEqual([task])
+      })
+
+      it('mô tả và hạn tuỳ chọn: thiếu hay để trống thì mô tả rỗng và không có hạn', async () => {
+        const bc = await dungBoiCanh()
+        const khongCo = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc), LUC_TAO_TASK))
+        expect(khongCo.moTa).toBe('')
+        expect(khongCo.han).toBeNull()
+        const deTrong = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { moTa: '   ', han: '  ' }), LUC_TAO_TASK))
+        expect(deTrong.moTa).toBe('')
+        expect(deTrong.han).toBeNull()
+        const hanNull = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { han: null }), LUC_TAO_TASK))
+        expect(hanNull.han).toBeNull()
+        expect(new Set([khongCo.id, deTrong.id, hanNull.id]).size).toBe(3)
+      })
+
+      it('hạn đã qua vẫn tạo được, kể cả ngày 29/02 của năm nhuận', async () => {
+        const bc = await dungBoiCanh()
+        expect(giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { han: '2020-01-15' }), LUC_TAO_TASK)).han).toBe(
+          '2020-01-15',
+        )
+        expect(giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { han: '2024-02-29' }), LUC_TAO_TASK)).han).toBe(
+          '2024-02-29',
+        )
+      })
+
+      it('tiêu đề đúng 200 ký tự được nhận', async () => {
+        const bc = await dungBoiCanh()
+        const tieuDe = 'a'.repeat(DO_DAI_TIEU_DE_TASK_TOI_DA)
+        expect(giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { tieuDe }), LUC_TAO_TASK)).tieuDe).toBe(tieuDe)
+      })
+
+      it.each([
+        { ca: 'tiêu đề rỗng', sua: { tieuDe: '' }, o: 'tieuDe', thongBao: THONG_BAO_TASK.tieuDeTrong },
+        { ca: 'tiêu đề chỉ khoảng trắng', sua: { tieuDe: ' \t  ' }, o: 'tieuDe', thongBao: THONG_BAO_TASK.tieuDeTrong },
+        {
+          ca: 'tiêu đề quá 200 ký tự',
+          sua: { tieuDe: 'a'.repeat(DO_DAI_TIEU_DE_TASK_TOI_DA + 1) },
+          o: 'tieuDe',
+          thongBao: THONG_BAO_TASK.tieuDeQuaDai,
+        },
+        { ca: 'hạn 30/02', sua: { han: '2026-02-30' }, o: 'han', thongBao: THONG_BAO_TASK.hanSai },
+        { ca: 'hạn 29/02 năm không nhuận', sua: { han: '2026-02-29' }, o: 'han', thongBao: THONG_BAO_TASK.hanSai },
+        { ca: 'hạn tháng 13', sua: { han: '2026-13-01' }, o: 'han', thongBao: THONG_BAO_TASK.hanSai },
+        { ca: 'hạn dạng ngày/tháng/năm', sua: { han: '31/12/2026' }, o: 'han', thongBao: THONG_BAO_TASK.hanSai },
+        { ca: 'hạn kèm giờ', sua: { han: '2026-12-31T10:00' }, o: 'han', thongBao: THONG_BAO_TASK.hanSai },
+        { ca: 'hạn là chữ', sua: { han: 'mai' }, o: 'han', thongBao: THONG_BAO_TASK.hanSai },
+      ])('$ca bị từ chối với KHONG_HOP_LE kèm thông báo tiếng Việt và không tạo gì', async ({ sua, o, thongBao }) => {
+        const bc = await dungBoiCanh()
+        const kq = await kho.taoTask(bc.pm, bc.duAnId, giao(bc, sua) as never, LUC_TAO_TASK)
+        expect(maLoi(kq)).toBe('KHONG_HOP_LE')
+        if (!kq.ok) expect(kq.loi.loiTheoO?.[o]).toBe(thongBao)
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([])
+      })
+
+      it('thiếu Người thực hiện hoặc Người kiểm tra (không gửi, null hay chuỗi rỗng) trả THIEU_NGUOI và không tạo gì', async () => {
+        const bc = await dungBoiCanh()
+        const an = bc.an.nguoiDungId
+        const binh = bc.binh.nguoiDungId
+        const cacCa: { dauVao: Record<string, unknown>; o: string[] }[] = [
+          { dauVao: { tieuDe: 'X', nguoiKiemTraId: binh }, o: ['nguoiThucHienId'] },
+          { dauVao: { tieuDe: 'X', nguoiThucHienId: an }, o: ['nguoiKiemTraId'] },
+          { dauVao: { tieuDe: 'X' }, o: ['nguoiThucHienId', 'nguoiKiemTraId'] },
+          { dauVao: { tieuDe: 'X', nguoiThucHienId: null, nguoiKiemTraId: binh }, o: ['nguoiThucHienId'] },
+          { dauVao: { tieuDe: 'X', nguoiThucHienId: an, nguoiKiemTraId: '  ' }, o: ['nguoiKiemTraId'] },
+        ]
+        for (const { dauVao, o } of cacCa) {
+          const kq = await kho.taoTask(bc.pm, bc.duAnId, dauVao as never, LUC_TAO_TASK)
+          expect(maLoi(kq)).toBe('THIEU_NGUOI')
+          if (!kq.ok) expect(Object.keys(kq.loi.loiTheoO ?? {}).sort()).toEqual([...o].sort())
+        }
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([])
+      })
+
+      it('người được chọn không ở trong Dự án (đã đăng ký, đã bị gỡ hay không tồn tại) trả NGUOI_NGOAI_DU_AN và không tạo gì', async () => {
+        const bc = await dungBoiCanh()
+        const ngoai = await dangKyVaDangNhap('ngoai-tk', 'Người ngoài')
+        const daGo = await dangKyVaDangNhap('da-go-tk', 'Đã gỡ')
+        await them(bc.pm, bc.duAnId, daGo)
+        giaTri(await kho.goNguoiKhoiDuAn(bc.pm, bc.duAnId, daGo.nguoiDungId))
+        // PM chưa được thêm vào Dự án cũng là người ngoài Dự án đó.
+        for (const idNgoai of [ngoai.nguoiDungId, daGo.nguoiDungId, bc.pm.nguoiDungId, 'khong-ton-tai']) {
+          const lamThucHien = await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { nguoiThucHienId: idNgoai }), LUC_TAO_TASK)
+          expect(maLoi(lamThucHien)).toBe('NGUOI_NGOAI_DU_AN')
+          if (!lamThucHien.ok) expect(lamThucHien.loi.loiTheoO?.nguoiThucHienId).toBe(THONG_BAO_TASK.nguoiNgoaiDuAn)
+          const lamKiemTra = await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { nguoiKiemTraId: idNgoai }), LUC_TAO_TASK)
+          expect(maLoi(lamKiemTra)).toBe('NGUOI_NGOAI_DU_AN')
+          if (!lamKiemTra.ok) expect(lamKiemTra.loi.loiTheoO?.nguoiKiemTraId).toBe(THONG_BAO_TASK.nguoiNgoaiDuAn)
+        }
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([])
+      })
+
+      it('cùng một người ở cả hai vai trả TRUNG_NGUOI và không tạo gì', async () => {
+        const bc = await dungBoiCanh()
+        const kq = await kho.taoTask(
+          bc.pm,
+          bc.duAnId,
+          giao(bc, { nguoiThucHienId: bc.an.nguoiDungId, nguoiKiemTraId: ` ${bc.an.nguoiDungId} ` }),
+          LUC_TAO_TASK,
+        )
+        expect(maLoi(kq)).toBe('TRUNG_NGUOI')
+        if (!kq.ok) expect(kq.loi.loiTheoO?.nguoiKiemTraId).toBe(THONG_BAO_TASK.trungNguoi)
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([])
+      })
+
+      it('Support của Dự án tạo được Task; PM và Support ở trong Dự án cũng nhận được việc', async () => {
+        const bc = await dungBoiCanh()
+        const support = await taoNguoiCoVai(bc.pm, 'support-tk', 'SUPPORT', 'Sơn Support')
+        await them(bc.pm, bc.duAnId, support)
+        await them(bc.pm, bc.duAnId, bc.pm)
+        const task = giaTri(
+          await kho.taoTask(
+            support,
+            bc.duAnId,
+            giao(bc, { nguoiThucHienId: support.nguoiDungId, nguoiKiemTraId: bc.pm.nguoiDungId }),
+            LUC_TAO_TASK,
+          ),
+        )
+        expect(task.nguoiThucHien).toEqual({ id: support.nguoiDungId, tenHienThi: 'Sơn Support' })
+        expect(task.nguoiKiemTra).toEqual({ id: bc.pm.nguoiDungId, tenHienThi: 'An PM' })
+        expect(task.dauVet.taoBoi).toEqual({ id: support.nguoiDungId, tenHienThi: 'Sơn Support' })
+        expect(task.trangThai).toBe('MOI')
+        expect(task.soLanTraLai).toBe(0)
+      })
+
+      it('PM tạo được Task ở Dự án mình không ở trong và do PM khác tạo', async () => {
+        const bc = await dungBoiCanh()
+        const pmKhac = await taoNguoiCoVai(bc.pm, 'pm-khac-tk', 'PM')
+        expect(maLoi(await kho.taoTask(pmKhac, bc.duAnId, giao(bc), LUC_TAO_TASK))).toBe('THANH_CONG')
+      })
+
+      it.each([
+        { ca: 'Thành viên ở trong Dự án, kể cả khi sẽ là Người thực hiện', vai: 'THANH_VIEN' as const, trong: true },
+        { ca: 'Thành viên không ở trong Dự án', vai: 'THANH_VIEN' as const, trong: false },
+        { ca: 'Support không ở trong Dự án', vai: 'SUPPORT' as const, trong: false },
+      ])('$ca: tạo Task trả KHONG_CO_QUYEN và không tạo gì', async ({ vai, trong }) => {
+        const bc = await dungBoiCanh()
+        const nguoiGoi = await taoNguoiCoVai(bc.pm, 'nguoi-goi-tk', vai)
+        if (trong) await them(bc.pm, bc.duAnId, nguoiGoi)
+        const cacDauVao = [
+          giao(bc, { nguoiThucHienId: trong ? nguoiGoi.nguoiDungId : bc.an.nguoiDungId }),
+          giao(bc),
+          // Dữ liệu sai cũng chỉ là không có quyền: không lộ gì thêm.
+          { tieuDe: '' },
+          giao(bc, { nguoiKiemTraId: bc.an.nguoiDungId }),
+        ]
+        for (const dauVao of cacDauVao) {
+          expect(maLoi(await kho.taoTask(nguoiGoi, bc.duAnId, dauVao as never, LUC_TAO_TASK))).toBe('KHONG_CO_QUYEN')
+        }
+        // Dự án không tồn tại cũng vậy.
+        expect(maLoi(await kho.taoTask(nguoiGoi, 'khong-ton-tai', giao(bc), LUC_TAO_TASK))).toBe('KHONG_CO_QUYEN')
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([])
+      })
+
+      it('PM tạo Task ở Dự án không tồn tại trả KHONG_TIM_THAY', async () => {
+        const bc = await dungBoiCanh()
+        expect(maLoi(await kho.taoTask(bc.pm, 'khong-ton-tai', giao(bc), LUC_TAO_TASK))).toBe('KHONG_TIM_THAY')
+      })
+
+      it('Dự án đã Lưu trữ: tạo Task trả DU_AN_DA_LUU_TRU (kể cả dữ liệu sai) và không tạo gì, Task cũ vẫn xem được', async () => {
+        const bc = await dungBoiCanh()
+        const support = await taoNguoiCoVai(bc.pm, 'support-lt-tk', 'SUPPORT')
+        await them(bc.pm, bc.duAnId, support)
+        const cu = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc), LUC_TAO_TASK))
+        giaTri(await kho.luuTruDuAn(bc.pm, bc.duAnId, LUC_TAO_TASK))
+
+        for (const phien of [bc.pm, support]) {
+          const kq = await kho.taoTask(phien, bc.duAnId, giao(bc, { tieuDe: 'Mới' }), LUC_TAO_TASK)
+          expect(maLoi(kq)).toBe('DU_AN_DA_LUU_TRU')
+          if (!kq.ok) expect(kq.loi.thongBao).toBe(THONG_BAO_DU_AN.daLuuTru)
+          expect(maLoi(await kho.taoTask(phien, bc.duAnId, { tieuDe: '' }, LUC_TAO_TASK))).toBe('DU_AN_DA_LUU_TRU')
+        }
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([cu.id])
+        expect(giaTri(await kho.layTask(bc.an, cu.id))).toEqual(cu)
+      })
+
+      it('mọi người trong dự án xem được danh sách và chi tiết Task kèm dấu vết, kể cả Task không giao cho mình', async () => {
+        const bc = await dungBoiCanh()
+        const chi = await dangKyVaDangNhap('chi-tk', 'Chi')
+        const support = await taoNguoiCoVai(bc.pm, 'support-xem-tk', 'SUPPORT')
+        await them(bc.pm, bc.duAnId, chi)
+        await them(bc.pm, bc.duAnId, support)
+        const mot = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { tieuDe: 'Một' }), LUC_TAO_TASK))
+        const hai = giaTri(
+          await kho.taoTask(support, bc.duAnId, giao(bc, { tieuDe: 'Hai', han: '2026-06-01' }), sau(LUC_TAO_TASK, 1000)),
+        )
+
+        for (const phien of [bc.pm, bc.an, bc.binh, chi, support]) {
+          const danhSach = giaTri(await kho.danhSachTask(phien, bc.duAnId))
+          expect(danhSach).toHaveLength(2)
+          expect(danhSach).toEqual(expect.arrayContaining([mot, hai]))
+          expect(giaTri(await kho.layTask(phien, mot.id))).toEqual(mot)
+          expect(giaTri(await kho.layTask(phien, hai.id)).dauVet).toEqual({
+            taoBoi: { id: support.nguoiDungId, tenHienThi: 'support-xem-tk' },
+            taoLuc: luc(sau(LUC_TAO_TASK, 1000)),
+            suaBoi: null,
+            suaLuc: null,
+          })
+        }
+      })
+
+      it('Dự án chưa có Task nào thì danh sách rỗng', async () => {
+        const bc = await dungBoiCanh()
+        expect(giaTri(await kho.danhSachTask(bc.an, bc.duAnId))).toEqual([])
+      })
+
+      it('người ngoài Dự án nhận không tìm thấy, giống hệt Task hay Dự án không tồn tại', async () => {
+        const bc = await dungBoiCanh()
+        const task = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc), LUC_TAO_TASK))
+        const tvNgoai = await dangKyVaDangNhap('tv-ngoai-tk')
+        const supportNgoai = await taoNguoiCoVai(bc.pm, 'support-ngoai-tk', 'SUPPORT')
+
+        const khongCoTask = await kho.layTask(tvNgoai, 'khong-ton-tai')
+        const khongCoDuAn = await kho.danhSachTask(tvNgoai, 'khong-ton-tai')
+        expect(maLoi(khongCoTask)).toBe('KHONG_TIM_THAY')
+        expect(maLoi(khongCoDuAn)).toBe('KHONG_TIM_THAY')
+        for (const phien of [tvNgoai, supportNgoai]) {
+          expect(await kho.layTask(phien, task.id)).toEqual(khongCoTask)
+          expect(await kho.danhSachTask(phien, bc.duAnId)).toEqual(khongCoDuAn)
+        }
+        // Người trong dự án mở Task không tồn tại cũng nhận không tìm thấy.
+        expect(maLoi(await kho.layTask(bc.an, 'khong-ton-tai'))).toBe('KHONG_TIM_THAY')
+      })
+
+      it('người bị gỡ khỏi Dự án không còn thấy Task của Dự án đó', async () => {
+        const bc = await dungBoiCanh()
+        const chi = await dangKyVaDangNhap('chi-go-tk')
+        await them(bc.pm, bc.duAnId, chi)
+        const task = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc), LUC_TAO_TASK))
+        expect(maLoi(await kho.layTask(chi, task.id))).toBe('THANH_CONG')
+        giaTri(await kho.goNguoiKhoiDuAn(bc.pm, bc.duAnId, chi.nguoiDungId))
+        expect(maLoi(await kho.layTask(chi, task.id))).toBe('KHONG_TIM_THAY')
+        expect(maLoi(await kho.danhSachTask(chi, bc.duAnId))).toBe('KHONG_TIM_THAY')
+      })
+
+      it('Task của Dự án này không xuất hiện trong Dự án khác', async () => {
+        const bc = await dungBoiCanh()
+        const duAnKhac = giaTri(await kho.taoDuAn(bc.pm, { ten: 'Dự án khác' }, LUC_TAO_DU_AN))
+        await them(bc.pm, duAnKhac.id, bc.an)
+        await them(bc.pm, duAnKhac.id, bc.binh)
+        const oDay = giaTri(await kho.taoTask(bc.pm, bc.duAnId, giao(bc, { tieuDe: 'Ở đây' }), LUC_TAO_TASK))
+        const oKia = giaTri(await kho.taoTask(bc.pm, duAnKhac.id, giao(bc, { tieuDe: 'Ở kia' }), LUC_TAO_TASK))
+        expect(oKia.duAnId).toBe(duAnKhac.id)
+
+        expect(await idCacTask(bc.pm, bc.duAnId)).toEqual([oDay.id])
+        expect(await idCacTask(bc.pm, duAnKhac.id)).toEqual([oKia.id])
+        expect(await idCacTask(bc.an, duAnKhac.id)).toEqual([oKia.id])
+
+        // Người chỉ ở Dự án khác không thấy Task ở đây.
+        const chiOKia = await dangKyVaDangNhap('chi-o-kia-tk')
+        await them(bc.pm, duAnKhac.id, chiOKia)
+        expect(maLoi(await kho.layTask(chiOKia, oDay.id))).toBe('KHONG_TIM_THAY')
+        expect(await idCacTask(chiOKia, duAnKhac.id)).toEqual([oKia.id])
+      })
+    })
+
+    describe.skipIf(coTask)('Task — bản cài này', () => {
+      it.skip('CHƯA KIỂM: bản cài chưa có các lệnh Task (coTask: false)', () => {})
+    })
   })
 }
 
@@ -1139,10 +1492,16 @@ export function chayBangCaQuyen(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const coTask = tuyChon.coTask ?? true
   const LUC = new Date('2026-05-01T09:00:00+07:00')
+  const cacCa = BANG_CA_QUYEN.filter((ca) => coTask || !laHanhDongTask(ca.hanhDong))
 
   describe(`Bảng ca dùng chung cho quyền — ${tenBanCai}`, () => {
-    it.each([...BANG_CA_QUYEN])(
+    if (!coTask) {
+      it.skip('CHƯA KIỂM: các dòng Task của bảng ca, vì bản cài chưa có các lệnh Task (coTask: false)', () => {})
+    }
+
+    it.each([...cacCa])(
       '$vai, trong Dự án: $trongDuAn, Dự án $trangThaiDuAn, $hanhDong → $ketQua',
       async (ca: CaQuyen) => {
         const banCai = await taoBanCai()
@@ -1177,10 +1536,34 @@ export function chayBangCaQuyen(
         const emailMoiDangKy = await dangKyDaXacNhan('nguoi-moi')
         const nguoiMoi = await dangNhap(emailMoiDangKy)
 
+        // Hành động về Task: thêm người kiểm và tạo sẵn một Task, trước khi Lưu trữ.
+        const coTaskSan = laHanhDongTask(ca.hanhDong)
+        let taskSanId = ''
+        let nguoiKiemId = ''
+        if (coTaskSan) {
+          const emailKiem = await dangKyDaXacNhan('nguoi-kiem')
+          nguoiKiemId = (await dangNhap(emailKiem)).nguoiDungId
+          giaTri(await kho.themNguoiVaoDuAn(pmChu, duAn.id, { email: emailKiem }))
+          const taskSan = giaTri(
+            await kho.taoTask(
+              pmChu,
+              duAn.id,
+              { tieuDe: 'Task có sẵn', nguoiThucHienId: nguoiCu.nguoiDungId, nguoiKiemTraId: nguoiKiemId },
+              LUC,
+            ),
+          )
+          taskSanId = taskSan.id
+        }
+
         if (ca.trangThaiDuAn === 'LUU_TRU') giaTri(await kho.luuTruDuAn(pmChu, duAn.id, LUC))
 
         async function anhChup() {
           return {
+            task: coTaskSan
+              ? giaTri(await kho.danhSachTask(pmChu, duAn.id))
+                  .map((task) => task.id)
+                  .sort()
+              : [],
             duAn: giaTri(await kho.layDuAn(pmChu, duAn.id)),
             nguoi: giaTri(await kho.danhSachNguoiTrongDuAn(pmChu, duAn.id))
               .map((nguoi) => nguoi.id)
@@ -1239,6 +1622,28 @@ export function chayBangCaQuyen(
             break
           case 'GO_NGUOI':
             thucTe = ketQuaLenh(await kho.goNguoiKhoiDuAn(nguoiGoi, duAn.id, nguoiCu.nguoiDungId))
+            break
+          case 'TAO_TASK':
+            thucTe = ketQuaLenh(
+              await kho.taoTask(
+                nguoiGoi,
+                duAn.id,
+                { tieuDe: 'Task mới', nguoiThucHienId: nguoiCu.nguoiDungId, nguoiKiemTraId: nguoiKiemId },
+                LUC,
+              ),
+            )
+            break
+          case 'DANH_SACH_TASK': {
+            const danhSach = await kho.danhSachTask(nguoiGoi, duAn.id)
+            thucTe = !danhSach.ok
+              ? danhSach.loi.ma
+              : danhSach.giaTri.some((task) => task.id === taskSanId)
+                ? 'THAY'
+                : 'KHONG_THAY'
+            break
+          }
+          case 'XEM_TASK':
+            thucTe = ketQuaLenh(await kho.layTask(nguoiGoi, taskSanId))
             break
           default:
             throw new Error(`Hành động chưa có cách chạy: ${String(ca.hanhDong)}`)

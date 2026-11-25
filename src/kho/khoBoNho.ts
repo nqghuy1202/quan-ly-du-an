@@ -6,7 +6,26 @@
 // tuỳ chọn `pmBanDau` (tạo sẵn một PM khi dựng Kho) hoặc `chuDuAn.datVaiPM` (đặt PM cho một tài
 // khoản có sẵn). Cả hai chỉ dành cho dev và test, không phải đường dùng thật của ứng dụng.
 import { THONG_BAO_MAC_DINH, thanhCong, thatBai, type KetQua } from './ketQua'
-import type { DuAn, DuAnTomTat, HoSo, KhoDuLieu, NguoiDauVet, NguoiDungTomTat, Phien, ThongBaoChung } from './khoDuLieu'
+import type {
+  DuAn,
+  DuAnTomTat,
+  HoSo,
+  KhoDuLieu,
+  NguoiDauVet,
+  NguoiDungTomTat,
+  Phien,
+  Task,
+  ThongBaoChung,
+} from './khoDuLieu'
+import {
+  TRANG_THAI_TASK_BAN_DAU,
+  duocXemTask,
+  kiemNguoiTask,
+  kiemTaoTask,
+  kiemTraTask,
+  type TaoTaskDauVao,
+  type TrangThaiTask,
+} from '../luat/task'
 import {
   dauVetMoi,
   dauVetSauSua,
@@ -130,6 +149,20 @@ interface BanGhiDuAn {
   dauVet: DauVet<string>
 }
 
+/** Task như kho lưu: người ghi bằng id, tên hiển thị tra lúc đọc. */
+interface BanGhiTask {
+  id: string
+  duAnId: string
+  tieuDe: string
+  moTa: string
+  han: string | null
+  nguoiThucHienId: string
+  nguoiKiemTraId: string
+  trangThai: TrangThaiTask
+  soLanTraLai: number
+  dauVet: DauVet<string>
+}
+
 export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   const thoiHanMaDatLaiMs = tuyChon.thoiHanMaDatLaiMs ?? THOI_HAN_MA_DAT_LAI_MAC_DINH_MS
   const taiKhoanTheoId = new Map<string, TaiKhoan>()
@@ -139,10 +172,12 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   const duAnTheoId = new Map<string, BanGhiDuAn>()
   /** Người trong dự án: duAnId -> tập id tài khoản. */
   const nguoiTheoDuAn = new Map<string, Set<string>>()
+  const taskTheoId = new Map<string, BanGhiTask>()
   let demNguoiDung = 0
   let demPhien = 0
   let demMa = 0
   let demDuAn = 0
+  let demTask = 0
 
   const banSao = (hoSo: HoSo): HoSo => ({ ...hoSo })
   const tomTat = ({ id, email, tenHienThi, vai }: HoSo): NguoiDungTomTat => ({ id, email, tenHienThi, vai })
@@ -159,6 +194,28 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       ten: banGhi.ten,
       moTa: banGhi.moTa,
       trangThai: banGhi.trangThai,
+      dauVet: {
+        taoBoi: nguoiDauVet(taoBoi),
+        taoLuc: new Date(taoLuc.getTime()),
+        suaBoi: suaBoi === null ? null : nguoiDauVet(suaBoi),
+        suaLuc: suaLuc === null ? null : new Date(suaLuc.getTime()),
+      },
+    }
+  }
+
+  /** Bản sao Task trả ra ngoài, như `docDuAn`. */
+  function docTask(banGhi: BanGhiTask): Task {
+    const { taoBoi, taoLuc, suaBoi, suaLuc } = banGhi.dauVet
+    return {
+      id: banGhi.id,
+      duAnId: banGhi.duAnId,
+      tieuDe: banGhi.tieuDe,
+      moTa: banGhi.moTa,
+      han: banGhi.han,
+      nguoiThucHien: nguoiDauVet(banGhi.nguoiThucHienId),
+      nguoiKiemTra: nguoiDauVet(banGhi.nguoiKiemTraId),
+      trangThai: banGhi.trangThai,
+      soLanTraLai: banGhi.soLanTraLai,
       dauVet: {
         taoBoi: nguoiDauVet(taoBoi),
         taoLuc: new Date(taoLuc.getTime()),
@@ -528,6 +585,52 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       // Chỉ bỏ cặp (Dự án, tài khoản); tài khoản và hồ sơ giữ nguyên.
       tap.delete(nguoiDungId)
       return thanhCong(null)
+    },
+
+    async taoTask(phien: Phien | null, duAnId: string, dauVao: TaoTaskDauVao, bayGio: Date) {
+      const xt = quanLyDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn, nguoiGoi } = xt.giaTri
+      const lyDo = kiemTaoTask({ ...nguoiGoi, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraTask.tao(dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const tap = nguoiTrong(duAnId)
+      const { nguoiThucHienId, nguoiKiemTraId } = kt.giaTri
+      const loiNguoi = kiemNguoiTask({ nguoiThucHienId, nguoiKiemTraId, laNguoiTrongDuAn: (id) => tap.has(id) })
+      if (loiNguoi) return thatBai(loiNguoi.ma, undefined, loiNguoi.loiTheoO)
+      // kiemNguoiTask đã bảo đảm cả hai id có mặt; kiểm lại để kiểu được thu hẹp.
+      if (nguoiThucHienId === null || nguoiKiemTraId === null) return thatBai('THIEU_NGUOI')
+      demTask += 1
+      const banGhi: BanGhiTask = {
+        id: `task-${demTask}`,
+        duAnId,
+        tieuDe: kt.giaTri.tieuDe,
+        moTa: kt.giaTri.moTa,
+        han: kt.giaTri.han,
+        nguoiThucHienId,
+        nguoiKiemTraId,
+        trangThai: TRANG_THAI_TASK_BAN_DAU,
+        soLanTraLai: 0,
+        dauVet: dauVetMoi(taiKhoan.hoSo.id, bayGio),
+      }
+      taskTheoId.set(banGhi.id, banGhi)
+      return thanhCong(docTask(banGhi))
+    },
+
+    async danhSachTask(phien: Phien | null, duAnId: string) {
+      const xt = xemDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      return thanhCong([...taskTheoId.values()].filter((task) => task.duAnId === duAnId).map(docTask))
+    },
+
+    async layTask(phien: Phien | null, taskId: string) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      const task = taskTheoId.get(taskId)
+      // Không tồn tại và không thấy được trả cùng một lỗi: không lộ rằng Task có tồn tại.
+      if (!task || !duocXemTask(nhinTuDuAn(xt.giaTri, task.duAnId))) return thatBai('KHONG_TIM_THAY')
+      return thanhCong(docTask(task))
     },
   }
 }

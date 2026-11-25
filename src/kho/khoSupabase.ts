@@ -13,6 +13,8 @@
 // - Supabase Auth không phân biệt mã đặt lại sai, đã dùng hay hết hạn: cả ba trả `MA_KHONG_HOP_LE`.
 // - Đăng ký lại một email đã đăng ký nhưng chưa xác nhận: Supabase gửi lại thư thay vì báo trùng.
 //
+// CHƯA CÀI: các lệnh Task (taoTask, danhSachTask, layTask) chỉ trả "chưa hỗ trợ"; ticket 10 cài thật.
+//
 // CỔNG CHƯA KIỂM: các lệnh cần mạng chỉ chạy được với Supabase thật (lệnh riêng, xem
 // src/kho/khoSupabase.test.ts). Cổng chỉ kiểm các nhánh không gọi mạng.
 import {
@@ -118,7 +120,17 @@ const MA_TU_CSDL: readonly MaLoi[] = [
   'DU_AN_DANG_HOAT_DONG',
   'CHUA_DANG_KY',
   'DA_TRONG_DU_AN',
+  'THIEU_NGUOI',
+  'NGUOI_NGOAI_DU_AN',
+  'TRUNG_NGUOI',
 ]
+
+/**
+ * Lệnh Task chưa có trên bản Supabase (bảng, phân quyền từng dòng và hàm của Task làm ở ticket 10).
+ * Bộ test hợp đồng và bảng ca phần Task bị bỏ qua cho bản này (`coTask: false`, hopDongSupabase.ts).
+ */
+export const THONG_BAO_TASK_CHUA_CO_TREN_SUPABASE =
+  'Máy chủ chưa hỗ trợ Task. Chức năng này sẽ có khi cơ sở dữ liệu được cập nhật.'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -351,6 +363,13 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     const { error } = await nguoiGoi.db.rpc(ham, { p_du_an_id: duAnId })
     if (error) return loiTuCsdl(error)
     return docLaiDuAn(nguoiGoi.db, duAnId)
+  }
+
+  /** Lệnh Task trên bản này: chưa đăng nhập thì `CHUA_DANG_NHAP`, còn lại báo chưa hỗ trợ. Không gọi mạng. */
+  function taskChuaCo(phien: Phien | null): KetQua<never> {
+    const mo = phien ? phienDangMo.get(phien.maPhien) : undefined
+    if (!phien || !mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
+    return thatBai('LOI_HE_THONG', THONG_BAO_TASK_CHUA_CO_TREN_SUPABASE)
   }
 
   return {
@@ -684,6 +703,19 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       if (error) return loiTuCsdl(error)
       if (!data || data.length === 0) return thatBai('KHONG_TIM_THAY')
       return thanhCong(null)
+    },
+
+    // CHƯA CÀI (ticket 10): Task trên Supabase. Người chưa đăng nhập vẫn nhận CHUA_DANG_NHAP như mọi lệnh.
+    async taoTask(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
+    async danhSachTask(phien: Phien | null) {
+      return taskChuaCo(phien)
+    },
+
+    async layTask(phien: Phien | null) {
+      return taskChuaCo(phien)
     },
   }
 }

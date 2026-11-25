@@ -102,6 +102,9 @@ describe('chọn bản cài Kho theo cấu hình môi trường', () => {
         await kho.danhSachNguoiDung(phien),
         await kho.taoDuAn(phien, { ten: 'X' }, LUC),
         await kho.themNguoiVaoDuAn(phien, 'du-an', { email: 'ai@vi-du.vn' }),
+        await kho.taoTask(phien, 'du-an', { tieuDe: 'X', nguoiThucHienId: 'a', nguoiKiemTraId: 'b' }, LUC),
+        await kho.danhSachTask(phien, 'du-an'),
+        await kho.layTask(phien, 'task'),
         await kho.dangXuat(phien),
       ]) {
         expect(kq.ok || kq.loi.ma).toBe('CHUA_DANG_NHAP')

@@ -12,6 +12,10 @@ import type { VaiHeThong } from '../luat/taiKhoan'
  * thêm sẵn một người cũ vào đó; người gọi có vai của dòng, được PM chủ thêm vào Dự án nếu dòng
  * ghi "trong Dự án"; Dự án được Lưu trữ nếu dòng ghi Lưu trữ; một tài khoản Thành viên "người
  * mới" đã đăng ký nhưng chưa ở trong Dự án.
+ *
+ * Riêng hành động về Task (`laHanhDongTask`): PM chủ thêm một Thành viên "người kiểm" vào Dự án và
+ * tạo sẵn một Task (Người thực hiện là người cũ, Người kiểm tra là người kiểm) trước khi Lưu trữ.
+ * Task mới mà người gọi tạo cũng giao cho người cũ và người kiểm.
  */
 export const MO_TA_HANH_DONG = {
   // Ticket 03: vai hệ thống.
@@ -30,11 +34,22 @@ export const MO_TA_HANH_DONG = {
   XEM_NGUOI_TRONG_DU_AN: 'Xem người trong dự án (danhSachNguoiTrongDuAn).',
   THEM_NGUOI: 'Thêm người mới vào Dự án bằng email (themNguoiVaoDuAn).',
   GO_NGUOI: 'Gỡ người cũ khỏi Dự án (goNguoiKhoiDuAn).',
+  // Ticket 07: Task.
+  TAO_TASK: 'Tạo Task giao cho người cũ, người kiểm duyệt (taoTask).',
+  DANH_SACH_TASK: 'Task có sẵn có hiện trong danh sách Task của Dự án không (danhSachTask).',
+  XEM_TASK: 'Mở thẳng Task có sẵn (layTask).',
 } as const
 
 export type HanhDong = keyof typeof MO_TA_HANH_DONG
 
 export const CAC_HANH_DONG = Object.keys(MO_TA_HANH_DONG) as HanhDong[]
+
+const HANH_DONG_TASK: readonly HanhDong[] = ['TAO_TASK', 'DANH_SACH_TASK', 'XEM_TASK']
+
+/** Hành động về Task: cần dựng thêm người kiểm và một Task có sẵn. */
+export function laHanhDongTask(hanhDong: HanhDong): boolean {
+  return HANH_DONG_TASK.includes(hanhDong)
+}
 
 /**
  * Kết quả mong đợi: `DUOC` (lệnh thành công), một mã lỗi của Kho, hoặc với hành động dạng danh
@@ -196,6 +211,47 @@ const DONG: readonly Dong[] = [
   ['SUPPORT',     false,       LT,    'XEM_NGUOI_TRONG_DU_AN',    'KHONG_TIM_THAY'],
   ['THANH_VIEN',  true,        LT,    'XEM_NGUOI_TRONG_DU_AN',    'DUOC'],
   ['THANH_VIEN',  false,       LT,    'XEM_NGUOI_TRONG_DU_AN',    'KHONG_TIM_THAY'],
+
+  // --- Ticket 07: tạo Task như quyền quản lý Dự án (PM ở mọi Dự án, Support của Dự án). Thành viên
+  // không tạo được, kể cả khi ở trong Dự án. Dự án Lưu trữ: DU_AN_DA_LUU_TRU sau khi kiểm quyền.
+  ['PM',          true,        HD,    'TAO_TASK',                 'DUOC'],
+  ['PM',          false,       HD,    'TAO_TASK',                 'DUOC'],
+  ['SUPPORT',     true,        HD,    'TAO_TASK',                 'DUOC'],
+  ['SUPPORT',     false,       HD,    'TAO_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'TAO_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'TAO_TASK',                 'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'TAO_TASK',                 'DU_AN_DA_LUU_TRU'],
+  ['PM',          false,       LT,    'TAO_TASK',                 'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     true,        LT,    'TAO_TASK',                 'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     false,       LT,    'TAO_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'TAO_TASK',                 'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'TAO_TASK',                 'KHONG_CO_QUYEN'],
+  // Xem Task: ai thấy Dự án thì thấy mọi Task của nó, kể cả khi Dự án đã Lưu trữ; người ngoài nhận
+  // "không tìm thấy".
+  ['PM',          true,        HD,    'DANH_SACH_TASK',           'THAY'],
+  ['PM',          false,       HD,    'DANH_SACH_TASK',           'THAY'],
+  ['SUPPORT',     true,        HD,    'DANH_SACH_TASK',           'THAY'],
+  ['SUPPORT',     false,       HD,    'DANH_SACH_TASK',           'KHONG_TIM_THAY'],
+  ['THANH_VIEN',  true,        HD,    'DANH_SACH_TASK',           'THAY'],
+  ['THANH_VIEN',  false,       HD,    'DANH_SACH_TASK',           'KHONG_TIM_THAY'],
+  ['PM',          true,        LT,    'DANH_SACH_TASK',           'THAY'],
+  ['PM',          false,       LT,    'DANH_SACH_TASK',           'THAY'],
+  ['SUPPORT',     true,        LT,    'DANH_SACH_TASK',           'THAY'],
+  ['SUPPORT',     false,       LT,    'DANH_SACH_TASK',           'KHONG_TIM_THAY'],
+  ['THANH_VIEN',  true,        LT,    'DANH_SACH_TASK',           'THAY'],
+  ['THANH_VIEN',  false,       LT,    'DANH_SACH_TASK',           'KHONG_TIM_THAY'],
+  ['PM',          true,        HD,    'XEM_TASK',                 'DUOC'],
+  ['PM',          false,       HD,    'XEM_TASK',                 'DUOC'],
+  ['SUPPORT',     true,        HD,    'XEM_TASK',                 'DUOC'],
+  ['SUPPORT',     false,       HD,    'XEM_TASK',                 'KHONG_TIM_THAY'],
+  ['THANH_VIEN',  true,        HD,    'XEM_TASK',                 'DUOC'],
+  ['THANH_VIEN',  false,       HD,    'XEM_TASK',                 'KHONG_TIM_THAY'],
+  ['PM',          true,        LT,    'XEM_TASK',                 'DUOC'],
+  ['PM',          false,       LT,    'XEM_TASK',                 'DUOC'],
+  ['SUPPORT',     true,        LT,    'XEM_TASK',                 'DUOC'],
+  ['SUPPORT',     false,       LT,    'XEM_TASK',                 'KHONG_TIM_THAY'],
+  ['THANH_VIEN',  true,        LT,    'XEM_TASK',                 'DUOC'],
+  ['THANH_VIEN',  false,       LT,    'XEM_TASK',                 'KHONG_TIM_THAY'],
 ]
 
 /** Bảng ca dùng chung cho quyền: mỗi phần tử là một dòng. */

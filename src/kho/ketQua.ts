@@ -16,6 +16,12 @@ export type MaLoi =
   | 'DU_AN_DANG_HOAT_DONG'
   | 'CHUA_DANG_KY'
   | 'DA_TRONG_DU_AN'
+  /** Task thiếu Người thực hiện hoặc Người kiểm tra. */
+  | 'THIEU_NGUOI'
+  /** Người được chọn cho Task không ở trong Dự án (hoặc không tồn tại). */
+  | 'NGUOI_NGOAI_DU_AN'
+  /** Cùng một người vừa là Người thực hiện vừa là Người kiểm tra. */
+  | 'TRUNG_NGUOI'
   /** Không gọi được máy chủ (mất mạng, máy chủ lỗi, quá nhiều yêu cầu); chỉ bản cài có I/O trả mã này. */
   | 'LOI_HE_THONG'
 
@@ -57,5 +63,9 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   CHUA_DANG_KY:
     'Email này chưa đăng ký. Hãy nhờ người đó tự đăng ký tài khoản trước rồi thêm lại (hệ thống không gửi thư mời).',
   DA_TRONG_DU_AN: 'Người này đã ở trong Dự án.',
+  THIEU_NGUOI: 'Task phải có đủ một Người thực hiện và một Người kiểm tra.',
+  NGUOI_NGOAI_DU_AN:
+    'Người được chọn không ở trong Dự án. Chỉ chọn được người đang ở trong Dự án làm Người thực hiện hay Người kiểm tra.',
+  TRUNG_NGUOI: 'Người kiểm tra phải khác Người thực hiện: không ai tự duyệt việc của mình.',
   LOI_HE_THONG: 'Không kết nối được máy chủ hoặc máy chủ đang lỗi. Hãy thử lại sau ít phút.',
 }

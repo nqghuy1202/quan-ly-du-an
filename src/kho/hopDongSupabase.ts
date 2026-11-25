@@ -175,6 +175,9 @@ export function taoBoBanCaiSupabase(cauHinh: CauHinhTestSupabase): BoBanCaiSupab
       // Giờ do máy chủ đặt; Supabase Auth không phân biệt mã sai, đã dùng hay hết hạn.
       dongHoCuaKho: true,
       gopLoiMaDatLai: true,
+      // Bản Supabase chưa có Task (bảng, phân quyền từng dòng, hàm): ticket 10. Các ca Task bị bỏ
+      // qua và báo "CHƯA KIỂM" cho tới khi ticket 10 cài xong và bỏ dòng này.
+      coTask: false,
     },
   }
 }
