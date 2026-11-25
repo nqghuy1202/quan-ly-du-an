@@ -15,6 +15,12 @@ import { useKho } from './khoContext'
 
 type CheDo = 'dangNhap' | 'dangKy'
 
+/**
+ * Bề rộng tối đa của biểu mẫu, tính theo cỡ chữ gốc (`rem`), không dùng `px` rời:
+ * co giãn theo cỡ chữ người dùng chọn. Astryx không có token bề rộng cho khung biểu mẫu.
+ */
+const DO_RONG_BIEU_MAU = '30rem'
+
 interface Props {
   onDaDangNhap: (phien: Phien) => void
 }
@@ -24,7 +30,7 @@ export function ManXacThuc({ onDaDangNhap }: Props) {
   const [cheDo, setCheDo] = useState<CheDo>('dangNhap')
   return (
     <Center padding={6}>
-      <Card width="100%" maxWidth={480}>
+      <Card width="100%" maxWidth={DO_RONG_BIEU_MAU}>
         {cheDo === 'dangNhap' ? (
           <FormDangNhap onDaDangNhap={onDaDangNhap} onChuyen={() => setCheDo('dangKy')} />
         ) : (
