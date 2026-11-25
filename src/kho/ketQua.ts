@@ -28,6 +28,12 @@ export type MaLoi =
   | 'REPO_KHONG_HOP_LE'
   /** Repo đã gắn vào Dự án (không phân biệt hoa thường). */
   | 'REPO_DA_GAN'
+  /** Đường dẫn dán vào Task không phải link issue hoặc PR của github.com. */
+  | 'LINK_KHONG_HOP_LE'
+  /** Link thuộc repo chưa gắn vào Dự án của Task. */
+  | 'LINK_REPO_CHUA_GAN'
+  /** Link đã có trên Task. */
+  | 'LINK_TRUNG'
 
 export interface LoiKho {
   ma: MaLoi
@@ -74,4 +80,9 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   LOI_HE_THONG: 'Không kết nối được máy chủ hoặc máy chủ đang lỗi. Hãy thử lại sau ít phút.',
   REPO_KHONG_HOP_LE: 'Tên repo phải có dạng chu-so-huu/ten-repo, ví dụ vercel/next.js.',
   REPO_DA_GAN: 'Repo này đã được gắn vào Dự án.',
+  LINK_KHONG_HOP_LE:
+    'Đường dẫn phải là link issue hoặc PR của github.com, ví dụ https://github.com/chu-so-huu/ten-repo/issues/12.',
+  LINK_REPO_CHUA_GAN:
+    'Link này thuộc repo chưa gắn vào Dự án. Hãy nhờ PM hoặc Support gắn repo trước, hoặc dán link của repo đã gắn.',
+  LINK_TRUNG: 'Link này đã có trên Task.',
 }

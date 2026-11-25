@@ -21,7 +21,7 @@ import type {
   TrangThaiDuAn,
 } from '../luat/duAn'
 import type { TaoTaskDauVao, TrangThaiTask } from '../luat/task'
-import type { GanRepoDauVao } from '../luat/github'
+import type { GanRepoDauVao, LienKetGitHub, ThemLienKetDauVao } from '../luat/github'
 
 export interface HoSo {
   id: string
@@ -94,6 +94,11 @@ export interface Task {
 /** Một repo GitHub gắn vào Dự án: tên dạng `chu-so-huu/ten-repo`, giữ chữ hoa chữ thường như lúc gắn. */
 export interface RepoDuAn {
   tenRepo: string
+}
+
+/** Một link issue hoặc PR trên Task: repo giữ chữ hoa chữ thường như lúc dán; `duongDan` là đường dẫn chuẩn. */
+export interface LienKetTask extends LienKetGitHub {
+  duongDan: string
 }
 
 /** Kết quả của các lệnh không được lộ email có tài khoản hay không: luôn cùng một thông báo. */
@@ -239,4 +244,29 @@ export interface KhoDuLieu {
    * này, kể cả Dự án đã Lưu trữ. Lỗi: `KHONG_TIM_THAY` (như `layDuAn`).
    */
   danhSachRepoCuaDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<RepoDuAn[]>>
+  /**
+   * Dán link issue hoặc PR của github.com vào Task (`dauVao.duongDan`). Mọi người trong dự án (và
+   * PM) thêm được, kể cả Task đã ở trạng thái cuối; cập nhật người và ngày chỉnh sửa gần nhất của
+   * Task (`bayGio`). Chỉ ghi link, không gọi GitHub. Lỗi (không đổi gì), theo thứ tự:
+   * `KHONG_TIM_THAY` (Task không tồn tại hoặc người gọi không thấy Dự án), `DU_AN_DA_LUU_TRU`,
+   * `LINK_KHONG_HOP_LE` (kèm lỗi ở ô `duongDan`), `LINK_REPO_CHUA_GAN`, `LINK_TRUNG` (so repo không
+   * phân biệt hoa thường).
+   */
+  themLienKetVaoTask(
+    phien: Phien | null,
+    taskId: string,
+    dauVao: ThemLienKetDauVao,
+    bayGio: Date,
+  ): Promise<KetQua<LienKetTask>>
+  /**
+   * Gỡ một link khỏi Task (so repo không phân biệt hoa thường); link khác giữ nguyên. Cập nhật
+   * người và ngày chỉnh sửa gần nhất của Task. Lỗi (không đổi gì): `KHONG_TIM_THAY` (như
+   * `themLienKetVaoTask`, hoặc link không có trên Task), `DU_AN_DA_LUU_TRU`.
+   */
+  goLienKetKhoiTask(phien: Phien | null, taskId: string, lienKet: LienKetGitHub, bayGio: Date): Promise<KetQua<null>>
+  /**
+   * Các link của Task, theo thứ tự thêm. Ai thấy Dự án của Task thì thấy danh sách này, kể cả Dự
+   * án đã Lưu trữ. Lỗi: `KHONG_TIM_THAY` (như `layTask`).
+   */
+  danhSachLienKetCuaTask(phien: Phien | null, taskId: string): Promise<KetQua<LienKetTask[]>>
 }

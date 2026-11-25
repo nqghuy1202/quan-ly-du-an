@@ -12,6 +12,7 @@ import type { Phien, Task } from '../kho/khoDuLieu'
 import { dinhDangNgayGio } from '../luat/duAn'
 import { TEN_TRANG_THAI_TASK, dinhDangNgay } from '../luat/task'
 import { useKho } from './khoContext'
+import { PhanLienKetTask } from './PhanLienKetTask'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 
 interface Props {
@@ -21,12 +22,15 @@ interface Props {
   tenDuAn: string
   /** Thông báo thành công mang sang từ màn trước (vd. vừa tạo xong). */
   thongBaoBanDau: string | null
+  /** Lý do không thêm, gỡ được link GitHub (Dự án đã Lưu trữ); null nếu được. */
+  lyDoKhongGhiLienKet: string | null
+  dongHo: () => Date
   onQuayLai: () => void
   onHetPhien: () => void
 }
 
 /** Chi tiết một Task: người được giao, hạn, trạng thái, số lần bị Trả lại và dấu vết. Chỉ xem. */
-export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayLai, onHetPhien }: Props) {
+export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, lyDoKhongGhiLienKet, dongHo, onQuayLai, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task> } | null>(null)
@@ -43,6 +47,12 @@ export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayL
       huy = true
     }
   }, [kho, phien, taskId, lanTai, onHetPhien])
+
+  /** Link vừa đổi nên dấu vết chỉnh sửa của Task đã đổi: đọc lại Task mà không về màn đang tải. */
+  async function docLaiTask() {
+    const kq = await kho.layTask(phien, taskId)
+    if (kq.ok) setDaTai({ lan: lanTai, kq })
+  }
 
   const nutVe = (
     <HStack gap={2}>
@@ -99,6 +109,15 @@ export function ManChiTietTask({ phien, taskId, tenDuAn, thongBaoBanDau, onQuayL
         <Heading level={3}>Mô tả</Heading>
         <Text>{task.moTa === '' ? 'Không có mô tả.' : task.moTa}</Text>
       </VStack>
+
+      <PhanLienKetTask
+        phien={phien}
+        taskId={taskId}
+        lyDoKhongGhi={lyDoKhongGhiLienKet}
+        dongHo={dongHo}
+        onDaDoi={docLaiTask}
+        onHetPhien={onHetPhien}
+      />
 
       <VStack gap={1} role="group" aria-label="Dấu vết">
         <Heading level={3}>Dấu vết</Heading>

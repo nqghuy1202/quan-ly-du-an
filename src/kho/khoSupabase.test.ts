@@ -22,6 +22,10 @@ switch (ketQua.trangThai) {
     describe('Repo GitHub của Dự án — bản Supabase', () => {
       it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh repo GitHub (ticket 17 cài và chạy chayHopDongRepo)', () => {})
     })
+    // Link issue hoặc PR trên Task chưa có trên bản Supabase (ticket 17).
+    describe('Link issue hoặc PR trên Task — bản Supabase', () => {
+      it.skip('CHƯA KIỂM: bản Supabase chưa có lệnh link GitHub của Task (ticket 17 cài và chạy chayHopDongLienKet)', () => {})
+    })
     break
   }
   case 'THIEU_CAU_HINH': {
