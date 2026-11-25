@@ -17,10 +17,11 @@ import { useKho } from './khoContext'
 import { ManDuAn } from './ManDuAn'
 import { ManHoSo } from './ManHoSo'
 import { ManNguoiDung } from './ManNguoiDung'
+import { ManTongQuan } from './ManTongQuan'
 import { TrangDuAnCuaToi } from './TrangDuAnCuaToi'
 import { TrangViecCaNhan } from './TrangViecCaNhan'
 
-type Trang = 'duAn' | 'viecCuaToi' | 'choToiDuyet' | 'tatCaDuAn' | 'hoSo' | 'nguoiDung'
+type Trang = 'tongQuan' | 'duAn' | 'viecCuaToi' | 'choToiDuyet' | 'tatCaDuAn' | 'hoSo' | 'nguoiDung'
 
 interface Props {
   phien: Phien
@@ -98,7 +99,9 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   }
 
   let noiDung: ReactNode
-  if (trangHien === 'duAn') {
+  if (trangHien === 'tongQuan') {
+    noiDung = <ManTongQuan phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
+  } else if (trangHien === 'duAn') {
     noiDung = <TrangDuAnCuaToi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'viecCuaToi' || trangHien === 'choToiDuyet') {
     noiDung = <TrangViecCaNhan key={trangHien} loai={trangHien} phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
@@ -126,6 +129,12 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
               </HStack>
             </HStack>
             <HStack gap={2} wrap="wrap" role="navigation" aria-label="Điều hướng chính">
+              <Button
+                label="Tổng quan"
+                variant={trangHien === 'tongQuan' ? 'secondary' : 'ghost'}
+                aria-current={trangHien === 'tongQuan' ? 'page' : undefined}
+                onClick={() => setTrang('tongQuan')}
+              />
               <Button
                 label="Dự án của tôi"
                 variant={trangHien === 'duAn' ? 'secondary' : 'ghost'}

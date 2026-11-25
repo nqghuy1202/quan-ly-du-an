@@ -14,6 +14,7 @@ import type { VaiHeThong } from '../luat/taiKhoan'
 import { BangKanbanTask } from './BangKanbanTask'
 import type { QuyenChuyenKanban } from './chuyenTheKanban'
 import { useKho } from './khoContext'
+import { PhanTaskTreHan } from './PhanTaskTreHan'
 
 interface Props {
   phien: Phien
@@ -22,6 +23,7 @@ interface Props {
   trangThaiDuAn: TrangThaiDuAn
   /** Người gọi có nằm trong danh sách người trong dự án không; null là chưa biết (đang tải hoặc lỗi). */
   laNguoiTrongDuAn: boolean | null
+  /** Đồng hồ: ngày hôm nay (giờ Việt Nam) để tìm Task Trễ hạn. */
   dongHo: () => Date
   /** Lý do không tạo được Task (cùng luật với Kho); null nếu được. */
   lyDoKhongTao: string | null
@@ -97,6 +99,7 @@ export function PhanTaskCuaDuAn({ phien, vai, duAnId, trangThaiDuAn, laNguoiTron
         {laNguoiTrongDuAn === null && (
           <Text type="supporting">Chưa kiểm xong quyền đổi trạng thái của bạn nên chưa kéo thả được.</Text>
         )}
+        <PhanTaskTreHan tasks={tai.giaTri} bayGio={dongHo()} onMo={onMo} />
         <BangKanbanTask tasks={tai.giaTri} onMo={onMo} quyen={quyen} onDaDoi={thayTask} onHetPhien={onHetPhien} />
       </VStack>
     )
