@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
 import { Center } from '@astryxdesign/core/Center'
-import { Heading } from '@astryxdesign/core/Heading'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout'
 import { Spinner } from '@astryxdesign/core/Spinner'
@@ -19,6 +18,7 @@ import { ManHoSo } from './ManHoSo'
 import { ManNguoiDung } from './ManNguoiDung'
 import { ManTongQuan } from './ManTongQuan'
 import { TrangDuAnCuaToi } from './TrangDuAnCuaToi'
+import { ThuongHieu } from './ThuongHieu'
 import { TrangViecCaNhan } from './TrangViecCaNhan'
 
 type Trang = 'tongQuan' | 'duAn' | 'viecCuaToi' | 'choToiDuyet' | 'tatCaDuAn' | 'hoSo' | 'nguoiDung'
@@ -122,7 +122,7 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
         <LayoutHeader hasDivider role="banner">
           <VStack gap={2}>
             <HStack gap={4} hAlign="between" vAlign="center" wrap="wrap">
-              <Heading level={1}>Quản lý dự án</Heading>
+              <ThuongHieu laTieuDeTrang />
               <HStack gap={2} vAlign="center" wrap="wrap" role="group" aria-label="Tài khoản đang đăng nhập">
                 <Text weight="semibold">{hoSo.tenHienThi}</Text>
                 <Token label={TEN_VAI[hoSo.vai]} />

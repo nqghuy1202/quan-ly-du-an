@@ -14,6 +14,7 @@ import type { MoPhongThu } from '../kho/khoBoNho'
 import { DO_DAI_MAT_KHAU_TOI_THIEU } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { trangThaiO } from './trangThaiO'
+import { ThuongHieu } from './ThuongHieu'
 import { ManChoXacNhan, ManDatLaiMatKhau, ManGuiLaiThuXacNhan, ManQuenMatKhau } from './ManEmailVaMatKhau'
 
 /** Màn đang hiện cho người chưa có phiên, kèm dữ liệu chuyển giữa các màn. */
@@ -116,7 +117,10 @@ export function ManXacThuc({ onDaDangNhap, moPhong, dongHo }: Props) {
   return (
     <Center padding={6}>
       <Card width="100%" maxWidth={DO_RONG_BIEU_MAU}>
-        {noiDung}
+        <VStack gap={4}>
+          <ThuongHieu laTieuDeTrang={false} />
+          {noiDung}
+        </VStack>
       </Card>
     </Center>
   )
