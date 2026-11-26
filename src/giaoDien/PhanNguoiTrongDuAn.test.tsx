@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../App'
 import { THONG_BAO_MAC_DINH, thatBai, type KetQua } from '../kho/ketQua'
@@ -7,6 +7,7 @@ import type { DuAn, KhoDuLieu, Phien } from '../kho/khoDuLieu'
 import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_DU_AN } from '../luat/duAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { choNganTruot, moTabDuAn } from '../test/khungUngDung'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -62,17 +63,19 @@ async function dangNhap(user: User, email: string) {
   await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 }
 
-/** PM mở chi tiết Dự án `ten` từ mục Tất cả Dự án. */
+/** PM mở chi tiết Dự án `ten` từ mục Tất cả Dự án, sang tab Người trong dự án. */
 async function pmMoDuAn(user: User, ten: string) {
   await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
   await user.click(await screen.findByRole('button', { name: ten }))
   await screen.findByRole('heading', { level: 2, name: ten })
+  await moTabDuAn(user, 'Người trong dự án')
 }
 
-/** Mở chi tiết Dự án `ten` từ mục Dự án của tôi (mục mặc định sau đăng nhập). */
+/** Mở chi tiết Dự án `ten` từ mục Dự án của tôi (mục mặc định sau đăng nhập), sang tab Người trong dự án. */
 async function moDuAnCuaToi(user: User, ten: string) {
   await user.click(await screen.findByRole('button', { name: ten }))
   await screen.findByRole('heading', { level: 2, name: ten })
+  await moTabDuAn(user, 'Người trong dự án')
 }
 
 function vungNguoi() {
@@ -155,19 +158,24 @@ describe('màn người trong dự án: thêm và gỡ', () => {
     await dangNhap(user, 'son@vi-du.vn')
     await moDuAnCuaToi(user, 'Cửa hàng')
 
-    expect(await screen.findByRole('button', { name: 'Lưu thay đổi' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Lưu trữ Dự án' })).toBeInTheDocument()
-    expect(ungDung.queryByText(THONG_BAO_DU_AN.khongQuanLy)).not.toBeInTheDocument()
-
-    await user.type(screen.getByLabelText(O_EMAIL), 'lan@vi-du.vn')
-    await user.click(screen.getByRole('button', { name: 'Thêm vào Dự án' }))
+    await user.type(await screen.findByLabelText(O_EMAIL), 'lan@vi-du.vn')
+    await user.click(await screen.findByRole('button', { name: 'Thêm vào Dự án' }))
     expect(await ungDung.findByText('Đã thêm Lan vào Dự án.')).toBeInTheDocument()
     expect(await idNguoiTrong(kho, duAn)).toContain(lanId)
 
-    await user.clear(screen.getByLabelText('Tên Dự án'))
-    await user.type(screen.getByLabelText('Tên Dự án'), 'Cửa hàng mới')
-    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    // Sửa (trong Ngăn trượt) và Lưu trữ nằm ở tab Thông tin.
+    await moTabDuAn(user, 'Thông tin')
+    expect(await screen.findByRole('button', { name: 'Sửa Dự án' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu trữ Dự án' })).toBeInTheDocument()
+    expect(ungDung.queryByText(THONG_BAO_DU_AN.khongQuanLy)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Sửa Dự án' }))
+    const ngan = within(await choNganTruot('Sửa Dự án'))
+    await user.clear(ngan.getByLabelText('Tên Dự án'))
+    await user.paste('Cửa hàng mới')
+    await user.click(ngan.getByRole('button', { name: 'Lưu thay đổi' }))
     expect(await ungDung.findByText('Đã lưu thay đổi.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Cửa hàng mới' })).toBeInTheDocument()
   })
 
   it('Thành viên của Dự án xem được người trong dự án nhưng nút ghi bị ẩn, ô email vô hiệu, kèm lý do', async () => {
@@ -189,10 +197,13 @@ describe('màn người trong dự án: thêm và gỡ', () => {
     expect(ungDung.getAllByText(THONG_BAO_DU_AN.khongQuanLy).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: 'Thêm vào Dự án' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Gỡ / })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Lưu thay đổi' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Lưu trữ Dự án' })).not.toBeInTheDocument()
     expect(screen.getByLabelText(O_EMAIL)).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByLabelText('Tên Dự án')).toHaveAttribute('aria-disabled', 'true')
+
+    // Tab Thông tin: chỉ xem, không có nút sửa hay Lưu trữ, không có ô nhập.
+    await moTabDuAn(user, 'Thông tin')
+    expect(screen.queryByRole('button', { name: 'Sửa Dự án' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Lưu trữ Dự án' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Tên Dự án')).not.toBeInTheDocument()
   })
 
   it.each<VaiHeThong>(['SUPPORT', 'THANH_VIEN'])(
@@ -203,6 +214,7 @@ describe('màn người trong dự án: thêm và gỡ', () => {
       await taoNguoi(kho, 'la@vi-du.vn', 'Lạ', vai)
       const { user } = dungApp(kho)
       await dangNhap(user, 'la@vi-du.vn')
+      await user.click(screen.getByRole('button', { name: 'Dự án của tôi' }))
       expect(
         await screen.findByRole('heading', { name: 'Bạn chưa ở dự án nào, hãy nhờ PM hoặc Support thêm bạn.' }),
       ).toBeInTheDocument()
@@ -223,6 +235,7 @@ describe('màn người trong dự án: thêm và gỡ', () => {
     await user.click(await screen.findByRole('radio', { name: 'Lưu trữ' }))
     await user.click(await screen.findByRole('button', { name: 'Đã xong' }))
     await screen.findByRole('heading', { level: 2, name: 'Đã xong' })
+    await moTabDuAn(user, 'Người trong dự án')
 
     expect(await vungNguoi().findByText('Dũng')).toBeInTheDocument()
     expect(ungDung.getAllByText(THONG_BAO_DU_AN.daLuuTru).length).toBeGreaterThan(0)
@@ -245,9 +258,11 @@ describe('màn người trong dự án: thêm và gỡ', () => {
     await user.click(screen.getByRole('button', { name: 'Thêm vào Dự án' }))
 
     expect(await ungDung.findByText('Chưa thêm được người vào Dự án.')).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Mở lại Dự án' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Thêm vào Dự án' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Thêm vào Dự án' })).not.toBeInTheDocument())
     expect(await idNguoiTrong(kho, duAn)).toEqual([])
+    // Nút mở lại nằm ở tab Thông tin.
+    await moTabDuAn(user, 'Thông tin')
+    expect(await screen.findByRole('button', { name: 'Mở lại Dự án' })).toBeInTheDocument()
   })
 
   it('đang tải thì hiện trạng thái đang tải', async () => {

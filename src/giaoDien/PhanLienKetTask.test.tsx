@@ -9,6 +9,7 @@ import type { DuAn, KhoDuLieu, Phien, Task } from '../kho/khoDuLieu'
 import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_GITHUB_MAC_DINH, THONG_BAO_LIEN_KET, khoaLienKet, type LienKetGitHub } from '../luat/github'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { choNganTruot, dongNganTruot, moTabTask } from '../test/khungUngDung'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -89,12 +90,18 @@ async function dangNhap(user: User, email: string) {
   await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 }
 
-/** PM mở Task "Làm trang chủ" từ trang Dự án "Cửa hàng". */
+/** Mở Task "Làm trang chủ" trong Ngăn trượt từ trang Dự án đang mở, rồi chọn tab Link GitHub của ngăn. */
+async function moTaskTabLink(user: User) {
+  await user.click(await screen.findByRole('button', { name: 'Làm trang chủ' }))
+  await choNganTruot('Làm trang chủ')
+  await moTabTask(user, 'Link GitHub')
+}
+
+/** PM mở Task "Làm trang chủ" từ trang Dự án "Cửa hàng", ở tab Link GitHub của Ngăn trượt. */
 async function pmMoTask(user: User) {
   await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
   await user.click(await screen.findByRole('button', { name: 'Cửa hàng' }))
-  await user.click(await screen.findByRole('button', { name: 'Làm trang chủ' }))
-  await screen.findByRole('heading', { level: 2, name: 'Làm trang chủ' })
+  await moTaskTabLink(user)
 }
 
 function vungLink() {
@@ -113,7 +120,7 @@ function kichBan(theoLienKet: Array<[LienKetGitHub, PhanUngGia]>): KichBanCongGi
   return { theoLienKet: Object.fromEntries(theoLienKet.map(([l, p]) => [khoaLienKet(l), p])) }
 }
 
-describe('link GitHub trên chi tiết Task: trạng thái đọc từ Cổng GitHub', () => {
+describe('link GitHub trong Ngăn trượt của Task: trạng thái đọc từ Cổng GitHub', () => {
   it('hiện đúng trạng thái của issue mở, issue đóng, PR mở, PR đã merge và PR đóng', async () => {
     const bc = await dungBoiCanh([url('issues', 1), url('issues', 2), url('pull', 3), url('pull', 4), url('pull', 5)])
     const { cong } = taoCongGiaGitHub(
@@ -237,8 +244,8 @@ describe('link GitHub trên chi tiết Task: trạng thái đọc từ Cổng Gi
     await within(await dongLink('Issue #1')).findByText('Issue đang mở')
     expect(gia.cacLanGoi()).toHaveLength(1)
 
-    await user.click(screen.getByRole('button', { name: 'Về Dự án Cửa hàng' }))
-    await user.click(await screen.findByRole('button', { name: 'Làm trang chủ' }))
+    await dongNganTruot(user)
+    await moTaskTabLink(user)
     await within(await dongLink('Issue #1')).findByText('Issue đang mở')
     expect(gia.cacLanGoi()).toHaveLength(2)
   })
@@ -305,7 +312,7 @@ describe('link GitHub trên chi tiết Task: trạng thái đọc từ Cổng Gi
   })
 })
 
-describe('link GitHub trên chi tiết Task: thêm và gỡ', () => {
+describe('link GitHub trong Ngăn trượt của Task: thêm và gỡ', () => {
   it('dán link: link vào bảng kèm trạng thái, dấu vết chỉnh sửa đổi; link sai, repo chưa gắn và link trùng bị báo bằng tiếng Việt, không lưu', async () => {
     const bc = await dungBoiCanh()
     const gia = taoCongGiaGitHub(kichBan([[issue(12), phanHoiGia({ state: 'open' })]]))
@@ -365,8 +372,7 @@ describe('link GitHub trên chi tiết Task: thêm và gỡ', () => {
     const { user, ungDung } = dungApp(bc, gia.cong)
     await dangNhap(user, 'an@vi-du.vn')
     await user.click(await screen.findByRole('button', { name: 'Cửa hàng' }))
-    await user.click(await screen.findByRole('button', { name: 'Làm trang chủ' }))
-    await screen.findByRole('heading', { level: 2, name: 'Làm trang chủ' })
+    await moTaskTabLink(user)
     await user.type(await screen.findByLabelText(O_LINK), url('issues', 9))
     await user.click(screen.getByRole('button', { name: 'Thêm link' }))
     expect(await ungDung.findByText('Đã thêm link acme/web · Issue #9 vào Task.')).toBeInTheDocument()
@@ -382,8 +388,7 @@ describe('link GitHub trên chi tiết Task: thêm và gỡ', () => {
     await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
     await user.click(await screen.findByRole('radio', { name: 'Lưu trữ' }))
     await user.click(await screen.findByRole('button', { name: 'Cửa hàng' }))
-    await user.click(await screen.findByRole('button', { name: 'Làm trang chủ' }))
-    await screen.findByRole('heading', { level: 2, name: 'Làm trang chủ' })
+    await moTaskTabLink(user)
 
     expect(await within(await dongLink('Issue #1')).findByText('Issue đang mở')).toBeInTheDocument()
     expect(screen.getByLabelText(O_LINK)).toHaveAttribute('aria-disabled', 'true')

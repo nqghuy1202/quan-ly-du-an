@@ -37,6 +37,11 @@ async function dangNhapQuaGiaoDien(user: ReturnType<typeof userEvent.setup>, ema
   await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 }
 
+/** Mở một mục trên Thanh bên (chờ khung tải hồ sơ xong). */
+async function moMuc(user: ReturnType<typeof userEvent.setup>, nhan: string) {
+  await user.click(await screen.findByRole('button', { name: nhan }))
+}
+
 function vungTaiKhoan() {
   return within(screen.getByRole('group', { name: 'Tài khoản đang đăng nhập' }))
 }
@@ -75,6 +80,9 @@ describe('màn đăng nhập và đăng ký', () => {
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
     expect(vungTaiKhoan().getByText('An Nguyễn')).toBeInTheDocument()
     expect(vungTaiKhoan().getByText('Thành viên')).toBeInTheDocument()
+    // Trang đầu là Tổng quan; màn trống của Dự án của tôi mở từ Thanh bên.
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
+    await moMuc(user, 'Dự án của tôi')
     expect(await screen.findByRole('heading', { name: CAU_MAN_TRONG })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
   })
@@ -161,6 +169,7 @@ describe('khung ứng dụng', () => {
     const { user, ungDung } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'g@vi-du.vn', 'G')
     await dangNhapQuaGiaoDien(user, 'g@vi-du.vn')
+    await moMuc(user, 'Dự án của tôi')
 
     expect(await ungDung.findByRole('alert')).toHaveTextContent('Không tải được danh sách Dự án.')
     await user.click(screen.getByRole('button', { name: 'Thử lại' }))
@@ -173,6 +182,7 @@ describe('khung ứng dụng', () => {
     const { user } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'h@vi-du.vn', 'H')
     await dangNhapQuaGiaoDien(user, 'h@vi-du.vn')
+    await moMuc(user, 'Dự án của tôi')
     expect(await screen.findByRole('progressbar', { name: 'Đang tải danh sách Dự án…' })).toBeInTheDocument()
   })
 
@@ -182,6 +192,7 @@ describe('khung ứng dụng', () => {
     const { user } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'i@vi-du.vn', 'I')
     await dangNhapQuaGiaoDien(user, 'i@vi-du.vn')
+    await moMuc(user, 'Dự án của tôi')
     expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
   })
 })
@@ -340,15 +351,19 @@ describe('điều hướng bằng phím', () => {
     await user.keyboard('{Enter}')
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 
-    // Khung: Tổng quan → Dự án của tôi → Việc của tôi → Chờ tôi duyệt → Hồ sơ → Đăng xuất.
+    // Khung: liên kết bỏ qua đến nội dung → Thanh bên (Tổng quan → Việc của tôi → Chờ tôi duyệt →
+    // Dự án của tôi) → chân Thanh bên (Hồ sơ → Đăng xuất). Trang đầu là Tổng quan.
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Bỏ qua đến nội dung' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Tổng quan' })).toHaveFocus()
-    await user.tab()
-    expect(screen.getByRole('button', { name: 'Dự án của tôi' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Việc của tôi' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Chờ tôi duyệt' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Dự án của tôi' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Hồ sơ' })).toHaveFocus()
     await user.keyboard('{Enter}')

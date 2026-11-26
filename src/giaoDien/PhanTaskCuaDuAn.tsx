@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
@@ -13,13 +13,13 @@ import type { TrangThaiDuAn } from '../luat/duAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { BangKanbanTask } from './BangKanbanTask'
 import type { QuyenChuyenKanban } from './chuyenTheKanban'
-import { useKho } from './khoContext'
 import { PhanTaskTreHan } from './PhanTaskTreHan'
 
 interface Props {
   phien: Phien
   vai: VaiHeThong
-  duAnId: string
+  /** Task của Dự án do màn chi tiết Dự án đọc (dải tóm tắt cũng dùng); null là đang tải. */
+  tai: KetQua<Task[]> | null
   trangThaiDuAn: TrangThaiDuAn
   /** Người gọi có nằm trong danh sách người trong dự án không; null là chưa biết (đang tải hoặc lỗi). */
   laNguoiTrongDuAn: boolean | null
@@ -27,43 +27,22 @@ interface Props {
   dongHo: () => Date
   /** Lý do không tạo được Task (cùng luật với Kho); null nếu được. */
   lyDoKhongTao: string | null
+  /** Đọc lại Task sau khi tải lỗi. */
+  onThuLai: () => void
+  /** Một Task vừa đổi trạng thái (hoặc vừa đọc lại) trên Kanban. */
+  onDaDoi: (task: Task) => void
   onTao: () => void
   onMo: (taskId: string) => void
   onHetPhien: () => void
 }
 
 /**
- * Phần "Task" của màn chi tiết Dự án: bảng Kanban kèm bộ lọc và kéo thả đổi trạng thái, nút tạo Task
+ * Tab "Task" của màn chi tiết Dự án: bảng Kanban kèm bộ lọc và kéo thả đổi trạng thái, nút tạo Task
  * (hoặc lý do không tạo được). Kéo thả cần biết người gọi có nằm trong Dự án không (cùng luật với
  * Kho); chưa biết (đang tải hay lỗi) thì bảng chỉ xem và nói rõ.
  */
-export function PhanTaskCuaDuAn({ phien, vai, duAnId, trangThaiDuAn, laNguoiTrongDuAn, dongHo, lyDoKhongTao, onTao, onMo, onHetPhien }: Props) {
-  const kho = useKho()
-  const [lanTai, setLanTai] = useState(0)
-  const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<Task[]> } | null>(null)
-  const tai = daTai && daTai.lan === lanTai ? daTai.kq : null
+export function PhanTaskCuaDuAn({ phien, vai, tai, trangThaiDuAn, laNguoiTrongDuAn, dongHo, lyDoKhongTao, onThuLai, onDaDoi, onTao, onMo, onHetPhien }: Props) {
   const duocTao = lyDoKhongTao === null
-
-  useEffect(() => {
-    let huy = false
-    kho.danhSachTask(phien, duAnId).then((kq) => {
-      if (huy) return
-      if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
-      else setDaTai({ lan: lanTai, kq })
-    })
-    return () => {
-      huy = true
-    }
-  }, [kho, phien, duAnId, lanTai, onHetPhien])
-
-  /** Thay một Task trong bảng đã tải bằng bản mới (vừa đổi trạng thái hoặc vừa đọc lại). */
-  function thayTask(moi: Task) {
-    setDaTai((cu) =>
-      cu && cu.kq.ok
-        ? { lan: cu.lan, kq: { ok: true, giaTri: cu.kq.giaTri.map((task) => (task.id === moi.id ? moi : task)) } }
-        : cu,
-    )
-  }
 
   const quyen: QuyenChuyenKanban | null =
     laNguoiTrongDuAn === null ? null : { phien, vai, trangThaiDuAn, laNguoiTrongDuAn, dongHo }
@@ -78,7 +57,7 @@ export function PhanTaskCuaDuAn({ phien, vai, duAnId, trangThaiDuAn, laNguoiTron
         title="Không tải được Task của Dự án."
         description={tai.loi.thongBao}
         role="alert"
-        endContent={<Button label="Thử lại" variant="secondary" onClick={() => setLanTai((n) => n + 1)} />}
+        endContent={<Button label="Thử lại" variant="secondary" onClick={onThuLai} />}
       />
     )
   } else if (tai.giaTri.length === 0) {
@@ -100,7 +79,7 @@ export function PhanTaskCuaDuAn({ phien, vai, duAnId, trangThaiDuAn, laNguoiTron
           <Text type="supporting">Chưa kiểm xong quyền đổi trạng thái của bạn nên chưa kéo thả được.</Text>
         )}
         <PhanTaskTreHan tasks={tai.giaTri} bayGio={dongHo()} onMo={onMo} />
-        <BangKanbanTask tasks={tai.giaTri} onMo={onMo} quyen={quyen} onDaDoi={thayTask} onHetPhien={onHetPhien} />
+        <BangKanbanTask tasks={tai.giaTri} onMo={onMo} quyen={quyen} onDaDoi={onDaDoi} onHetPhien={onHetPhien} />
       </VStack>
     )
   }

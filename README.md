@@ -24,6 +24,8 @@ Support thêm mình vào.
 
 ## Các màn chính
 
+Điều hướng chính là **Thanh bên** bên trái (màn hẹp thu thành nút mở trình đơn), chia nhóm Tổng quan, Công việc, Dự án, Quản trị; đăng nhập xong vào thẳng Tổng quan.
+
 | Màn | Ai thấy | Nội dung |
 |---|---|---|
 | Đăng ký, Đăng nhập, Quên mật khẩu | Mọi người | Đăng ký bằng email, mật khẩu và tên hiển thị; xác nhận email; đặt lại mật khẩu bằng mã gửi qua email |
@@ -33,7 +35,7 @@ Support thêm mình vào.
 | Việc của tôi | Mọi người đã đăng nhập | Task chưa chốt mà mình là Người thực hiện, ở mọi Dự án |
 | Chờ tôi duyệt | Mọi người đã đăng nhập | Task đang Chờ duyệt giao cho mình làm Người kiểm tra |
 | Tất cả Dự án | PM | Mọi Dự án, kể cả Dự án đã Lưu trữ |
-| Hồ sơ | Mọi người đã đăng nhập | Sửa tên hiển thị và GitHub username; tên và vai luôn hiện ở đầu trang |
+| Hồ sơ | Mọi người đã đăng nhập | Sửa tên hiển thị và GitHub username; tên và vai luôn hiện ở chân Thanh bên |
 | Người dùng | PM | Danh sách tài khoản và đổi vai hệ thống |
 | Trang tổng quan | Mọi người đã đăng nhập (ticket 13) | Mỗi Dự án một dòng: tên, **Tiến độ**, số Task theo từng trạng thái và cờ **Trễ hạn**. PM thấy mọi Dự án; Support và Thành viên chỉ thấy Dự án mình ở trong, kèm số Task chưa chốt của riêng mình; Dự án Lưu trữ ở nhóm riêng. Dự án chưa có Task nào đáng tính hiện "chưa có task" thay vì 0%. Trang Dự án liệt kê các Task Trễ hạn |
 

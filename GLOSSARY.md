@@ -19,6 +19,9 @@ Dùng đúng các từ này trong mã, test, giao diện và ticket. Nguồn: `.
 | **Dấu vết** | Người tạo, ngày tạo, người chỉnh sửa gần nhất, ngày chỉnh sửa gần nhất | audit log |
 | **Tiến độ** | Phần trăm Task Hoàn thành của một Dự án (Huỷ không tính vào mẫu số) | |
 | **Trễ hạn** | Task có hạn đã qua mà chưa Hoàn thành và chưa Huỷ | |
+| **Tổng quan** | Trang đầu tiên sau khi đăng nhập, tóm tắt mọi Dự án và Task người đó được xem | dashboard |
+| **Thanh bên** | Điều hướng chính nằm dọc bên trái | menu |
+| **Ngăn trượt** | Khung mở từ bên phải, đè lên trang hiện tại, để xem hoặc nhập rồi đóng lại | popup |
 
 ## Từ kỹ thuật
 

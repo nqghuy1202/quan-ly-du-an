@@ -34,7 +34,7 @@ interface Props {
 const LOI_CAN_DOC_LAI: readonly MaLoi[] = ['DU_AN_DA_LUU_TRU', 'KHONG_CO_QUYEN', 'KHONG_TIM_THAY', 'TASK_DA_CHOT', 'BUOC_KHONG_HOP_LE']
 
 /**
- * Phần "Chuyển trạng thái" của màn chi tiết Task: chỉ hiện nút các bước người dùng làm được (cùng
+ * Phần "Chuyển trạng thái" trong Ngăn trượt của Task: chỉ hiện nút các bước người dùng làm được (cùng
  * luật thuần với Kho). Bước cần lý do mở hộp nhập lý do trước khi áp dụng. Khi Kho từ chối (vd. Task
  * vừa đổi ở nơi khác) thì hiện lý do bằng tiếng Việt.
  */

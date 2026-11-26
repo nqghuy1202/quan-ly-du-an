@@ -99,25 +99,31 @@ describe('logo SDVICO ở đầu khung ứng dụng', () => {
     const { user, goc } = dungApp()
     await dangKyDaXacNhan(goc, 'tr@vi-du.vn')
     await dangNhap(user, 'tr@vi-du.vn')
+    await user.click(await screen.findByRole('button', { name: 'Dự án của tôi' }))
     expect(await screen.findByRole('heading', { name: CAU_MAN_TRONG })).toBeInTheDocument()
     expect(within(screen.getByRole('banner')).getByRole('img', { name: 'SDVICO' })).toBeInTheDocument()
   })
 
-  it('thứ tự phím Tab trong đầu khung không đổi: logo bị bỏ qua, đi lần lượt các nút điều hướng', async () => {
+  it('thứ tự phím Tab trong khung: logo bị bỏ qua, đi lần lượt các mục của Thanh bên', async () => {
     const { user, goc } = dungApp()
     await dangKyDaXacNhan(goc, 'tab@vi-du.vn')
     await dangNhap(user, 'tab@vi-du.vn')
     const dau = await screen.findByRole('banner')
-    await screen.findByRole('heading', { name: CAU_MAN_TRONG })
+    await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })
+    const thanhBen = screen.getByRole('navigation', { name: 'Điều hướng chính' })
     ;(document.activeElement as HTMLElement | null)?.blur()
+    // Tab đầu là liên kết bỏ qua đến nội dung (AppShell), không phải logo.
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Bỏ qua đến nội dung' })).toHaveFocus()
     const thuTu: string[] = []
     for (let i = 0; i < 6; i++) {
       await user.tab()
       const dangFocus = document.activeElement as HTMLElement
-      expect(dau.contains(dangFocus)).toBe(true)
+      expect(dau.contains(dangFocus)).toBe(false)
+      expect(thanhBen.contains(dangFocus)).toBe(true)
       thuTu.push(dangFocus.textContent ?? '')
     }
-    expect(thuTu).toEqual(['Tổng quan', 'Dự án của tôi', 'Việc của tôi', 'Chờ tôi duyệt', 'Hồ sơ', 'Đăng xuất'])
+    expect(thuTu).toEqual(['Tổng quan', 'Việc của tôi', 'Chờ tôi duyệt', 'Dự án của tôi', 'Hồ sơ', 'Đăng xuất'])
   })
 
   it('trạng thái đang tải hồ sơ vẫn hiện như trước', async () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../App'
 import { THONG_BAO_MAC_DINH, thatBai, type KetQua } from '../kho/ketQua'
@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_DU_AN } from '../luat/duAn'
 import { THONG_BAO_REPO } from '../luat/github'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { moTabDuAn } from '../test/khungUngDung'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -67,15 +68,19 @@ async function dangNhap(user: User, email: string) {
   await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 }
 
+/** PM mở chi tiết Dự án `ten` từ mục Tất cả Dự án, sang tab GitHub. */
 async function pmMoDuAn(user: User, ten: string) {
   await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
   await user.click(await screen.findByRole('button', { name: ten }))
   await screen.findByRole('heading', { level: 2, name: ten })
+  await moTabDuAn(user, 'GitHub')
 }
 
+/** Mở chi tiết Dự án `ten` từ mục Dự án của tôi, sang tab GitHub. */
 async function moDuAnCuaToi(user: User, ten: string) {
   await user.click(await screen.findByRole('button', { name: ten }))
   await screen.findByRole('heading', { level: 2, name: ten })
+  await moTabDuAn(user, 'GitHub')
 }
 
 function vungRepo() {
@@ -171,6 +176,7 @@ describe('mục Repo GitHub trên trang Dự án', () => {
     await user.click(await screen.findByRole('radio', { name: 'Lưu trữ' }))
     await user.click(await screen.findByRole('button', { name: 'Đã xong' }))
     await screen.findByRole('heading', { level: 2, name: 'Đã xong' })
+    await moTabDuAn(user, 'GitHub')
 
     expect(await vungRepo().findByText('acme/api')).toBeInTheDocument()
     expect(ungDung.getAllByText(THONG_BAO_DU_AN.daLuuTru).length).toBeGreaterThan(0)
@@ -225,8 +231,10 @@ describe('mục Repo GitHub trên trang Dự án', () => {
     await user.click(screen.getByRole('button', { name: 'Gắn repo' }))
 
     expect(await ungDung.findByText('Chưa gắn được repo vào Dự án.')).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Mở lại Dự án' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Gắn repo' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Gắn repo' })).not.toBeInTheDocument())
     expect(await tenCacRepo(kho, duAn)).toEqual([])
+    // Nút mở lại nằm ở tab Thông tin.
+    await moTabDuAn(user, 'Thông tin')
+    expect(await screen.findByRole('button', { name: 'Mở lại Dự án' })).toBeInTheDocument()
   })
 })

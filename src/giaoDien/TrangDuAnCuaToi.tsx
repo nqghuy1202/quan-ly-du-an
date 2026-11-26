@@ -3,21 +3,23 @@ import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Heading } from '@astryxdesign/core/Heading'
+import { HStack } from '@astryxdesign/core/HStack'
 import { Spinner } from '@astryxdesign/core/Spinner'
 import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
-import type { DuAnTomTat, Phien } from '../kho/khoDuLieu'
-import { TEN_TRANG_THAI_DU_AN, type TrangThaiDuAn } from '../luat/duAn'
+import type { DuAn, DuAnTomTat, Phien } from '../kho/khoDuLieu'
+import { TEN_TRANG_THAI_DU_AN, duocTaoDuAn, type TrangThaiDuAn } from '../luat/duAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { ManChiTietDuAn } from './ManChiTietDuAn'
+import { NganTruotTaoDuAn } from './NganTruotDuAn'
 
 interface Props {
   phien: Phien
   vai: VaiHeThong
-  /** Đồng hồ cho dấu vết khi sửa Dự án ở màn chi tiết. */
+  /** Đồng hồ cho dấu vết khi tạo Dự án, và khi sửa Dự án ở màn chi tiết. */
   dongHo: () => Date
   onHetPhien: () => void
 }
@@ -29,12 +31,19 @@ type Dong = {
   trangThai: TrangThaiDuAn
 }
 
-/** Các Dự án người dùng đang ở trong; trống thì hướng dẫn nhờ PM hoặc Support. Mở được chi tiết. */
+/**
+ * Các Dự án người dùng đang ở trong; trống thì hướng dẫn nhờ PM hoặc Support. Mở được chi tiết. PM tạo
+ * Dự án trong Ngăn trượt; tạo xong thì ngăn đóng, danh sách đọc lại và có nút mở ngay Dự án vừa tạo
+ * (người tạo chưa phải người trong dự án nên Dự án mới chưa nằm trong danh sách này).
+ */
 export function TrangDuAnCuaToi({ phien, vai, dongHo, onHetPhien }: Props) {
   const kho = useKho()
   const [tai, setTai] = useState<KetQua<DuAnTomTat[]> | null>(null)
   const [lanTai, setLanTai] = useState(0)
   const [duAnDangMo, setDuAnDangMo] = useState<string | null>(null)
+  const duocTao = duocTaoDuAn(vai)
+  const [dangTao, setDangTao] = useState(false)
+  const [daTao, setDaTao] = useState<DuAn | null>(null)
 
   useEffect(() => {
     if (duAnDangMo !== null) return
@@ -61,11 +70,11 @@ export function TrangDuAnCuaToi({ phien, vai, dongHo, onHetPhien }: Props) {
         phien={phien}
         vai={vai}
         duAnId={duAnDangMo}
-        thongBaoBanDau={null}
         dongHo={dongHo}
         onQuayLai={() => {
           // Quay lại thì đọc lại danh sách: có thể vừa Lưu trữ, đổi tên hay tự gỡ mình ra.
           setTai(null)
+          setDaTao(null)
           setDuAnDangMo(null)
         }}
         onHetPhien={onHetPhien}
@@ -120,8 +129,43 @@ export function TrangDuAnCuaToi({ phien, vai, dongHo, onHetPhien }: Props) {
 
   return (
     <VStack gap={4}>
-      <Heading level={2}>Dự án của tôi</Heading>
+      <HStack gap={4} hAlign="between" vAlign="center" wrap="wrap">
+        <Heading level={2}>Dự án của tôi</Heading>
+        {duocTao && (
+          <Button
+            label="Tạo Dự án"
+            variant="primary"
+            onClick={() => {
+              setDaTao(null)
+              setDangTao(true)
+            }}
+          />
+        )}
+      </HStack>
+      {daTao !== null && (
+        <Banner
+          status="success"
+          title={`Đã tạo Dự án ${daTao.ten}.`}
+          description="Dự án của tôi chỉ liệt kê Dự án bạn đang ở trong; Dự án mới có ở Tất cả Dự án."
+          role="status"
+          endContent={<Button label={`Mở Dự án ${daTao.ten}`} variant="secondary" onClick={() => setDuAnDangMo(daTao.id)} />}
+        />
+      )}
       {noiDung}
+      {duocTao && (
+        <NganTruotTaoDuAn
+          isOpen={dangTao}
+          phien={phien}
+          dongHo={dongHo}
+          onDong={() => setDangTao(false)}
+          onDaTao={(duAn) => {
+            setDangTao(false)
+            setDaTao(duAn)
+            taiLai()
+          }}
+          onHetPhien={onHetPhien}
+        />
+      )}
     </VStack>
   )
 }

@@ -23,13 +23,15 @@ import {
 } from '../luat/duAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
+import { NganTruotTaoDuAn } from './NganTruotDuAn'
 
 interface Props {
   phien: Phien
   vai: VaiHeThong
+  /** Đồng hồ cho dấu vết khi tạo Dự án. */
+  dongHo: () => Date
   boLoc: TrangThaiDuAn
   onDoiBoLoc: (boLoc: TrangThaiDuAn) => void
-  onTao: () => void
   onMo: (duAnId: string) => void
   onHetPhien: () => void
 }
@@ -71,8 +73,11 @@ function thanhDong(duAn: DuAn): Dong {
   }
 }
 
-/** Danh sách Dự án người dùng được thấy (PM: mọi Dự án), lọc giữa đang hoạt động và Lưu trữ. */
-export function ManDanhSachDuAn({ phien, vai, boLoc, onDoiBoLoc, onTao, onMo, onHetPhien }: Props) {
+/**
+ * Danh sách Dự án người dùng được thấy (PM: mọi Dự án), lọc giữa đang hoạt động và Lưu trữ. PM tạo Dự
+ * án trong Ngăn trượt; tạo xong thì ngăn đóng và danh sách (bộ lọc đang hoạt động) đọc lại.
+ */
+export function ManDanhSachDuAn({ phien, vai, dongHo, boLoc, onDoiBoLoc, onMo, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   // Kết quả gắn với bộ lọc và lần tải đã sinh ra nó; khác bộ lọc hay lần tải thì coi như đang tải.
@@ -80,6 +85,8 @@ export function ManDanhSachDuAn({ phien, vai, boLoc, onDoiBoLoc, onTao, onMo, on
   const khoa = `${boLoc}:${lanTai}`
   const tai = daTai && daTai.khoa === khoa ? daTai.kq : null
   const duocTao = duocTaoDuAn(vai)
+  const [dangTao, setDangTao] = useState(false)
+  const [daTao, setDaTao] = useState<string | null>(null)
 
   useEffect(() => {
     let huy = false
@@ -143,9 +150,19 @@ export function ManDanhSachDuAn({ phien, vai, boLoc, onDoiBoLoc, onTao, onMo, on
     <VStack gap={4}>
       <HStack gap={4} hAlign="between" vAlign="center" wrap="wrap">
         <Heading level={2}>Tất cả Dự án</Heading>
-        {duocTao && <Button label="Tạo Dự án" variant="primary" onClick={onTao} />}
+        {duocTao && (
+          <Button
+            label="Tạo Dự án"
+            variant="primary"
+            onClick={() => {
+              setDaTao(null)
+              setDangTao(true)
+            }}
+          />
+        )}
       </HStack>
       {!duocTao && <Text>{THONG_BAO_DU_AN.chiPMTao}</Text>}
+      {daTao !== null && <Banner status="success" title={daTao} role="status" />}
       <Text>Ngày giờ hiển thị theo giờ Việt Nam.</Text>
       <SegmentedControl
         label="Lọc Dự án theo trạng thái"
@@ -160,6 +177,22 @@ export function ManDanhSachDuAn({ phien, vai, boLoc, onDoiBoLoc, onTao, onMo, on
         ))}
       </SegmentedControl>
       {noiDung}
+      {duocTao && (
+        <NganTruotTaoDuAn
+          isOpen={dangTao}
+          phien={phien}
+          dongHo={dongHo}
+          onDong={() => setDangTao(false)}
+          onDaTao={(duAn) => {
+            // Ngăn đóng; danh sách Dự án đang hoạt động đọc lại nên Dự án mới hiện trong bảng.
+            setDangTao(false)
+            setDaTao(`Đã tạo Dự án ${duAn.ten}.`)
+            if (boLoc !== 'HOAT_DONG') onDoiBoLoc('HOAT_DONG')
+            else setLanTai((n) => n + 1)
+          }}
+          onHetPhien={onHetPhien}
+        />
+      )}
     </VStack>
   )
 }

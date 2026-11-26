@@ -1,5 +1,6 @@
-// Bộ test hợp đồng của ticket 13: trang tổng quan (Tiến độ, số Task theo trạng thái, cờ Trễ hạn,
-// quyền xem theo vai). Chạy lại cho mọi bản cài của Kho dữ liệu qua `chayHopDongTongQuan`.
+// Bộ test hợp đồng của trang Tổng quan (ticket 13, mở rộng ở bố cục 02): Tiến độ, số Task theo trạng
+// thái, cờ Trễ hạn, ô số, Task Trễ hạn và tới hạn, phân bố, quyền xem theo vai. Chạy lại cho mọi bản
+// cài của Kho dữ liệu qua `chayHopDongTongQuan`.
 // Chỉ đi qua giao diện `KhoDuLieu`; "bây giờ" truyền vào. Task ở trạng thái Hoàn thành, Huỷ... được
 // dựng sẵn bằng `BanCaiHopDong.datTrangThaiTask`.
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -172,32 +173,84 @@ export function chayHopDongTongQuan(
       expect(dong.taskTreHan.map((t) => t.id)).toEqual([choDuyet.id])
     })
 
-    it('PM thấy mọi Dự án (kể cả Dự án mình không ở trong); Dự án Lưu trữ ở nhóm riêng', async () => {
-      const { pm, duAnId } = await dungBoiCanh()
-      await taoDuAn(pm, 'Kho hàng')
+    it('PM thấy mọi Dự án đang hoạt động (kể cả Dự án mình không ở trong); Dự án Lưu trữ và Task của nó không có trong Tổng quan', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      const khoHang = await taoDuAn(pm, 'Kho hàng')
       const luuTru = await taoDuAn(pm, 'Cũ')
+      await them(pm, luuTru, an)
+      await them(pm, luuTru, binh)
+      await taoTask(pm, duAnId, an, binh, 'Cửa hàng trễ', 'DANG_LAM', '2026-11-20')
+      await taoTask(pm, luuTru, an, binh, 'Cũ trễ', 'DANG_LAM', '2026-11-01')
+      await taoTask(pm, luuTru, an, binh, 'Cũ tới hạn', 'MOI', '2026-11-27')
+      await taoTask(pm, luuTru, binh, an, 'Cũ chờ An duyệt', 'CHO_DUYET')
       giaTri(await kho.luuTruDuAn(pm, luuTru, LUC_TAO))
-      expect(duAnId).not.toBe(luuTru)
-      const tq = await doc(pm)
+      expect(khoHang).not.toBe(luuTru)
+      const tq = await doc(pm, DAU_NGAY_SAU_HAN)
       expect(tq.hoatDong.map((d) => d.duAn.ten)).toEqual(['Cửa hàng', 'Kho hàng'])
-      expect(tq.luuTru.map((d) => d.duAn.ten)).toEqual(['Cũ'])
+      expect(tq.oSo).toEqual({ duAnDangHoatDong: 2, taskDangMo: 1, taskTreHan: 1, choToiDuyet: 0, viecCuaToi: 0 })
+      expect(tq.taskTreHan.map((t) => [t.tieuDe, t.tenDuAn])).toEqual([['Cửa hàng trễ', 'Cửa hàng']])
+      expect(tq.taskToiHan).toEqual([])
+      expect(tq.phanBo.MOI + tq.phanBo.CHO_DUYET).toBe(0)
+      // An vẫn ở trong Dự án Lưu trữ nhưng Task ở đó cũng không vào ô số của An.
+      expect((await doc(an, DAU_NGAY_SAU_HAN)).oSo).toEqual({
+        duAnDangHoatDong: 1,
+        taskDangMo: 1,
+        taskTreHan: 1,
+        choToiDuyet: 0,
+        viecCuaToi: 1,
+      })
     })
 
-    it('Support và Thành viên chỉ thấy Dự án mình ở trong; người chưa ở Dự án nào nhận hai nhóm rỗng', async () => {
-      const { pm, an, duAnId } = await dungBoiCanh()
-      await taoDuAn(pm, 'Dự án khác')
+    it('Support và Thành viên chỉ thấy Dự án mình ở trong (ô số, danh sách, phân bố); người chưa ở Dự án nào nhận mọi số 0', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      const khac = await taoDuAn(pm, 'Dự án khác')
+      const cuong = await dangKyVaDangNhap('cuong-tq', 'Cường')
+      await them(pm, khac, binh)
+      await them(pm, khac, cuong)
       const support = await taoNguoiCoVai(pm, 'support-tq', 'SUPPORT')
       await them(pm, duAnId, support)
+      await taoTask(pm, duAnId, an, binh, 'Cửa hàng mới', 'MOI', '2026-11-28')
+      await taoTask(pm, khac, binh, cuong, 'Khác trễ', 'DANG_LAM', '2026-11-01')
+      await taoTask(pm, khac, binh, cuong, 'Khác tới hạn', 'MOI', '2026-11-27')
       const khach = await dangKyVaDangNhap('khach-tq', 'Khách')
       for (const phien of [an, support]) {
-        const tq = await doc(phien)
+        const tq = await doc(phien, DAU_NGAY_SAU_HAN)
         expect(tq.hoatDong.map((d) => d.duAn.ten)).toEqual(['Cửa hàng'])
-        expect(tq.luuTru).toEqual([])
+        expect(tq.oSo.duAnDangHoatDong).toBe(1)
+        expect(tq.oSo.taskDangMo).toBe(1)
+        expect(tq.oSo.taskTreHan).toBe(0)
+        expect(tq.taskTreHan).toEqual([])
+        expect(tq.taskToiHan.map((t) => t.tieuDe)).toEqual(['Cửa hàng mới'])
+        expect(tq.phanBo).toEqual({ MOI: 1, DANG_LAM: 0, CHO_DUYET: 0, TRA_LAI: 0, BI_LOI: 0, HOAN_THANH: 0, HUY: 0 })
       }
-      expect(await doc(khach)).toEqual({ hoatDong: [], luuTru: [] })
+      // PM thấy cả hai Dự án.
+      const cuaPM = await doc(pm, DAU_NGAY_SAU_HAN)
+      expect(cuaPM.oSo.taskDangMo).toBe(3)
+      expect(cuaPM.taskTreHan.map((t) => t.tieuDe)).toEqual(['Khác trễ'])
+      expect(cuaPM.taskToiHan.map((t) => t.tieuDe)).toEqual(['Khác tới hạn', 'Cửa hàng mới'])
+      const rong = {
+        oSo: { duAnDangHoatDong: 0, taskDangMo: 0, taskTreHan: 0, choToiDuyet: 0, viecCuaToi: 0 },
+        hoatDong: [],
+        taskTreHan: [],
+        taskToiHan: [],
+        phanBo: { MOI: 0, DANG_LAM: 0, CHO_DUYET: 0, TRA_LAI: 0, BI_LOI: 0, HOAN_THANH: 0, HUY: 0 },
+      }
+      expect(await doc(khach)).toEqual(rong)
       // Support không ở Dự án nào cũng chỉ thấy rỗng (không phải PM).
       const supportNgoai = await taoNguoiCoVai(pm, 'support-ngoai-tq', 'SUPPORT')
-      expect(await doc(supportNgoai)).toEqual({ hoatDong: [], luuTru: [] })
+      expect(await doc(supportNgoai)).toEqual(rong)
+    })
+
+    it('ô Chờ tôi duyệt và Việc của tôi tính theo người gọi', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      await taoTask(pm, duAnId, an, binh, 'An làm', 'DANG_LAM')
+      await taoTask(pm, duAnId, an, binh, 'An làm, Bình duyệt', 'CHO_DUYET')
+      await taoTask(pm, duAnId, binh, an, 'Bình làm, An duyệt', 'CHO_DUYET')
+      await taoTask(pm, duAnId, binh, an, 'Bình làm, An kiểm tra', 'DANG_LAM')
+      await taoTask(pm, duAnId, an, binh, 'An xong', 'HOAN_THANH')
+      expect((await doc(an)).oSo).toMatchObject({ choToiDuyet: 1, viecCuaToi: 2 })
+      expect((await doc(binh)).oSo).toMatchObject({ choToiDuyet: 1, viecCuaToi: 2 })
+      expect((await doc(pm)).oSo).toMatchObject({ choToiDuyet: 0, viecCuaToi: 0, taskDangMo: 4 })
     })
 
     it('mỗi người thấy số Task chưa chốt của riêng mình (làm hoặc duyệt), không tính Hoàn thành và Huỷ', async () => {

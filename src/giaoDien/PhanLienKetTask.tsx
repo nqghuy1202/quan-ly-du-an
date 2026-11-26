@@ -73,7 +73,7 @@ function TrangThaiMotLink({ doc }: { doc: DocGitHub | undefined }) {
 }
 
 /**
- * Phần "Link GitHub" của chi tiết Task: dán và gỡ link issue hoặc PR, và hiện trạng thái hiện tại
+ * Tab "Link GitHub" trong Ngăn trượt của Task: dán và gỡ link issue hoặc PR, và hiện trạng thái hiện tại
  * của từng link đọc qua Cổng GitHub (chỉ đọc). Trạng thái được đọc mỗi lần mở Task và khi bấm làm
  * mới; Task không có link thì không đọc GitHub. Lỗi GitHub chỉ hiện cạnh link đó.
  */

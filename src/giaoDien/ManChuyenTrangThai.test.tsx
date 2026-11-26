@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_CHUYEN_TRANG_THAI } from '../luat/chuyenTrangThai'
 import type { TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { choNganTruot } from '../test/khungUngDung'
 
 const MAT_KHAU = 'matkhau-123'
 /** Đồng hồ ứng dụng dùng khi bấm đổi trạng thái: 01/03/2026 08:00 giờ Việt Nam. */
@@ -70,15 +71,26 @@ async function dangNhap(user: User, email: string) {
   await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 }
 
-/** Đăng nhập bằng `email`, mở Dự án Cửa hàng rồi chi tiết Task "Làm trang chủ". */
+/** Đăng nhập bằng `email`, mở Dự án Cửa hàng rồi Task "Làm trang chủ" trong Ngăn trượt. */
 async function moChiTiet(user: User, email: string, laPM = false) {
   await dangNhap(user, email)
-  if (laPM) await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
+  await user.click(screen.getByRole('button', { name: laPM ? 'Tất cả Dự án' : 'Dự án của tôi' }))
   await user.click(await screen.findByRole('button', { name: 'Cửa hàng' }))
   await screen.findByRole('heading', { level: 2, name: 'Cửa hàng' })
   const vung = within(screen.getByRole('group', { name: 'Task của Dự án' }))
   await user.click(await vung.findByRole('button', { name: 'Làm trang chủ' }))
-  await screen.findByRole('heading', { level: 2, name: 'Làm trang chủ' })
+  await choNganTruot('Làm trang chủ')
+}
+
+/** Hộp nhập lý do (mở đè lên Ngăn trượt của Task). */
+const TEN_HOP_LY_DO = /: nhập lý do$/
+
+async function choHopLyDo() {
+  return within(await screen.findByRole('dialog', { name: TEN_HOP_LY_DO }))
+}
+
+function hopLyDoDaDong() {
+  return screen.queryByRole('dialog', { name: TEN_HOP_LY_DO }) === null
 }
 
 function vungChuyen() {
@@ -182,7 +194,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       expect(screen.getByText('Số lần bị Trả lại: 0')).toBeInTheDocument()
 
       await user.click(await choCoNut('Trả lại'))
-      const hop = within(await screen.findByRole('dialog'))
+      const hop = await choHopLyDo()
       const gui = hop.getByRole('button', { name: 'Trả lại' })
       expect(gui).toHaveAttribute('aria-disabled', 'true')
       await user.click(gui)
@@ -195,7 +207,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       await user.click(hop.getByRole('button', { name: 'Trả lại' }))
 
       expect(await screen.findByText('Số lần bị Trả lại: 1')).toBeInTheDocument()
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(hopLyDoDaDong()).toBe(true)
       expect(screen.getByRole('group', { name: 'Thông tin Task' })).toHaveTextContent('Trạng thái: Trả lại')
       const lichSuUi = screen.getByRole('group', { name: 'Lịch sử trạng thái' })
       expect(await within(lichSuUi).findByText('Chờ duyệt sang Trả lại')).toBeInTheDocument()
@@ -213,15 +225,15 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       const { user } = dungApp(bc.kho)
       await moChiTiet(user, 'binh@vi-du.vn')
       await user.click(await choCoNut('Báo Bị lỗi'))
-      let hop = within(await screen.findByRole('dialog'))
+      let hop = await choHopLyDo()
       await user.type(hop.getByRole('textbox', { name: /^Lý do/ }), 'Hỏng hẳn')
       await user.click(hop.getByRole('button', { name: 'Đóng' }))
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(hopLyDoDaDong()).toBe(true)
       expect((await doiDen(bc.kho, bc.task.id)).trangThai).toBe('CHO_DUYET')
       expect(await lichSu(bc.kho, bc.task.id)).toEqual([])
 
       await user.click(screen.getByRole('button', { name: 'Báo Bị lỗi' }))
-      hop = within(await screen.findByRole('dialog'))
+      hop = await choHopLyDo()
       expect(hop.getByRole('textbox', { name: /^Lý do/ })).toHaveValue('')
     })
 
@@ -230,7 +242,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       const { user } = dungApp(bc.kho)
       await moChiTiet(user, PM.email, true)
       await user.click(await choCoNut('Huỷ Task'))
-      const hop = within(await screen.findByRole('dialog'))
+      const hop = await choHopLyDo()
       await user.type(hop.getByRole('textbox', { name: /^Lý do/ }), 'Khách đổi ý')
       await user.click(hop.getByRole('button', { name: 'Huỷ Task' }))
       expect(await screen.findByText('Đã chuyển Task sang Huỷ.')).toBeInTheDocument()
@@ -248,7 +260,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       const { user } = dungApp(goc, kho)
       await moChiTiet(user, 'binh@vi-du.vn')
       await user.click(await choCoNut('Trả lại'))
-      const hop = within(await screen.findByRole('dialog'))
+      const hop = await choHopLyDo()
       await user.type(hop.getByRole('textbox', { name: /^Lý do/ }), 'Thiếu ảnh')
       await user.click(hop.getByRole('button', { name: 'Trả lại' }))
       expect(await hop.findByRole('alert')).toHaveTextContent('Bạn vừa bị gỡ khỏi Dự án.')
@@ -301,7 +313,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       const huy = await choCoNut('Huỷ Task')
       huy.focus()
       await user.keyboard('{Enter}')
-      const hop = within(await screen.findByRole('dialog'))
+      const hop = await choHopLyDo()
       const o = hop.getByRole('textbox', { name: /^Lý do/ })
       o.focus()
       await user.keyboard('Không cần nữa')

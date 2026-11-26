@@ -154,7 +154,8 @@ describe('đổi vai trên màn Người dùng', () => {
     await user.click(vaiTrenBang('An PM').getByRole('radio', { name: 'Support' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Người dùng' })).not.toBeInTheDocument())
     expect(within(screen.getByRole('group', { name: 'Tài khoản đang đăng nhập' })).getByText('Support')).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: 'Dự án của tôi' })).toBeInTheDocument()
+    // Không còn được mở màn Người dùng thì khung về trang đầu (Tổng quan).
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
     expect(await vaiCua(kho, PM.email)).toBe('SUPPORT')
   })
 

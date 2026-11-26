@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { mucDieuHuong } from './luat/dieuHuong'
 import { TEN_TRANG_THAI_DU_AN } from './luat/duAn'
 import { TEN_TRANG_THAI_TASK } from './luat/task'
 import { TEN_VAI } from './luat/taiKhoan'
@@ -120,9 +121,10 @@ describe('README gốc: nội dung bắt buộc', () => {
 
   it('các màn chính trùng với thanh điều hướng của ứng dụng và có trang tổng quan', () => {
     const muc = mucTheoTieuDe(README, /^## Các màn chính/)
-    const khung = doc('src/giaoDien/KhungUngDung.tsx')
+    // Mục điều hướng nằm ở luật thuần (`luat/dieuHuong.ts`); PM thấy đủ mọi mục.
+    const nhanCuaPM = mucDieuHuong('PM').map((m) => m.nhan)
     for (const nhan of ['Dự án của tôi', 'Việc của tôi', 'Chờ tôi duyệt', 'Tất cả Dự án', 'Hồ sơ', 'Người dùng']) {
-      expect(khung, `ứng dụng không có mục ${nhan}`).toContain(`label="${nhan}"`)
+      expect(nhanCuaPM, `ứng dụng không có mục ${nhan}`).toContain(nhan)
       expect(muc, `README thiếu màn ${nhan}`).toContain(nhan)
     }
     for (const tu of ['Đăng ký', 'Đăng nhập', 'Chi tiết Dự án', 'Chi tiết Task', 'Kanban', 'Trang tổng quan', 'Tiến độ', 'Trễ hạn']) {
@@ -442,6 +444,9 @@ describe('Bảng thuật ngữ khớp spec và GLOSSARY', () => {
       // Bỏ ghi chú (không phải chữ hiển thị) trước khi tìm.
       const ma = doc(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
       for (const tu of dungViet) {
+        // Ngoại lệ có chủ đích: tiêu đề nhóm "Công việc" trên Thanh bên (spec bố cục, ticket 01) gom Việc
+        // của tôi và Chờ tôi duyệt; ở đó "công việc" là tên nhóm, không phải cách gọi một Task.
+        if (f === 'src/luat/dieuHuong.ts' && tu === 'công việc') continue
         expect(ma.toLowerCase(), `${f} dùng từ "${tu}", GLOSSARY bảo đừng viết`).not.toMatch(new RegExp(`(^|[^\\p{L}])${tu}([^\\p{L}]|$)`, 'u'))
       }
     }
