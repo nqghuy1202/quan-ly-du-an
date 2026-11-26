@@ -9,6 +9,7 @@ import { THONG_BAO_DU_AN } from '../luat/duAn'
 import { THONG_BAO_REPO } from '../luat/github'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { moTabDuAn } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -44,7 +45,7 @@ async function taoNguoi(kho: KhoBoNho, email: string, tenHienThi: string, vai: V
 }
 
 async function taoDuAn(kho: KhoBoNho, ten: string): Promise<DuAn> {
-  return giaTri(await kho.taoDuAn(await phienCua(kho, PM.email), { ten }, LUC))
+  return giaTri(await kho.taoDuAn(await phienCua(kho, PM.email), { ma: maDuAnMoi(), ten }, LUC))
 }
 
 async function themVao(kho: KhoBoNho, duAn: DuAn, email: string) {

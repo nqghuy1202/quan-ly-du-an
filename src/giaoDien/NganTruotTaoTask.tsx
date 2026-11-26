@@ -13,7 +13,9 @@ import { THONG_BAO_MAC_DINH, type KetQua, type LoiKho } from '../kho/ketQua'
 import type { DuAn, NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
 import { DO_DAI_TIEU_DE_TASK_TOI_DA, THONG_BAO_TASK, lyDoKhongTaoTask } from '../luat/task'
 import { xepTheoTen, type VaiHeThong } from '../luat/taiKhoan'
+import { MUC_UU_TIEN_MAC_DINH, laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 import { useKho } from './khoContext'
+import { LUA_CHON_MUC_UU_TIEN } from './mauMucUuTien'
 import { NganTruot } from './NganTruot'
 import { trangThaiO } from './trangThaiO'
 import { useLanMoNgan } from './useLanMoNgan'
@@ -39,8 +41,8 @@ interface Props {
 }
 
 /**
- * Tạo Task trong Ngăn trượt, đè lên trang chi tiết Dự án: tiêu đề, mô tả, hạn tuỳ chọn, một Người thực
- * hiện và một Người kiểm tra chọn từ người trong dự án. Chỉ PM hoặc Support của Dự án; người khác thấy
+ * Tạo Task trong Ngăn trượt, đè lên trang chi tiết Dự án: tiêu đề, mô tả, hạn tuỳ chọn, Mức ưu tiên
+ * (mặc định Trung bình), một Người thực hiện và một Người kiểm tra chọn từ người trong dự án. Chỉ PM hoặc Support của Dự án; người khác thấy
  * lý do. Lỗi hiện cạnh ô tương ứng và ngăn vẫn mở.
  */
 export function NganTruotTaoTask(props: Props) {
@@ -58,6 +60,7 @@ function BieuMauTaoTask({ isOpen, phien, vai, duAn, dongHo, onDong, onDaTao, onH
   const [moTa, setMoTa] = useState('')
   const [han, setHan] = useState<NgayISO | undefined>(undefined)
   const [loiNhapHan, setLoiNhapHan] = useState(false)
+  const [mucUuTien, setMucUuTien] = useState<MucUuTien>(MUC_UU_TIEN_MAC_DINH)
   const [nguoiThucHienId, setNguoiThucHienId] = useState<string | undefined>(undefined)
   const [nguoiKiemTraId, setNguoiKiemTraId] = useState<string | undefined>(undefined)
   const [loi, setLoi] = useState<LoiKho | null>(null)
@@ -125,6 +128,7 @@ function BieuMauTaoTask({ isOpen, phien, vai, duAn, dongHo, onDong, onDaTao, onH
             tieuDe,
             moTa,
             han: han ?? null,
+            mucUuTien,
             nguoiThucHienId: nguoiThucHienId ?? null,
             nguoiKiemTraId: nguoiKiemTraId ?? null,
           },
@@ -172,6 +176,16 @@ function BieuMauTaoTask({ isOpen, phien, vai, duAn, dongHo, onDong, onDaTao, onH
               onChange={setHan}
               onEntryErrorChange={(loiNhap) => setLoiNhapHan(loiNhap !== null)}
               status={loiNhapHan ? { type: 'error', message: THONG_BAO_TASK.hanSai } : trangThaiO(loi, 'han')}
+            />
+            <Selector
+              label="Mức ưu tiên"
+              description="Thấp, Trung bình hoặc Cao. Không chọn thì là Trung bình."
+              options={LUA_CHON_MUC_UU_TIEN}
+              value={mucUuTien}
+              onChange={(muc) => {
+                if (laMucUuTien(muc)) setMucUuTien(muc)
+              }}
+              status={trangThaiO(loi, 'mucUuTien')}
             />
             <Selector
               label="Người thực hiện"

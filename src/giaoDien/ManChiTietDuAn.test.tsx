@@ -9,6 +9,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import type { TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, choTongQuanTaiXong, moTabDuAn, type TabChiTietDuAn } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 /** Lúc dựng dữ liệu (tạo Dự án, tạo Task). */
@@ -53,7 +54,7 @@ interface BoiCanh {
 /** Dự án "Cửa hàng" với hai Thành viên An và Bình, một repo đã gắn; chưa có Task. */
 async function dungBoiCanh(goc: KhoBoNho = taoKhoBoNho({ pmBanDau: PM })): Promise<BoiCanh> {
   const pm = await phienCua(goc, PM.email)
-  const duAn = giaTri(await goc.taoDuAn(pm, { ten: 'Cửa hàng', moTa: 'Bán hàng trực tuyến' }, LUC_TAO))
+  const duAn = giaTri(await goc.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng', moTa: 'Bán hàng trực tuyến' }, LUC_TAO))
   const an = await taoNguoi(goc, 'an@vi-du.vn', 'An', 'THANH_VIEN')
   const binh = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình', 'THANH_VIEN')
   for (const email of ['an@vi-du.vn', 'binh@vi-du.vn']) giaTri(await goc.themNguoiVaoDuAn(pm, duAn.id, { email }))

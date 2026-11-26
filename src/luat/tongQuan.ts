@@ -2,13 +2,17 @@
 // tính hàng ô số, bảng Dự án đang hoạt động, Task Trễ hạn, Task tới hạn trong 7 ngày và phân bố Task
 // theo trạng thái. Không I/O, không đọc đồng hồ. Giao diện chỉ hiển thị kết quả của hàm ở đây.
 //
-// Task của Dự án đã Lưu trữ không tính ở đâu: không vào ô số, danh sách hay phân bố.
-import type { TrangThaiDuAn } from './duAn'
+// Task của Dự án đã Lưu trữ không tính ở đâu: không vào ô số, danh sách hay phân bố. Dự án Lưu trữ cũng
+// không bao giờ Quá hạn dự kiến.
+import { duocThayDauChuaCoNguoiPhuTrach, type TrangThaiDuAn } from './duAn'
+import type { VaiHeThong } from './taiKhoan'
 import { laTaskDaChot } from './task'
 import {
   demTaskTheoTrangThai,
   homNayGioVietNam,
+  laDuAnQuaHanDuKien,
   laTaskTreHan,
+  tinhTienDo,
   tomTatTienDoDuAn,
   xepTaskTreHan,
   type SoTaskTheoTrangThai,
@@ -22,8 +26,14 @@ export const SO_NGAY_TOI_HAN = 7
 /** Phần Dự án mà luật Tổng quan cần đọc. */
 export interface DuAnDeTinhTongQuan {
   id: string
+  /** Mã Dự án, hiện cạnh tên. */
+  ma: string
   ten: string
   trangThai: TrangThaiDuAn
+  /** `YYYY-MM-DD`; null khi chưa có Ngày kết thúc dự kiến. */
+  ngayKetThucDuKien: string | null
+  /** Người phụ trách; null khi chưa có. */
+  nguoiPhuTrach: { id: string } | null
 }
 
 /** Phần Task mà luật Tổng quan cần đọc. `daRoiDuAn` như ở Kho: người đó đã bị gỡ khỏi Dự án. */
@@ -44,15 +54,21 @@ export interface DongDuAnTongQuan<D, T> {
   duAn: D
   tomTat: TomTatTienDoDuAn
   taskTreHan: T[]
+  /** Dự án đã qua Ngày kết thúc dự kiến mà Tiến độ chưa đủ 100% (nhãn Quá hạn dự kiến trên dòng). */
+  quaHanDuKien: boolean
+  /** Hiện dấu "chưa có Người phụ trách": Dự án chưa có Người phụ trách và người gọi là PM hoặc Support. */
+  chuaCoNguoiPhuTrach: boolean
 }
 
-/** Một Task trong hai danh sách của Tổng quan, kèm tên Dự án chứa nó. */
-export type TaskTongQuan<T> = T & { tenDuAn: string }
+/** Một Task trong hai danh sách của Tổng quan, kèm tên và Mã của Dự án chứa nó. */
+export type TaskTongQuan<T> = T & { tenDuAn: string; maDuAn: string }
 
 /** Hàng ô số của Tổng quan. */
 export interface OSoTongQuan {
   /** Số Dự án đang hoạt động người gọi được xem. */
   duAnDangHoatDong: number
+  /** Số Dự án đang hoạt động người gọi được xem có Quá hạn dự kiến. */
+  duAnQuaHanDuKien: number
   /** Task chưa Hoàn thành, chưa Huỷ, thuộc Dự án đang hoạt động. */
   taskDangMo: number
   /** Task Trễ hạn thuộc Dự án đang hoạt động. */
@@ -98,26 +114,37 @@ function xepTheoTen<D extends DuAnDeTinhTongQuan, T>(danhSach: DongDuAnTongQuan<
 }
 
 /**
- * Số liệu Tổng quan của người gọi `nguoiDungId` từ các Dự án người đó được xem (đã áp quyền xem ở Kho).
- * "Chờ tôi duyệt" và "Việc của tôi" chỉ tính Task người gọi đang giữ thật (không tính khi người gọi đã
- * bị gỡ khỏi Dự án mà vẫn được ghi trên Task), như hai trang cùng tên.
+ * Số liệu Tổng quan của người gọi `nguoiDungId` (vai hệ thống `vaiNguoiGoi`) từ các Dự án người đó được
+ * xem (đã áp quyền xem ở Kho). "Chờ tôi duyệt" và "Việc của tôi" chỉ tính Task người gọi đang giữ thật
+ * (không tính khi người gọi đã bị gỡ khỏi Dự án mà vẫn được ghi trên Task), như hai trang cùng tên.
+ * Dấu "chưa có Người phụ trách" chỉ bật cho PM và Support (`duocThayDauChuaCoNguoiPhuTrach`).
  */
 export function tinhTongQuan<D extends DuAnDeTinhTongQuan, T extends TaskDeTinhTongQuan>(
   duLieu: readonly DuAnKemTask<D, T>[],
   bayGio: Date,
   nguoiDungId: string,
+  vaiNguoiGoi: VaiHeThong,
 ): SoLieuTongQuan<D, T> {
   const hoatDong = duLieu.filter((d) => d.duAn.trangThai === 'HOAT_DONG')
-  const moiTask: TaskTongQuan<T>[] = hoatDong.flatMap((d) => d.task.map((t) => ({ ...t, tenDuAn: d.duAn.ten })))
+  const moiTask: TaskTongQuan<T>[] = hoatDong.flatMap((d) => d.task.map((t) => ({ ...t, tenDuAn: d.duAn.ten, maDuAn: d.duAn.ma })))
   const dangMo = moiTask.filter((t) => !laTaskDaChot(t.trangThai))
   const treHan = xepTaskTreHan(moiTask.filter((t) => laTaskTreHan(t, bayGio)))
   const toiHan = moiTask
     .filter((t) => laTaskToiHan(t, bayGio))
     .sort((a, b) => (a.han ?? '').localeCompare(b.han ?? '') || a.tieuDe.localeCompare(b.tieuDe, 'vi'))
+  const thayDauPhuTrach = duocThayDauChuaCoNguoiPhuTrach(vaiNguoiGoi)
+  const dong: DongDuAnTongQuan<D, T>[] = hoatDong.map((d) => ({
+    duAn: d.duAn,
+    tomTat: tomTatTienDoDuAn(d.task, bayGio, nguoiDungId),
+    taskTreHan: xepTaskTreHan(d.task.filter((t) => laTaskTreHan(t, bayGio))),
+    quaHanDuKien: laDuAnQuaHanDuKien(d.duAn, tinhTienDo(d.task), bayGio),
+    chuaCoNguoiPhuTrach: thayDauPhuTrach && d.duAn.nguoiPhuTrach === null,
+  }))
 
   return {
     oSo: {
       duAnDangHoatDong: hoatDong.length,
+      duAnQuaHanDuKien: dong.filter((d) => d.quaHanDuKien).length,
       taskDangMo: dangMo.length,
       taskTreHan: treHan.length,
       choToiDuyet: moiTask.filter(
@@ -125,13 +152,7 @@ export function tinhTongQuan<D extends DuAnDeTinhTongQuan, T extends TaskDeTinhT
       ).length,
       viecCuaToi: dangMo.filter((t) => t.nguoiThucHien.id === nguoiDungId && !t.nguoiThucHien.daRoiDuAn).length,
     },
-    hoatDong: xepTheoTen(
-      hoatDong.map((d) => ({
-        duAn: d.duAn,
-        tomTat: tomTatTienDoDuAn(d.task, bayGio, nguoiDungId),
-        taskTreHan: xepTaskTreHan(d.task.filter((t) => laTaskTreHan(t, bayGio))),
-      })),
-    ),
+    hoatDong: xepTheoTen(dong),
     taskTreHan: treHan,
     taskToiHan: toiHan,
     phanBo: demTaskTheoTrangThai(moiTask),

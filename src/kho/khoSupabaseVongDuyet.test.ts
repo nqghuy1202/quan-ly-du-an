@@ -401,13 +401,14 @@ describe('lịch sử trạng thái Task trên bản Supabase, máy chủ là fe
       'TRA_LAI>DANG_LAM',
     ])
     expect(ls[2]).toEqual({
+      loai: 'TRANG_THAI',
       nguoiDoi: { id: ID.binh, tenHienThi: 'Binh' },
       luc: new Date('2026-06-02T02:00:00+00:00'),
       tu: 'CHO_DUYET',
       sang: 'TRA_LAI',
       lyDo: 'Thiếu ảnh',
     })
-    expect(ls[0].lyDo).toBeNull()
+    expect(ls[0]).toMatchObject({ loai: 'TRANG_THAI', lyDo: null })
   })
 
   it('Task chưa đổi trạng thái lần nào: rỗng; lịch sử Task khác không lẫn sang', async () => {

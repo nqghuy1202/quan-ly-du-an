@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { CAC_TRANG_THAI_TASK, TEN_TRANG_THAI_TASK, type TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, choTongQuanTaiXong, dongNganTruot } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -48,7 +49,7 @@ interface BoiCanh {
 /** Dự án "Cửa hàng" với ba Thành viên trong đó: An, Bình, Chi. */
 async function dungBoiCanh(goc: KhoBoNho = taoKhoBoNho({ pmBanDau: PM })): Promise<BoiCanh> {
   const pm = await phienCua(goc, PM.email)
-  const duAn = giaTri(await goc.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await goc.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const an = await taoNguoi(goc, 'an@vi-du.vn', 'An')
   const binh = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình')
   const chi = await taoNguoi(goc, 'chi@vi-du.vn', 'Chi')
@@ -381,7 +382,7 @@ describe('"Việc của tôi" và "Chờ tôi duyệt"', () => {
   async function dungHaiDuAn() {
     const bc = await dungBoiCanh()
     const pm = await phienCua(bc.kho, PM.email)
-    const khoHang = giaTri(await bc.kho.taoDuAn(pm, { ten: 'Kho hàng' }, LUC))
+    const khoHang = giaTri(await bc.kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Kho hàng' }, LUC))
     for (const email of ['an@vi-du.vn', 'binh@vi-du.vn']) {
       giaTri(await bc.kho.themNguoiVaoDuAn(pm, khoHang.id, { email }))
     }

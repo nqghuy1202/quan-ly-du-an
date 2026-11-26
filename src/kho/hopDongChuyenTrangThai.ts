@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { KetQua, MaLoi } from './ketQua'
 import type { KhoDuLieu, Phien, Task } from './khoDuLieu'
-import type { BanCaiHopDong, TuyChonHopDong } from './hopDong'
+import { taoBoDemMaDuAn, type BanCaiHopDong, type TuyChonHopDong } from './hopDong'
 import {
   BANG_CA_CHUYEN_TRANG_THAI,
   type CaChuyenTrangThai,
@@ -46,6 +46,7 @@ export function chayHopDongChuyenTrangThai(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const maDuAnMoi = tuyChon.maDuAnMoi ?? taoBoDemMaDuAn()
   const dongHoCuaKho = tuyChon.dongHoCuaKho ?? false
   const coTask = tuyChon.coTask ?? true
   const coDatTrangThaiTask = tuyChon.coDatTrangThaiTask ?? true
@@ -108,7 +109,7 @@ export function chayHopDongChuyenTrangThai(
        */
       async function dungBoiCanh(): Promise<BoiCanh> {
         const pm = await taoPM('pm-chu', 'PM chủ')
-        const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC_TAO_DU_AN))
+        const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC_TAO_DU_AN))
         const an = await dangKyVaDangNhap('an', 'An')
         const binh = await dangKyVaDangNhap('binh', 'Bình')
         const chi = await taoNguoiCoVai(pm, 'chi', 'SUPPORT', 'Chi')
@@ -183,6 +184,7 @@ export function chayHopDongChuyenTrangThai(
             expect(sau.task.dauVet.taoLuc).toEqual(truoc.task.dauVet.taoLuc)
             expect(sau.lichSu).toHaveLength(truoc.lichSu.length + 1)
             expect(sau.lichSu[sau.lichSu.length - 1]).toEqual({
+              loai: 'TRANG_THAI',
               nguoiDoi: expect.objectContaining({ id: nguoiGoi.nguoiDungId }),
               luc: luc(LUC_DOI),
               tu: ca.tu,
@@ -230,7 +232,7 @@ export function chayHopDongChuyenTrangThai(
           expect(giaTri(await kho.layTask(bc.pm, bc.task.id)).soLanTraLai).toBe(0)
           giaTri(await doi(binh, bc.task.id, 'TRA_LAI', 'a'.repeat(DO_DAI_LY_DO_TOI_DA)))
           const ls = giaTri(await kho.lichSuTask(bc.pm, bc.task.id))
-          expect(ls[0]?.lyDo).toBe('a'.repeat(DO_DAI_LY_DO_TOI_DA))
+          expect(ls[0]).toMatchObject({ loai: 'TRANG_THAI', lyDo: 'a'.repeat(DO_DAI_LY_DO_TOI_DA) })
         })
 
         it('thiếu lý do báo ở ô lyDo bằng thông báo tiếng Việt', async () => {
@@ -281,6 +283,7 @@ export function chayHopDongChuyenTrangThai(
           let truocDo: TrangThaiTask = 'MOI'
           buoc.forEach(([nguoi, sang, lyDo, phut], i) => {
             expect(ls[i]).toEqual({
+              loai: 'TRANG_THAI',
               nguoiDoi: expect.objectContaining({ id: nguoi.nguoiDungId }),
               luc: luc(gio(phut)),
               tu: truocDo,
@@ -374,6 +377,7 @@ export function chayHopDongChuyenTrangThai(
           const ls = giaTri(await kho.lichSuTask(bc.pm, bc.task.id))
           expect(ls).toEqual([
             {
+              loai: 'TRANG_THAI',
               nguoiDoi: expect.objectContaining({ id: bc.nguoi.SUPPORT_CUA_DU_AN.nguoiDungId }),
               luc: luc(LUC_DOI),
               tu: 'MOI',

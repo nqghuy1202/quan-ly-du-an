@@ -2,8 +2,8 @@
 
 Tài liệu này dành cho **chủ dự án**. Đi từ trên xuống: Phần A dựng Supabase từng bước, Phần B là
 **danh sách kiểm tay bắt buộc** trước khi đưa ứng dụng lên mạng, Phần C nói rõ cổng test (`npm test`)
-không kiểm được gì. Phần D là tham chiếu chi tiết theo từng lát (ticket 06, 10, 14, 17) cho người
-duyệt SQL. Tổng quan ứng dụng nằm ở `README.md` ở thư mục gốc; từ vựng ở `GLOSSARY.md`.
+không kiểm được gì. Phần D là tham chiếu chi tiết theo từng lát (ticket 06, 10, 14, 17, và trường mới
+của Dự án ở ticket truong-moi 09, Task, hồ sơ và Người trong dự án ở ticket truong-moi 10) cho người duyệt SQL. Tổng quan ứng dụng nằm ở `README.md` ở thư mục gốc; từ vựng ở `GLOSSARY.md`.
 
 Mọi lệnh, đường dẫn và tên bảng dưới đây có trong repo. Ở đâu cần Supabase CLI thì ghi rõ là tuỳ
 chọn; cách luôn dùng được là SQL Editor trên trang quản trị của Supabase.
@@ -49,11 +49,21 @@ secret, không đụng Supabase thật). **Kiểm** là cách biết bước đ�
   3. `migrations/20261125000300_lat_3_vong_duyet.sql`: bảng `lich_su_trang_thai_task`, hàm
      `public.doi_trang_thai_task` và `public.lich_su_task`.
   4. `migrations/20261125000400_lat_4_github.sql`: bảng `repo_du_an` và `lien_ket_task`.
+  5. `migrations/20261126000500_truong_du_an.sql`: thêm vào `du_an` Mã Dự án, Khách hàng, hai ngày, Mức
+     ưu tiên, Người phụ trách. Cần PostgreSQL 15 trở lên (`select version();`). Dự án có sẵn nhận **mã
+     tạm** `DA-001`, `DA-002`… theo thứ tự ngày tạo và Mức ưu tiên Trung bình: đổi sang mã thật trên ứng
+     dụng sau khi áp (mục "Trường mới của Dự án trên Supabase" ở Phần D).
+  6. `migrations/20261126000600_truong_task_ho_so_nguoi.sql`: thêm Mức ưu tiên vào `task` (Task có sẵn nhận
+     Trung bình) và bảng `lich_su_muc_uu_tien_task`; Số điện thoại, Chức danh, Phòng ban vào `ho_so`; Vai trò
+     trong Dự án vào `nguoi_trong_du_an`; thay hàm `public.lich_su_task` và `public.them_nguoi_vao_du_an` (mục
+     "Task, hồ sơ và Người trong dự án trên Supabase" ở Phần D).
 - Tuỳ chọn: nếu đã liên kết Supabase CLI với project, `supabase db push` áp các file trong
   `migrations/` theo thứ tự tên. Thư mục `down/` nằm ngoài `migrations/` nên CLI không tự áp.
 - **Kiểm:** sau mỗi file không có lỗi; Table Editor hiện đủ các bảng nêu trên và **mọi bảng đều hiện
-  "RLS enabled"**. Gỡ lại (xoá dữ liệu của lát tương ứng): chạy file trong `down/` theo thứ tự
-  **ngược**: lát 4, lát 3, lát 2, lát 1.
+  "RLS enabled"**; `select ma, muc_uu_tien from public.du_an order by tao_luc;` trả mã tạm `DA-001`,
+  `DA-002`… cho Dự án có sẵn. Gỡ lại (xoá dữ liệu của lát tương ứng): chạy file trong `down/` theo thứ tự
+  **ngược**: Task, hồ sơ và Người trong dự án (`down/20261126000600_truong_task_ho_so_nguoi.down.sql`), trường
+  mới của Dự án (`down/20261126000500_truong_du_an.down.sql`), lát 4, lát 3, lát 2, lát 1.
 
 ### Bước 5. Cấu hình ứng dụng
 
@@ -142,19 +152,51 @@ secret, không đụng Supabase thật). **Kiểm** là cách biết bước đ�
 ### Bước 12. Chạy danh sách kiểm tay (Phần B)
 
 - **Ai làm:** chủ dự án, trên project thật hoặc một project dựng đúng như project thật.
-- **Kiểm:** cả bảy mục kiểm của Phần B đạt.
+- **Kiểm:** cả bảy mục kiểm của Phần B đạt, cùng các mục kiểm tay "Trường mới của Dự án" và "Task, hồ sơ
+  và Người trong dự án" ở Phần D.
 
 ### Bước 13. Chỉ khi bảy mục đạt mới đưa lên mạng
 
 - **Ai làm:** chủ dự án. Đưa ứng dụng lên mạng nằm ngoài phạm vi các ticket; tài liệu này chỉ nói điều
   kiện: **chưa kiểm xong danh sách ở Phần B thì chưa đưa lên mạng.**
-- **Kiểm:** bảy mục đạt, ghi lại ngày kiểm và người kiểm.
+- **Kiểm:** bảy mục đạt, cùng bốn mục kiểm tay của trường mới (mục "Nâng cấp lên trường mới" ngay dưới);
+  ghi lại ngày kiểm và người kiểm.
+
+### Nâng cấp lên trường mới (Mã Dự án, Mức ưu tiên, Thông tin nhân sự, Vai trò trong Dự án)
+
+Dành cho project đã áp lát 1 đến lát 4 và nay nhận bản ứng dụng có trường mới. Project dựng mới thì Bước 4
+đã gồm hai migration này; vẫn làm bước 3 đến bước 5 dưới đây.
+
+1. **Sao lưu** dữ liệu project trước khi áp (trang Database > Backups, hoặc `supabase db dump` nếu dùng CLI):
+   bản xuống xoá dữ liệu của các trường mới.
+2. **Áp đúng thứ tự**, trong SQL Editor, sau lát 4: trước `migrations/20261126000500_truong_du_an.sql`
+   (trường mới của Dự án, cần PostgreSQL 15 trở lên), rồi `migrations/20261126000600_truong_task_ho_so_nguoi.sql`
+   (Mức ưu tiên của Task, Thông tin nhân sự, Vai trò trong Dự án). Kiểm như Bước 4.
+3. **Chạy bộ test trên Supabase thật** trên project test (Bước 11): phần trường mới phải đạt hết.
+4. **Kiểm tay bốn mục mới** (cách kiểm và kết quả mong đợi chi tiết ở Phần D, mục "Trường mới của Dự án trên
+   Supabase" và "Task, hồ sơ và Người trong dự án trên Supabase"):
+   - **Quyền xem Thông tin nhân sự theo từng dòng**: Thành viên không cùng Dự án nào không đọc được Số điện
+     thoại, Chức danh, Phòng ban của người kia; người cùng Dự án (kể cả đã Lưu trữ), PM, chính chủ thì đọc được.
+   - **Trùng Mã Dự án khác hoa thường bị từ chối**: mã của Dự án khác viết thường vẫn lỗi `du_an_ma_key`.
+   - **Người phụ trách về trống khi bị gỡ**: gỡ Người phụ trách khỏi Dự án thì `nguoi_phu_trach_id` về `null`
+     trong cùng lệnh.
+   - **Thành viên không đổi được Mức ưu tiên của Task**: kể cả khi là Người thực hiện hay Người kiểm tra.
+5. **Sửa mã tạm `DA-…` thành mã thật**, sau khi bốn mục trên đạt. Liệt kê Dự án còn mã tạm:
+   `select ma, ten, trang_thai from public.du_an where ma like 'DA-%' order by ma;`. PM hoặc Support của Dự án
+   mở Dự án trên ứng dụng, tab Thông tin, Sửa Dự án, nhập mã thật (2 đến 12 ký tự gồm chữ in hoa, số, gạch
+   nối). Dự án đã Lưu trữ phải mở lại, sửa mã, rồi Lưu trữ lại. Kiểm: câu `select` trên không còn dòng nào
+   (trừ Dự án cố ý giữ mã dạng `DA-`).
+6. **Quay lại** (nếu cần): chạy bản xuống theo thứ tự **ngược**: trước
+   `down/20261126000600_truong_task_ho_so_nguoi.down.sql`, rồi `down/20261126000500_truong_du_an.down.sql`.
+   Mọi giá trị của trường mới mất hẳn (áp lại thì Dự án nhận lại mã tạm `DA-…`), nên đưa ứng dụng về bản trước
+   trường mới cùng lúc: bản mới đọc và ghi các cột đã bỏ sẽ lỗi.
 
 ## Phần B. Danh sách kiểm tay bắt buộc
 
 Đăng ký đang mở cho mọi người, nên **phân quyền từng dòng (RLS) là hàng rào duy nhất** giữa một người
 lạ và dữ liệu của PM. Cổng test không chạy SQL thật, nên chỉ kiểm tay mới chứng minh được hàng rào này.
-Chạy trên Supabase thật và phải đạt cả bảy mục.
+Chạy trên Supabase thật và phải đạt cả bảy mục. Bốn mục kiểm tay của trường mới (Thông tin nhân sự, Mã Dự
+án, Người phụ trách, Mức ưu tiên của Task) nằm ở mục "Nâng cấp lên trường mới" của Phần A, chi tiết ở Phần D.
 
 **Giả một người gọi trong SQL Editor.** SQL Editor chạy bằng vai `postgres` (bỏ qua RLS), nên muốn thử
 như một người dùng thì giả phiên của họ trong MỘT lần chạy (xem mục "Giả người gọi trong SQL Editor"
@@ -236,7 +278,8 @@ rollback;
 - **Cách kiểm:** trên project test, chạy `npx vitest run --config vitest.supabase.config.ts` (Bước 11).
   Lệnh chạy bộ test hợp đồng và mọi dòng của hai bảng ca dùng chung: `BANG_CA_QUYEN`
   (`src/kho/bangCaQuyen.ts`) và `BANG_CA_CHUYEN_TRANG_THAI` (`src/kho/bangCaChuyenTrangThai.ts`), cùng
-  phần Repo GitHub và Link issue hoặc PR.
+  phần Repo GitHub, Link issue hoặc PR, và trường mới của Dự án (Mã và Khách hàng, ngày của Dự án, Mức ưu
+  tiên và Người phụ trách).
 - **Kết quả mong đợi:** mọi ca **đạt**; không có ca nào mang chữ "CHƯA KIỂM". Các ca bị bỏ qua có chủ ý
   (vì Supabase khác bản bộ nhớ) kiểm tay thay thế: (a) hai ca "PM cuối cùng": trên project chỉ có một PM,
   `update public.ho_so set vai = 'SUPPORT' where vai = 'PM';` phải lỗi `PHAI_CON_PM`; (b) ca "mã hết hạn
@@ -269,7 +312,7 @@ Cụ thể:
   Supabase thật: mọi lệnh gọi mạng.
 - **File migration** (`migrations/*` và `down/*`): bảng, ràng buộc, trigger, hàm. Cổng chỉ đọc chữ để
   kiểm cấu trúc (có bật RLS, không mở quyền cột trạng thái cho client, bản xuống bỏ đủ đối tượng), không
-  chạy SQL.
+  chạy SQL. Kể cả việc gán mã tạm `DA-…`, chỉ mục duy nhất của Mã Dự án và khoá ngoại Người phụ trách.
 - **Phân quyền từng dòng và quyền cột** của mọi bảng.
 - **Hàm cơ sở dữ liệu** (`doi_trang_thai_task`, `lich_su_task`, `luu_tru_du_an`, `mo_lai_du_an`,
   `them_nguoi_vao_du_an`, `them_lien_ket_vao_task`, `go_lien_ket_khoi_task`, ...).
@@ -286,7 +329,7 @@ Edge Function với đầu vào giả. Chi tiết theo từng lát ở Phần D.
 > **Chưa kiểm xong danh sách ở Phần B thì chưa đưa lên mạng.** Cổng xanh không có nghĩa là phân quyền
 > đúng: chỉ chạy tay trên Supabase thật mới chứng minh được.
 
-## Phần D. Tham chiếu theo từng lát (ticket 06, 10, 14, 17)
+## Phần D. Tham chiếu theo từng lát (ticket 06, 10, 14, 17, truong-moi 09, truong-moi 10)
 
 Bản cài Supabase của Kho dữ liệu: `src/kho/khoSupabase.ts`. Ứng dụng chọn bản cài theo biến môi
 trường (`src/kho/cauHinh.ts`, `src/kho/chonKho.ts`):
@@ -498,6 +541,177 @@ Việc chủ dự án làm tay cho phần GitHub (theo thứ tự):
    - Trong tab Network của trình duyệt và trong gói đã dựng (`npm run build`, tìm chuỗi `github_pat_`,
      `ghp_`): không có token GitHub ở đâu.
    - Gỡ secret rồi thử một yêu cầu cố tình gây lỗi: phản hồi không chứa chuỗi của token.
+
+## Trường mới của Dự án trên Supabase (ticket truong-moi 09)
+
+Migration `migrations/20261126000500_truong_du_an.sql` (chạy SAU lát 4; bản xuống
+`down/20261126000500_truong_du_an.down.sql`, chạy TRƯỚC bản xuống của lát 4) thêm vào bảng `du_an` sáu cột
+`ma`, `khach_hang`, `ngay_bat_dau`, `ngay_ket_thuc_du_kien`, `muc_uu_tien`, `nguoi_phu_trach_id`, và cài phía
+cơ sở dữ liệu cùng bộ luật với `src/luat/duAn.ts`, `src/luat/mucUuTien.ts`. Bản cài Supabase
+(`src/kho/khoSupabase.ts`: `taoDuAn`, `suaDuAn`, `layDuAn`, `danhSachDuAn`, `danhSachDuAnCuaToi`) đọc và
+ghi đủ các cột này. **Cần PostgreSQL 15 trở lên** (khoá ngoại dùng `on delete set null (nguoi_phu_trach_id)`).
+
+**Mã tạm cho Dự án có sẵn.** Trước khi Mã thành bắt buộc và duy nhất, migration gán cho mọi Dự án đã có mã
+tạm `DA-001`, `DA-002`… theo thứ tự ngày tạo (cùng ngày tạo thì theo `id`; từ Dự án thứ 1000 là `DA-1000`…)
+và Mức ưu tiên Trung bình, kể cả Dự án đã Lưu trữ (trigger sửa tắt trong lúc gán nên dấu vết chỉnh sửa giữ
+nguyên). Khách hàng của chúng là trống, chưa có ngày, chưa có Người phụ trách. Sau khi áp, PM hoặc Support
+đổi mã tạm sang mã thật trên ứng dụng (Dự án đã Lưu trữ phải mở lại trước khi sửa).
+
+Cơ sở dữ liệu ép (không tin trình duyệt):
+
+- **Mã Dự án** bắt buộc; trigger cắt khoảng trắng và đổi in hoa; ràng buộc `du_an_ma_hop_le` (2 đến 12 ký
+  tự `[A-Z0-9-]`); chỉ mục duy nhất `du_an_ma_key` trên `upper(ma)` (không phân biệt hoa thường, kể cả Dự án
+  đã Lưu trữ). Trùng thì Kho trả `MA_DU_AN_DA_DUNG` ở ô Mã.
+- **Khách hàng** tối đa 120 ký tự (`du_an_khach_hang_hop_le`). **Hai ngày** kiểu `date`; Ngày kết thúc dự
+  kiến không trước Ngày bắt đầu (`du_an_ngay_hop_le`). **Mức ưu tiên** `THAP`, `TRUNG_BINH`, `CAO`, mặc định
+  `TRUNG_BINH` (`du_an_muc_uu_tien_hop_le`). Vi phạm thì Kho trả `KHONG_HOP_LE` ở đúng ô.
+- **Người phụ trách** phải là Người trong dự án: trigger `du_an_truoc_khi_sua` ném `NGUOI_NGOAI_DU_AN` (Kho
+  trả kèm lỗi ở ô Người phụ trách); khoá ngoại `du_an_nguoi_phu_trach_fkey` tới `nguoi_trong_du_an` là hàng
+  rào cuối và đặt Người phụ trách về trống trong **cùng lệnh** gỡ người đó khỏi Dự án (hay xoá tài khoản).
+  Việc về trống đó không đổi người và ngày chỉnh sửa của Dự án. Dự án mới chưa có Người phụ trách.
+- **Ai ghi**: client chỉ có quyền cột thêm trên đúng các cột mới (`nguoi_phu_trach_id` chỉ khi sửa); hàng
+  được ghi vẫn do policy của lát 1 quyết: tạo chỉ PM (`du_an_tao`); sửa chỉ PM hoặc Support của chính Dự án
+  (`du_an_sua`). Dự án đã Lưu trữ: trigger chặn đổi mọi cột mới (`DU_AN_DA_LUU_TRU`). Người phụ trách
+  không có thêm quyền nào.
+- **Tên hiển thị** của Người phụ trách đọc qua `ten_nguoi_dau_vet` (migration này thêm Người phụ trách vào
+  hàm đó), chỉ cho Dự án người gọi thấy.
+
+Khác bản bộ nhớ (do Supabase quyết): không có. Luật thuần kiểm trước khi gửi (dạng Mã, ngày so với ngày đang
+lưu, Người phụ trách có id sai dạng); lỗi ràng buộc chỉ đến từ cơ sở dữ liệu khi hai người sửa cùng lúc, và
+được đổi về cùng mã, cùng ô như bản bộ nhớ. `danhSachDuAnKemSoLieu` vẫn ghép phía client (một lần đọc Task
+mỗi Dự án).
+
+Cổng **có kiểm** (`src/kho/khoSupabaseDuAn.test.ts`, không mạng, không DB): với một `fetch` giả trong bộ
+nhớ, tạo, sửa, đọc Dự án gửi và nhận đủ sáu trường; Mã trùng, sai thứ tự ngày, Người phụ trách ngoài Dự án,
+ràng buộc dạng Mã, Khách hàng, Mức ưu tiên, khoá ngoại, Lưu trữ, quyền được đổi về đúng lỗi có mã như bản bộ
+nhớ; và cấu trúc file migration bằng cách đọc chữ (sáu cột, gán mã tạm trước khi bắt buộc và duy nhất, tên
+ràng buộc khớp với bản cài, giới hạn khớp với luật thuần, quyền cột, bản xuống trả ba hàm về bản của lát 1).
+Bộ test hợp đồng Mã và Khách hàng (`src/kho/hopDongMaDuAn.ts`), ngày của Dự án (`src/kho/hopDongNgayDuAn.ts`),
+Mức ưu tiên và Người phụ trách (`src/kho/hopDongUuTienPhuTrach.ts`) chạy cho bản Supabase trong lệnh chạy tay.
+
+**Cổng không kiểm** (chủ dự án phải chạy tay): toàn bộ SQL của migration này và bản xuống; bản Supabase với
+trường mới trên Supabase thật. Việc chủ dự án làm tay:
+
+1. `select version();` là PostgreSQL 15 trở lên. Áp migration (sau lát 4).
+2. Kiểm mã tạm: `select ma, muc_uu_tien, sua_boi, sua_luc from public.du_an order by tao_luc, id;` trả
+   `DA-001`, `DA-002`… đúng thứ tự ngày tạo, Mức ưu tiên `TRUNG_BINH`, dấu vết chỉnh sửa như trước khi áp.
+   Đổi mã tạm sang mã thật trên ứng dụng sau khi kiểm tay xong (bước 5 của mục "Nâng cấp lên trường mới" ở
+   Phần A).
+3. Chạy `npx vitest run --config vitest.supabase.config.ts`: phần "Mã Dự án và Khách hàng", "ngày của Dự án",
+   "Mức ưu tiên của Dự án và Người phụ trách" của bản Supabase phải đạt hết.
+4. Kiểm tay (giả người gọi như mục "Giả người gọi trong SQL Editor"):
+   - **Trùng Mã Dự án khác hoa thường bị từ chối**: phiên PM, `insert into public.du_an (ma, ten) values ('<mã của Dự án khác, viết
+     thường>', 'x');` và `update public.du_an set ma = lower('<mã của Dự án khác>') where id = '<uuid>';` đều
+     lỗi `du_an_ma_key` (23505); với mã của một Dự án đã Lưu trữ cũng vậy; sửa sang mã của chính Dự án đó
+     (khác hoa thường) thì được và lưu in hoa. Mã `'a'` hay `'SDV_01'` lỗi `du_an_ma_hop_le`.
+   - **Người phụ trách về trống khi bị gỡ**: đặt `An` làm Người phụ trách (`update public.du_an set
+     nguoi_phu_trach_id = '<uuid An>' where id = '<uuid Dự án>';`), ghi lại `sua_boi`, `sua_luc`; rồi gỡ
+     `An` (`delete from public.nguoi_trong_du_an where du_an_id = '<uuid Dự án>' and nguoi_dung_id = '<uuid
+     An>';`): `nguoi_phu_trach_id` thành `null` ngay sau lệnh đó, `sua_boi`, `sua_luc` giữ nguyên. Gỡ một
+     người khác thì Người phụ trách giữ nguyên. Thêm lại `An` thì vẫn trống.
+   - **Người phụ trách ngoài Dự án**: đặt người chưa thêm vào Dự án, PM không ở trong Dự án, hay uuid không
+     có: lỗi `NGUOI_NGOAI_DU_AN`, Dự án không đổi.
+   - **Ngày**: `update public.du_an set ngay_bat_dau = '2026-12-31', ngay_ket_thuc_du_kien = '2026-12-01'
+     where id = '<uuid>';` lỗi `du_an_ngay_hop_le`. Mức ưu tiên `'KHAC'` lỗi `du_an_muc_uu_tien_hop_le`.
+   - **Quyền**: phiên Thành viên (kể cả khi là Người phụ trách) và Support ở Dự án khác: `update` các cột mới
+     không đổi dòng nào; phiên Support của Dự án thì được. Dự án đã Lưu trữ: `update` cột mới bằng phiên PM
+     lỗi `DU_AN_DA_LUU_TRU`. Gửi `nguoi_phu_trach_id` khi `insert`: lỗi quyền cột (`permission denied`).
+   - **Tên Người phụ trách**: phiên Thành viên trong Dự án, `select * from public.ten_nguoi_dau_vet(array['<uuid
+     Người phụ trách>']::uuid[]);` trả tên của người đó.
+5. Thử bản xuống trên project thử: sáu cột, chỉ mục `du_an_ma_key` và các ràng buộc biến mất; tạo và sửa Dự
+   án bằng SQL (chỉ tên, mô tả) vẫn được; `ten_nguoi_dau_vet` như lát 1.
+
+## Task, hồ sơ và Người trong dự án trên Supabase (ticket truong-moi 10)
+
+Migration `migrations/20261126000600_truong_task_ho_so_nguoi.sql` (chạy SAU
+`migrations/20261126000500_truong_du_an.sql`; bản xuống `down/20261126000600_truong_task_ho_so_nguoi.down.sql`,
+chạy TRƯỚC bản xuống của 000500) cài phía cơ sở dữ liệu cùng bộ luật với `src/luat/mucUuTien.ts`,
+`src/luat/thongTinNhanSu.ts` và phần Vai trò trong Dự án của `src/luat/duAn.ts`. Bản cài Supabase
+(`src/kho/khoSupabase.ts`, `src/kho/khoSupabaseTask.ts`, `src/kho/khoSupabaseVongDuyet.ts`) đọc và ghi đủ các
+trường này.
+
+Cơ sở dữ liệu ép (không tin trình duyệt):
+
+- **Mức ưu tiên của Task**: cột `task.muc_uu_tien` (`THAP`, `TRUNG_BINH`, `CAO`; ràng buộc
+  `task_muc_uu_tien_hop_le`), mặc định `TRUNG_BINH`; Task có sẵn nhận `TRUNG_BINH` ngay khi thêm cột (dấu vết
+  không đổi). Ai đổi được: đúng như sửa Task hiện có (trigger `task_truoc_khi_sua` của lát 2 và lát 4 không
+  đổi): PM hoặc Support của Dự án, Dự án chưa Lưu trữ, Task chưa chốt. Client chỉ có thêm quyền cột
+  `muc_uu_tien` khi tạo và khi sửa.
+- **Lịch sử đổi Mức ưu tiên** ghi ở phía cơ sở dữ liệu: trigger `task_sau_khi_doi_muc_uu_tien` (AFTER UPDATE OF
+  `muc_uu_tien`, chỉ khi mức đổi sang mức khác) thêm một dòng vào bảng `lich_su_muc_uu_tien_task` (người gọi,
+  giờ máy chủ, từ, sang) trong cùng giao dịch. Đổi sang đúng mức đang có: không ghi. Chủ dự án sửa tay trong SQL
+  Editor (không có người gọi): không ghi. Bảng chỉ đọc theo quyền xem Dự án, client không ghi được. Hàm
+  `lich_su_task` được thay (đổi kiểu trả về): trả thêm cột `loai` (`TRANG_THAI` hoặc `MUC_UU_TIEN`) và gộp hai
+  loại dòng trên cùng một dòng thời gian theo thời điểm.
+- **Thông tin nhân sự**: cột `ho_so.so_dien_thoai` (dạng đã chuẩn hoá `0` + 9 chữ số hoặc `+84` + 9 chữ số,
+  ràng buộc `ho_so_so_dien_thoai_hop_le`), `chuc_danh`, `phong_ban` (tối đa 60 ký tự, `ho_so_chuc_danh_hop_le`,
+  `ho_so_phong_ban_hop_le`); trống là `null`. Trigger `ho_so_truoc_khi_sua` (thay bản lát 1, giữ mọi luật cũ)
+  chỉ cho chính chủ đổi ba cột này, kể cả PM cũng không sửa hộ được, và chuẩn hoá trước khi lưu.
+- **Quyền xem Thông tin nhân sự** (chính chủ, PM, Support, người cùng ít nhất một Dự án, kể cả Dự án đã Lưu
+  trữ): ba cột nằm trong `ho_so` và đi theo phân quyền từng dòng `ho_so_doc` của lát 1. Policy đó chỉ cho đọc
+  hồ sơ của mình, của mọi người với PM, và của người ở trong một Dự án mà người gọi thấy được, tức người cùng
+  Dự án; nên mọi hồ sơ đọc được đều là hồ sơ người gọi đủ quyền xem ba trường, không có dòng nào phải trả trống.
+  Hàm security definer trả hồ sơ (`them_nguoi_vao_du_an`) tự áp `rieng.duoc_xem_thong_tin_nhan_su` và trả
+  `null` khi không đủ quyền; bản cài đọc `null` thành trống như bản bộ nhớ. Lý do chọn cách này và điều phải đổi
+  nếu sau này mở rộng `ho_so_doc`: phần 3 của migration.
+- **Vai trò trong Dự án**: cột `nguoi_trong_du_an.vai_tro` (tối đa 60 ký tự, `nguoi_trong_du_an_vai_tro_hop_le`;
+  trống là `null`). Sửa: policy mới `nguoi_trong_du_an_sua` (PM, hoặc Support của chính Dự án), quyền cột chỉ
+  `vai_tro`, trigger `nguoi_trong_du_an_truoc_khi_sua` chặn Dự án đã Lưu trữ (`DU_AN_DA_LUU_TRU`). Thêm người
+  kèm vai trò là **một lệnh**: hàm `them_nguoi_vao_du_an(p_du_an_id, p_email, p_vai_tro)` (bản hai tham số của
+  lát 1 bị bỏ) ghi vai trò ngay trong câu thêm và trả kèm vai trò đã lưu. Gỡ người thì vai trò mất theo dòng.
+- **Số Task đang giữ** vẫn tính phía client (luật thuần `soTaskDangGiu` trên Task người gọi đọc được; ai thấy
+  Dự án thì thấy mọi Task của nó).
+
+Lỗi cơ sở dữ liệu được đổi về đúng mã và ô như bản bộ nhớ: ràng buộc Mức ưu tiên → `KHONG_HOP_LE` ở ô Mức ưu
+tiên; ràng buộc Số điện thoại, Chức danh, Phòng ban → `KHONG_HOP_LE` ở đúng ô; vai trò quá dài (hàm ném
+`KHONG_HOP_LE` hoặc ràng buộc) → `KHONG_HOP_LE` ở ô vai trò; `TASK_DA_CHOT`, `DU_AN_DA_LUU_TRU`,
+`KHONG_CO_QUYEN`, `CHUA_DANG_KY`, `DA_TRONG_DU_AN` giữ nguyên mã. Khác bản bộ nhớ (do Supabase quyết): thời điểm
+dòng lịch sử là giờ máy chủ.
+
+Cổng **có kiểm** (`src/kho/khoSupabaseTaskHoSoNguoi.test.ts`, không mạng, không DB): với một `fetch` giả trong
+bộ nhớ, tạo Task, đổi Mức ưu tiên, sửa hồ sơ, thêm người kèm vai trò (đúng một lần gọi hàm), sửa vai trò, đọc
+Người trong dự án và lịch sử Task gửi và nhận đủ trường mới; lỗi được đổi về đúng mã có mã; ba trường Thông tin
+nhân sự cơ sở dữ liệu trả `null` thì Kho trả trống; và cấu trúc file migration bằng cách đọc chữ (cột, ràng
+buộc cùng giới hạn với luật thuần, trigger ghi lịch sử, quyền cột, policy mới, thứ tự lỗi của hàm thêm người,
+lập luận quyền xem so với `ho_so_doc` của lát 1, bản xuống trả các hàm về bản của lát 1 và lát 3). Bộ test hợp
+đồng Mức ưu tiên của Task (`src/kho/hopDongMucUuTienTask.ts`), Thông tin nhân sự
+(`src/kho/hopDongThongTinNhanSu.ts`), Vai trò trong Dự án (`src/kho/hopDongVaiTroTrongDuAn.ts`) và các ca mới
+của bảng ca quyền chạy cho bản Supabase trong lệnh chạy tay.
+
+**Cổng không kiểm** (chủ dự án phải chạy tay): toàn bộ SQL của migration này và bản xuống; trigger ghi lịch sử;
+phân quyền từng dòng và quyền cột mới; bản Supabase với các trường này trên Supabase thật. Việc chủ dự án làm tay:
+
+1. Áp migration (sau 000500). Kiểm: `select muc_uu_tien, count(*) from public.task group by 1;` chỉ có
+   `TRUNG_BINH` cho Task có sẵn; `sua_boi`, `sua_luc` của Task như trước khi áp.
+2. Chạy `npx vitest run --config vitest.supabase.config.ts`: phần "Mức ưu tiên của Task", "Thông tin nhân sự
+   trong hồ sơ", "Vai trò trong Dự án và bảng Người trong dự án" và bảng ca quyền của bản Supabase phải đạt hết.
+3. Kiểm tay (giả người gọi như mục "Giả người gọi trong SQL Editor"):
+   - **Quyền xem Thông tin nhân sự theo từng dòng**: `Bình` tự nhập Số điện thoại. Phiên `Lạ` (không cùng Dự
+     án nào): `select so_dien_thoai from public.ho_so where id = '<uuid Bình>';` không trả dòng nào; đọc lồng
+     `select vai_tro, ho_so!nguoi_trong_du_an_nguoi_dung_id_fkey(so_dien_thoai) ...` qua REST cũng không ra.
+     Phiên `An` (cùng Dự án) thấy; Lưu trữ Dự án rồi vẫn thấy; gỡ `An` khỏi mọi Dự án chung thì hết thấy. Phiên
+     PM thấy mọi hồ sơ. Phiên Support `Chi` ở Dự án khác (không cùng Dự án với `Bình`): không thấy dòng nào.
+   - **Chỉ chính chủ sửa**: phiên PM `update public.ho_so set chuc_danh = 'x' where id = '<uuid Bình>';` lỗi
+     `KHONG_CO_QUYEN`; phiên `Bình` sửa của mình được; `so_dien_thoai = '0901 234.567'` lưu thành `0901234567`;
+     `'12345'` lỗi `ho_so_so_dien_thoai_hop_le`; Chức danh 61 ký tự lỗi `ho_so_chuc_danh_hop_le`.
+   - **Lịch sử Mức ưu tiên**: phiên Support của Dự án `update public.task set muc_uu_tien = 'CAO' where id =
+     '<uuid>';` rồi `select * from public.lich_su_task('<uuid>');` có đúng một dòng `loai = 'MUC_UU_TIEN'` (từ
+     `TRUNG_BINH` sang `CAO`, người đổi là Support); đặt lại `'CAO'` không thêm dòng nào. Task Hoàn thành: lỗi
+     `TASK_DA_CHOT`. Dự án Lưu trữ: lỗi `DU_AN_DA_LUU_TRU`. `insert into public.lich_su_muc_uu_tien_task ...`
+     bằng phiên bất kỳ: lỗi quyền.
+   - **Thành viên không đổi được Mức ưu tiên của Task**: phiên `An` (Người thực hiện) rồi phiên `Bình` (Người
+     kiểm tra), cả hai vai Thành viên: `update public.task set muc_uu_tien = 'CAO' where id = '<uuid Task>';`
+     không đổi dòng nào (hoặc bị từ chối); `select muc_uu_tien from public.task where id = '<uuid Task>';` vẫn
+     là mức cũ và `lich_su_task` không có dòng `MUC_UU_TIEN` mới. Trên ứng dụng, Ngăn trượt của Task không có
+     tab Sửa cho hai người này.
+   - **Vai trò trong Dự án**: phiên Thành viên `update public.nguoi_trong_du_an set vai_tro = 'x' where
+     du_an_id = '<uuid>';` không đổi dòng nào; phiên Support của Dự án đổi được; đổi `du_an_id` hay
+     `nguoi_dung_id`: lỗi quyền cột. Dự án Lưu trữ: lỗi `DU_AN_DA_LUU_TRU`. `select
+     public.them_nguoi_vao_du_an('<uuid Dự án>', '<email>', '  Trưởng nhóm ');` thêm người với vai trò
+     `Trưởng nhóm` trong một lệnh; vai trò 61 ký tự lỗi `KHONG_HOP_LE` và không thêm ai. Hàm hai tham số cũ
+     không còn (`\df public.them_nguoi_vao_du_an` chỉ ra một hàm).
+4. Thử bản xuống trên project thử: các cột, bảng `lich_su_muc_uu_tien_task`, policy `nguoi_trong_du_an_sua`
+   biến mất; `lich_su_task` và `them_nguoi_vao_du_an` như lát 3 và lát 1; sửa hồ sơ như lát 1.
 
 ## Cổng chưa kiểm (phải kiểm tay)
 

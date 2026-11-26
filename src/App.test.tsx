@@ -161,9 +161,9 @@ describe('khung ứng dụng', () => {
     let lanGoi = 0
     const kho: KhoDuLieu = {
       ...goc,
-      danhSachDuAnCuaToi: async (phien) => {
+      danhSachDuAnKemSoLieu: async (phien, phamVi, bayGio) => {
         lanGoi += 1
-        return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnCuaToi(phien)
+        return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnKemSoLieu(phien, phamVi, bayGio)
       },
     }
     const { user, ungDung } = dungApp(goc, kho)
@@ -178,7 +178,7 @@ describe('khung ứng dụng', () => {
 
   it('đang tải danh sách Dự án thì hiện trạng thái đang tải', async () => {
     const goc = taoKhoBoNho()
-    const kho: KhoDuLieu = { ...goc, danhSachDuAnCuaToi: () => new Promise(() => {}) }
+    const kho: KhoDuLieu = { ...goc, danhSachDuAnKemSoLieu: () => new Promise(() => {}) }
     const { user } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'h@vi-du.vn', 'H')
     await dangNhapQuaGiaoDien(user, 'h@vi-du.vn')
@@ -188,7 +188,7 @@ describe('khung ứng dụng', () => {
 
   it('phiên hết hạn giữa chừng thì quay về màn đăng nhập', async () => {
     const goc = taoKhoBoNho()
-    const kho: KhoDuLieu = { ...goc, danhSachDuAnCuaToi: async () => thatBai('CHUA_DANG_NHAP') }
+    const kho: KhoDuLieu = { ...goc, danhSachDuAnKemSoLieu: async () => thatBai('CHUA_DANG_NHAP') }
     const { user } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'i@vi-du.vn', 'I')
     await dangNhapQuaGiaoDien(user, 'i@vi-du.vn')
@@ -369,7 +369,7 @@ describe('điều hướng bằng phím', () => {
     await user.keyboard('{Enter}')
     await screen.findByRole('heading', { level: 2, name: 'Hồ sơ của tôi' })
 
-    // Màn hồ sơ: tới ô Tên hiển thị, GitHub username và nút Lưu bằng Tab.
+    // Màn hồ sơ: tới ô Tên hiển thị, GitHub username, ba ô Thông tin nhân sự và nút Lưu bằng Tab.
     await user.tab()
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toHaveFocus()
     await user.tab() // Email (chỉ đọc)
@@ -379,6 +379,10 @@ describe('điều hướng bằng phím', () => {
     await user.tab()
     expect(screen.getByLabelText('GitHub username')).toHaveFocus()
     await user.keyboard('khanh-gh')
+    for (const nhan of ['Số điện thoại', 'Chức danh', 'Phòng ban']) {
+      await user.tab()
+      expect(screen.getByLabelText(nhan)).toHaveFocus()
+    }
     await user.tab()
     expect(screen.getByRole('button', { name: 'Lưu hồ sơ' })).toHaveFocus()
     await user.keyboard('{Enter}')

@@ -9,7 +9,14 @@ const TOI = 'toi'
 const KHAC = 'khac'
 
 type TaskMau = TaskDeTinhTongQuan & { id: string }
-type DuAnMau = { id: string; ten: string; trangThai: TrangThaiDuAn }
+type DuAnMau = {
+  id: string
+  ma: string
+  ten: string
+  trangThai: TrangThaiDuAn
+  ngayKetThucDuKien: string | null
+  nguoiPhuTrach: { id: string } | null
+}
 
 let dem = 0
 function task(
@@ -30,7 +37,21 @@ function task(
 }
 
 function duAn(ten: string, trangThai: TrangThaiDuAn, ...cacTask: TaskMau[]): DuAnKemTask<DuAnMau, TaskMau> {
-  return { duAn: { id: `da-${ten}`, ten, trangThai }, task: cacTask }
+  return {
+    duAn: { id: `da-${ten}`, ma: `MA-${ten}`, ten, trangThai, ngayKetThucDuKien: null, nguoiPhuTrach: { id: KHAC } },
+    task: cacTask,
+  }
+}
+
+/** Như `duAn`, kèm Ngày kết thúc dự kiến và Người phụ trách (null là chưa có). */
+function duAnCo(
+  ten: string,
+  trangThai: TrangThaiDuAn,
+  them: { ngayKetThucDuKien?: string | null; nguoiPhuTrach?: { id: string } | null },
+  ...cacTask: TaskMau[]
+): DuAnKemTask<DuAnMau, TaskMau> {
+  const kq = duAn(ten, trangThai, ...cacTask)
+  return { ...kq, duAn: { ...kq.duAn, ...them } }
 }
 
 /** Hai Dự án đang hoạt động và một Dự án Lưu trữ, Task ở mọi trạng thái. */
@@ -63,9 +84,11 @@ function duLieuMau() {
 
 describe('Tổng quan: năm ô số', () => {
   it('đếm đúng với Dự án đang hoạt động và Lưu trữ; Task của Dự án Lưu trữ không được tính', () => {
-    const tq = tinhTongQuan(duLieuMau(), BAY_GIO, TOI)
+    const tq = tinhTongQuan(duLieuMau(), BAY_GIO, TOI, 'THANH_VIEN')
     expect(tq.oSo).toEqual({
       duAnDangHoatDong: 2,
+      // Dữ liệu mẫu không có Ngày kết thúc dự kiến.
+      duAnQuaHanDuKien: 0,
       // Cửa hàng: Mới, Đang làm, Chờ duyệt, Trả lại; Kho hàng: Bị lỗi, Chờ duyệt.
       taskDangMo: 6,
       // Đang làm trễ (20/11), Bị lỗi trễ (25/11); "Cũ trễ" thuộc Dự án Lưu trữ.
@@ -93,6 +116,7 @@ describe('Tổng quan: năm ô số', () => {
       ],
       BAY_GIO,
       TOI,
+      'THANH_VIEN',
     )
     expect(tq.oSo.choToiDuyet).toBe(1)
     expect(tq.oSo.viecCuaToi).toBe(1)
@@ -110,6 +134,7 @@ describe('Tổng quan: năm ô số', () => {
       ],
       BAY_GIO,
       TOI,
+      'THANH_VIEN',
     )
     expect(tq.oSo.choToiDuyet).toBe(0)
     expect(tq.oSo.viecCuaToi).toBe(0)
@@ -117,8 +142,15 @@ describe('Tổng quan: năm ô số', () => {
   })
 
   it('không có Dự án nào thì mọi số là 0 và các danh sách rỗng', () => {
-    const tq = tinhTongQuan([], BAY_GIO, TOI)
-    expect(tq.oSo).toEqual({ duAnDangHoatDong: 0, taskDangMo: 0, taskTreHan: 0, choToiDuyet: 0, viecCuaToi: 0 })
+    const tq = tinhTongQuan([], BAY_GIO, TOI, 'THANH_VIEN')
+    expect(tq.oSo).toEqual({
+      duAnDangHoatDong: 0,
+      duAnQuaHanDuKien: 0,
+      taskDangMo: 0,
+      taskTreHan: 0,
+      choToiDuyet: 0,
+      viecCuaToi: 0,
+    })
     expect(tq.hoatDong).toEqual([])
     expect(tq.taskTreHan).toEqual([])
     expect(tq.taskToiHan).toEqual([])
@@ -127,7 +159,7 @@ describe('Tổng quan: năm ô số', () => {
 
 describe('Tổng quan: bảng Dự án đang hoạt động', () => {
   it('chỉ Dự án đang hoạt động, xếp theo tên, kèm Tiến độ và số Task Trễ hạn', () => {
-    const tq = tinhTongQuan(duLieuMau(), BAY_GIO, TOI)
+    const tq = tinhTongQuan(duLieuMau(), BAY_GIO, TOI, 'THANH_VIEN')
     expect(tq.hoatDong.map((d) => d.duAn.ten)).toEqual(['Cửa hàng', 'Kho hàng'])
     const [cuaHang, khoHang] = tq.hoatDong
     // 1 Hoàn thành trên 5 Task không Huỷ.
@@ -149,11 +181,12 @@ describe('Tổng quan: Task Trễ hạn và Task tới hạn trong 7 ngày', () 
       ],
       BAY_GIO,
       TOI,
+      'THANH_VIEN',
     )
-    expect(tq.taskTreHan.map((t) => [t.tieuDe, t.tenDuAn])).toEqual([
-      ['A trễ 10 ngày', 'A'],
-      ['B trễ 3 ngày', 'B'],
-      ['A trễ 1 ngày', 'A'],
+    expect(tq.taskTreHan.map((t) => [t.tieuDe, t.tenDuAn, t.maDuAn])).toEqual([
+      ['A trễ 10 ngày', 'A', 'MA-A'],
+      ['B trễ 3 ngày', 'B', 'MA-B'],
+      ['A trễ 1 ngày', 'A', 'MA-A'],
     ])
   })
 
@@ -176,6 +209,7 @@ describe('Tổng quan: Task Trễ hạn và Task tới hạn trong 7 ngày', () 
       ],
       BAY_GIO,
       TOI,
+      'THANH_VIEN',
     )
     expect(tq.taskToiHan.map((t) => t.tieuDe)).toEqual(['Hạn hôm nay', 'Hạn ngày mai, Chờ duyệt', 'Hạn ngày thứ bảy'])
     expect(tq.taskToiHan.every((t) => t.tenDuAn === 'A')).toBe(true)
@@ -193,7 +227,7 @@ describe('Tổng quan: Task Trễ hạn và Task tới hạn trong 7 ngày', () 
     const dauNgaySau = new Date('2026-11-26T00:00:00+07:00')
     expect(laTaskToiHan(hanHomNay, dauNgaySau)).toBe(false)
     expect(laTaskToiHan(han2Thang12, dauNgaySau)).toBe(true)
-    expect(tinhTongQuan([duAn('A', 'HOAT_DONG', hanHomNay)], dauNgaySau, TOI).taskTreHan.map((t) => t.tieuDe)).toEqual([
+    expect(tinhTongQuan([duAn('A', 'HOAT_DONG', hanHomNay)], dauNgaySau, TOI, 'THANH_VIEN').taskTreHan.map((t) => t.tieuDe)).toEqual([
       'Hạn 25/11',
     ])
   })
@@ -207,7 +241,62 @@ describe('Tổng quan: Task Trễ hạn và Task tới hạn trong 7 ngày', () 
 
 describe('Tổng quan: phân bố Task theo trạng thái', () => {
   it('đếm đúng từng trạng thái của Task thuộc Dự án đang hoạt động, không tính Dự án Lưu trữ', () => {
-    const tq = tinhTongQuan(duLieuMau(), BAY_GIO, TOI)
+    const tq = tinhTongQuan(duLieuMau(), BAY_GIO, TOI, 'THANH_VIEN')
     expect(tq.phanBo).toEqual({ MOI: 1, DANG_LAM: 1, CHO_DUYET: 2, TRA_LAI: 1, BI_LOI: 1, HOAN_THANH: 1, HUY: 1 })
+  })
+})
+
+describe('Tổng quan: Dự án Quá hạn dự kiến', () => {
+  it('đếm Dự án đang hoạt động đã qua Ngày kết thúc dự kiến mà Tiến độ chưa đủ 100%; Dự án Lưu trữ không được đếm', () => {
+    const tq = tinhTongQuan(
+      [
+        // Kết thúc hôm qua, Tiến độ 50%: Quá hạn dự kiến.
+        duAnCo('Quá hạn', 'HOAT_DONG', { ngayKetThucDuKien: '2026-11-25' }, task('Xong', 'HOAN_THANH'), task('Mới')),
+        // Chưa có Task ("chưa có task") vẫn là chưa đủ 100%.
+        duAnCo('Quá hạn chưa có task', 'HOAT_DONG', { ngayKetThucDuKien: '2026-11-01' }),
+        // Kết thúc đúng hôm nay: chưa quá hạn.
+        duAnCo('Kết thúc hôm nay', 'HOAT_DONG', { ngayKetThucDuKien: '2026-11-26' }, task('Mới')),
+        // Tiến độ 100% (Huỷ không tính): không Quá hạn dự kiến.
+        duAnCo('Xong hết', 'HOAT_DONG', { ngayKetThucDuKien: '2026-11-01' }, task('Xong', 'HOAN_THANH'), task('Huỷ', 'HUY')),
+        // Chưa có Ngày kết thúc dự kiến.
+        duAnCo('Không ngày', 'HOAT_DONG', { ngayKetThucDuKien: null }, task('Mới')),
+        // Lưu trữ: không đếm, dù đã qua ngày và chưa xong.
+        duAnCo('Lưu trữ quá hạn', 'LUU_TRU', { ngayKetThucDuKien: '2026-11-01' }, task('Mới')),
+      ],
+      BAY_GIO,
+      TOI,
+      'THANH_VIEN',
+    )
+    expect(tq.oSo.duAnQuaHanDuKien).toBe(2)
+    expect(tq.oSo.duAnDangHoatDong).toBe(5)
+    expect(tq.hoatDong.filter((d) => d.quaHanDuKien).map((d) => d.duAn.ten)).toEqual(['Quá hạn', 'Quá hạn chưa có task'])
+    expect(tq.hoatDong.map((d) => d.duAn.ten)).not.toContain('Lưu trữ quá hạn')
+  })
+
+  it('mốc ngày theo giờ Việt Nam: kết thúc 25/11 chưa quá hạn lúc 23:59 ngày 25/11, đã quá hạn lúc 00:00 ngày 26/11', () => {
+    const duLieu = [duAnCo('A', 'HOAT_DONG', { ngayKetThucDuKien: '2026-11-25' }, task('Mới'))]
+    expect(tinhTongQuan(duLieu, new Date('2026-11-25T23:59:00+07:00'), TOI, 'PM').oSo.duAnQuaHanDuKien).toBe(0)
+    expect(tinhTongQuan(duLieu, new Date('2026-11-26T00:00:00+07:00'), TOI, 'PM').oSo.duAnQuaHanDuKien).toBe(1)
+  })
+})
+
+describe('Tổng quan: dấu "chưa có Người phụ trách"', () => {
+  const duLieu = [
+    duAnCo('Chưa phụ trách', 'HOAT_DONG', { nguoiPhuTrach: null }),
+    duAnCo('Có phụ trách', 'HOAT_DONG', { nguoiPhuTrach: { id: KHAC } }),
+    duAnCo('Lưu trữ chưa phụ trách', 'LUU_TRU', { nguoiPhuTrach: null }),
+  ]
+
+  it.each(['PM', 'SUPPORT'] as const)('%s thấy dấu trên đúng Dự án đang hoạt động chưa có Người phụ trách', (vai) => {
+    const tq = tinhTongQuan(duLieu, BAY_GIO, TOI, vai)
+    expect(tq.hoatDong.map((d) => [d.duAn.ten, d.chuaCoNguoiPhuTrach])).toEqual([
+      ['Chưa phụ trách', true],
+      ['Có phụ trách', false],
+    ])
+  })
+
+  it('Thành viên không thấy dấu này', () => {
+    const tq = tinhTongQuan(duLieu, BAY_GIO, TOI, 'THANH_VIEN')
+    expect(tq.hoatDong.map((d) => d.chuaCoNguoiPhuTrach)).toEqual([false, false])
   })
 })

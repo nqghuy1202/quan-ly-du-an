@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { DO_DAI_TEN_DU_AN_TOI_DA, THONG_BAO_DU_AN } from '../luat/duAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, choTongQuanTaiXong, moTabDuAn } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 /** Đồng hồ ứng dụng dùng khi PM bấm tạo, lưu, Lưu trữ, mở lại. */
@@ -28,6 +29,18 @@ function dungApp(goc: KhoBoNho, kho: KhoDuLieu = goc) {
   return { user, ungDung: within(container) }
 }
 
+/**
+ * Cảnh báo (role alert) có chứa `chu`. Biểu mẫu Dự án có ô ngày của Astryx, mỗi ô mang sẵn một vùng
+ * alert ẩn cho lỗi gõ ngày, nên lọc theo chữ thay vì lấy alert duy nhất.
+ */
+async function timCanhBao(vung: ReturnType<typeof within>, chu: string): Promise<HTMLElement> {
+  return waitFor(() => {
+    const thay = vung.getAllByRole('alert').find((phanTu: HTMLElement) => phanTu.textContent?.includes(chu))
+    if (!thay) throw new Error(`Không thấy cảnh báo "${chu}"`)
+    return thay
+  })
+}
+
 function giaTri<T>(kq: KetQua<T>): T {
   if (!kq.ok) throw new Error(kq.loi.thongBao)
   return kq.giaTri
@@ -45,7 +58,7 @@ async function taoNguoi(kho: KhoBoNho, email: string, tenHienThi: string, vai: V
 
 /** Tạo Dự án thẳng qua Kho với đồng hồ `luc`. */
 async function taoDuAn(kho: KhoBoNho, ten: string, luc: Date, moTa = ''): Promise<DuAn> {
-  return giaTri(await kho.taoDuAn(await phienCua(kho, PM.email), { ten, moTa }, luc))
+  return giaTri(await kho.taoDuAn(await phienCua(kho, PM.email), { ma: maDuAnMoi(), ten, moTa }, luc))
 }
 
 async function dangNhap(user: User, email: string) {
@@ -133,6 +146,7 @@ describe('tạo Dự án trong Ngăn trượt', () => {
     // Trang danh sách ở nguyên phía sau ngăn.
     expect(ungDung.getByRole('heading', { level: 2, name: 'Tất cả Dự án' })).toBeInTheDocument()
 
+    await user.type(vung.getByLabelText('Mã Dự án'), 'web-1')
     await user.click(vung.getByLabelText('Tên Dự án'))
     await user.paste('  Website bán hàng  ')
     await user.click(vung.getByLabelText('Mô tả'))
@@ -143,8 +157,8 @@ describe('tạo Dự án trong Ngăn trượt', () => {
     expect(await ungDung.findByText('Đã tạo Dự án Website bán hàng.')).toBeInTheDocument()
     const bang = within(await screen.findByRole('table', { name: 'Danh sách Dự án' }))
     expect(bang.getByRole('button', { name: 'Website bán hàng' })).toBeInTheDocument()
-    expect(bang.getByText('An PM')).toBeInTheDocument()
-    expect(bang.getByText('01/03/2026 08:00')).toBeInTheDocument()
+    expect(bang.getByText('WEB-1')).toBeInTheDocument()
+    expect(bang.getByText('chưa có task')).toBeInTheDocument()
 
     // Dấu vết và mô tả nằm ở tab Thông tin của Dự án mới.
     await moChiTiet(user, 'Website bán hàng')
@@ -157,8 +171,10 @@ describe('tạo Dự án trong Ngăn trượt', () => {
     const ds = giaTri(await kho.danhSachDuAn(await phienCua(kho, PM.email)))
     expect(ds).toEqual([
       expect.objectContaining({
+        ma: 'WEB-1',
         ten: 'Website bán hàng',
         moTa: 'Làm lại trang chủ',
+        khachHang: '',
         trangThai: 'HOAT_DONG',
         dauVet: expect.objectContaining({ taoLuc: LUC, suaBoi: null, suaLuc: null }),
       }),
@@ -175,6 +191,7 @@ describe('tạo Dự án trong Ngăn trượt', () => {
     await moTatCaDuAn(user)
     const vung = await moNganTao(user)
 
+    await user.type(vung.getByLabelText('Mã Dự án'), 'DA-1')
     await user.click(vung.getByLabelText('Tên Dự án'))
     await user.paste(ten)
     await user.click(vung.getByRole('button', { name: 'Tạo Dự án' }))
@@ -194,7 +211,7 @@ describe('tạo Dự án trong Ngăn trượt', () => {
     const vung = await moNganTao(user)
     await user.type(vung.getByLabelText('Tên Dự án'), 'X')
     await user.click(vung.getByRole('button', { name: 'Tạo Dự án' }))
-    const canhBao = await vung.findByRole('alert')
+    const canhBao = await timCanhBao(vung, 'Chưa tạo được Dự án.')
     expect(canhBao).toHaveTextContent('Chưa tạo được Dự án.')
     expect(canhBao).toHaveTextContent(THONG_BAO_MAC_DINH.KHONG_CO_QUYEN)
     expect(screen.getByRole('dialog', { name: 'Tạo Dự án' })).toBeInTheDocument()
@@ -223,6 +240,7 @@ describe('tạo Dự án trong Ngăn trượt', () => {
     await user.click(screen.getByRole('button', { name: 'Dự án của tôi' }))
     await screen.findByRole('heading', { level: 2, name: 'Dự án của tôi' })
     const vung = await moNganTao(user)
+    await user.type(vung.getByLabelText('Mã Dự án'), 'KHO')
     await user.type(vung.getByLabelText('Tên Dự án'), 'Kho')
     await user.click(vung.getByRole('button', { name: 'Tạo Dự án' }))
 
@@ -262,33 +280,37 @@ describe('màn danh sách Dự án', () => {
     // 20:00 UTC ngày 10/4 là 03:00 sáng 11/4 ở Việt Nam.
     await taoDuAn(kho, 'Một', new Date('2026-04-10T20:00:00Z'))
     const phienBinh = await phienCua(kho, 'binh@vi-du.vn')
-    giaTri(await kho.taoDuAn(phienBinh, { ten: 'Hai' }, new Date('2026-04-12T01:15:00Z')))
-    const ba = await taoDuAn(kho, 'Ba', new Date('2026-04-13T00:00:00Z'))
+    giaTri(await kho.taoDuAn(phienBinh, { ma: maDuAnMoi(), ten: 'Hai' }, new Date('2026-04-12T01:15:00Z')))
+    const ba = await taoDuAn(kho, 'Ba', new Date('2026-04-12T20:00:00Z'))
     giaTri(await kho.luuTruDuAn(phienBinh, ba.id, new Date('2026-05-01T10:00:00Z')))
 
     const { user } = dungApp(kho)
     await dangNhap(user, PM.email)
     await moTatCaDuAn(user)
 
+    // Mặc định các Dự án đang hoạt động, kể cả Dự án PM khác tạo.
     const bang = await screen.findByRole('table', { name: 'Danh sách Dự án' })
     expect(within(bang).getByRole('button', { name: 'Một' })).toBeInTheDocument()
     expect(within(bang).getByRole('button', { name: 'Hai' })).toBeInTheDocument()
     expect(within(bang).queryByRole('button', { name: 'Ba' })).not.toBeInTheDocument()
-    expect(within(bang).getByText('11/04/2026 03:00')).toBeInTheDocument()
-    expect(within(bang).getByText('12/04/2026 08:15')).toBeInTheDocument()
-    expect(within(bang).getByText('Bình PM')).toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: 'Lưu trữ' }))
     const bangLuuTru = await screen.findByRole('table', { name: 'Danh sách Dự án' })
     expect(await within(bangLuuTru).findByRole('button', { name: 'Ba' })).toBeInTheDocument()
     expect(within(bangLuuTru).queryByRole('button', { name: 'Một' })).not.toBeInTheDocument()
-    // Lưu trữ là một lần chỉnh sửa: hiện người và ngày chỉnh sửa gần nhất theo giờ Việt Nam.
-    expect(within(bangLuuTru).getByText('Bình PM, 01/05/2026 17:00')).toBeInTheDocument()
+    expect(within(bangLuuTru).getByText('Lưu trữ')).toBeInTheDocument()
+
+    // Dấu vết (ở tab Thông tin) theo giờ Việt Nam: tạo 03:00 ngày 13/4; Lưu trữ là một lần chỉnh sửa.
+    await moChiTiet(user, 'Ba')
+    await moTabDuAn(user, 'Thông tin')
+    expect(dauVet().getByText('Ngày tạo: 13/04/2026 03:00')).toBeInTheDocument()
+    expect(dauVet().getByText('Người chỉnh sửa gần nhất: Bình PM')).toBeInTheDocument()
+    expect(dauVet().getByText('Ngày chỉnh sửa gần nhất: 01/05/2026 17:00')).toBeInTheDocument()
   })
 
   it('đang tải thì hiện trạng thái đang tải', async () => {
     const goc = taoKho()
-    const kho: KhoDuLieu = { ...goc, danhSachDuAn: () => new Promise(() => {}) }
+    const kho: KhoDuLieu = { ...goc, danhSachDuAnKemSoLieu: () => new Promise(() => {}) }
     const { user } = dungApp(goc, kho)
     await dangNhap(user, PM.email)
     await moTatCaDuAn(user)
@@ -299,20 +321,17 @@ describe('màn danh sách Dự án', () => {
     const goc = taoKho()
     await taoDuAn(goc, 'Một', LUC)
     let lanGoi = 0
-    // Chỉ đếm sau khi trang đầu (Tổng quan, cũng đọc danh sách Dự án) đã tải xong.
-    let batDauDem = false
+    // Chỉ trang Tất cả Dự án đọc lệnh này (Tổng quan đọc danh sách Dự án bằng lệnh khác).
     const kho: KhoDuLieu = {
       ...goc,
-      danhSachDuAn: async (phien, loc) => {
-        if (!batDauDem) return goc.danhSachDuAn(phien, loc)
+      danhSachDuAnKemSoLieu: async (phien, phamVi, bayGio) => {
         lanGoi += 1
-        return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAn(phien, loc)
+        return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnKemSoLieu(phien, phamVi, bayGio)
       },
     }
     const { user, ungDung } = dungApp(goc, kho)
     await dangNhap(user, PM.email)
     await choTongQuanTaiXong()
-    batDauDem = true
     await moTatCaDuAn(user)
 
     const canhBao = await ungDung.findByRole('alert')
@@ -324,16 +343,10 @@ describe('màn danh sách Dự án', () => {
 
   it('phiên hết hạn khi tải danh sách thì quay về màn đăng nhập', async () => {
     const goc = taoKho()
-    // Phiên hết hạn sau khi trang đầu (Tổng quan, cũng đọc danh sách Dự án) đã tải xong.
-    let hetHan = false
-    const kho: KhoDuLieu = {
-      ...goc,
-      danhSachDuAn: async (phien, loc) => (hetHan ? thatBai('CHUA_DANG_NHAP') : goc.danhSachDuAn(phien, loc)),
-    }
+    const kho: KhoDuLieu = { ...goc, danhSachDuAnKemSoLieu: async () => thatBai('CHUA_DANG_NHAP') }
     const { user } = dungApp(goc, kho)
     await dangNhap(user, PM.email)
     await choTongQuanTaiXong()
-    hetHan = true
     await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
   })
@@ -346,7 +359,7 @@ describe('màn chi tiết Dự án', () => {
     const kho = taoKho()
     await taoNguoi(kho, 'binh@vi-du.vn', 'Bình PM', 'PM')
     const phienBinh = await phienCua(kho, 'binh@vi-du.vn')
-    giaTri(await kho.taoDuAn(phienBinh, { ten: 'Tên cũ', moTa: 'Mô tả cũ' }, LUC_TAO))
+    giaTri(await kho.taoDuAn(phienBinh, { ma: maDuAnMoi(), ten: 'Tên cũ', moTa: 'Mô tả cũ' }, LUC_TAO))
 
     const { user, ungDung } = dungApp(kho)
     await dangNhap(user, PM.email)
@@ -477,7 +490,7 @@ describe('màn chi tiết Dự án', () => {
     await user.type(vung.getByLabelText('Tên Dự án'), ' x')
     await user.click(vung.getByRole('button', { name: 'Lưu thay đổi' }))
 
-    const canhBao = await vung.findByRole('alert')
+    const canhBao = await timCanhBao(vung, 'Chưa lưu được thay đổi.')
     expect(canhBao).toHaveTextContent('Chưa lưu được thay đổi.')
     expect(canhBao).toHaveTextContent(THONG_BAO_MAC_DINH.DU_AN_DA_LUU_TRU)
     // Trang phía sau đọc lại: có nút Mở lại, hết nút sửa; ngăn chỉ còn lý do, không còn nút lưu.

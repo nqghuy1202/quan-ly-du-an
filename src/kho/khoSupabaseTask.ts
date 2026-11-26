@@ -32,9 +32,13 @@ import {
   type TrangThaiTask,
 } from '../luat/task'
 import type { NguoiGoiDuAn, TrangThaiDuAn } from '../luat/duAn'
+import { MUC_UU_TIEN_MAC_DINH, THONG_BAO_MUC_UU_TIEN, laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 
+// `muc_uu_tien` (ticket truong-moi 04): cột, ràng buộc `task_muc_uu_tien_hop_le` và trigger ghi dòng lịch sử đổi
+// mức do supabase/migrations/20261126000600_truong_task_ho_so_nguoi.sql thêm (Task có sẵn nhận Trung bình); bản
+// này chỉ đọc và gửi cột. Chưa có migration thì Supabase thật báo lỗi.
 const COT_TASK =
-  'id, du_an_id, tieu_de, mo_ta, han, nguoi_thuc_hien_id, nguoi_kiem_tra_id, trang_thai, so_lan_tra_lai, tao_boi, tao_luc, sua_boi, sua_luc'
+  'id, du_an_id, tieu_de, mo_ta, han, muc_uu_tien, nguoi_thuc_hien_id, nguoi_kiem_tra_id, trang_thai, so_lan_tra_lai, tao_boi, tao_luc, sua_boi, sua_luc'
 
 /**
  * Đọc từng trang để không bị cắt ở giới hạn số dòng của máy chủ (mặc định 1000 dòng một lần gọi).
@@ -51,6 +55,7 @@ interface DongTask {
   tieu_de: string
   mo_ta: string
   han: string | null
+  muc_uu_tien?: string | null
   nguoi_thuc_hien_id: string
   nguoi_kiem_tra_id: string
   trang_thai: string
@@ -62,7 +67,7 @@ interface DongTask {
 }
 
 interface DongTaskKemDuAn extends DongTask {
-  du_an: { ten: string } | { ten: string }[] | null
+  du_an: { ten: string; ma?: string | null } | { ten: string; ma?: string | null }[] | null
 }
 
 /** Lỗi trả về từ PostgREST (bảng, RPC). */
@@ -123,10 +128,16 @@ function chuanHoaId(id: string | null | undefined): string | null | undefined {
 export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabase {
   const { xacThuc, xemDuAn, quanLyDuAn, laUuid } = phuThuoc
 
-  /** `TASK_DA_CHOT` do trigger ném; các mã còn lại do `loiTuCsdl` của khoSupabase.ts đọc. */
+  /**
+   * `TASK_DA_CHOT` do trigger ném; ràng buộc `task_muc_uu_tien_hop_le` (23514) thành `KHONG_HOP_LE` ở ô Mức ưu
+   * tiên như luật thuần; các mã còn lại do `loiTuCsdl` của khoSupabase.ts đọc.
+   */
   function loiTask<T = never>(loi: LoiCsdl): KetQua<T> {
     const thongDiep = (loi.message ?? '').trim()
     if (thongDiep === 'TASK_DA_CHOT' || thongDiep.startsWith('TASK_DA_CHOT:')) return thatBai('TASK_DA_CHOT')
+    if (loi.code === '23514' && /constraint "task_muc_uu_tien_hop_le"/.test(loi.message ?? '')) {
+      return thatBai('KHONG_HOP_LE', undefined, { mucUuTien: THONG_BAO_MUC_UU_TIEN.sai })
+    }
     return phuThuoc.loiTuCsdl<T>(loi)
   }
 
@@ -233,6 +244,8 @@ export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabas
         tieuDe: d.tieu_de,
         moTa: d.mo_ta,
         han: d.han,
+        // Giá trị lạ hay thiếu (trước migration) coi như mức mặc định.
+        mucUuTien: laMucUuTien(d.muc_uu_tien) ? d.muc_uu_tien : MUC_UU_TIEN_MAC_DINH,
         nguoiThucHien: nguoiCuaTask(d.nguoi_thuc_hien_id, d.du_an_id),
         nguoiKiemTra: nguoiCuaTask(d.nguoi_kiem_tra_id, d.du_an_id),
         trangThai: trangThaiTaskTuDong(d.trang_thai),
@@ -301,8 +314,10 @@ export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabas
     const ketQua: TaskKemDuAn[] = []
     task.giaTri.forEach((t, i) => {
       const duAn = cuaDuAnToi[i]?.du_an
-      const ten = (Array.isArray(duAn) ? duAn[0]?.ten : duAn?.ten) ?? ''
-      if (thoa(t, hoSo.id)) ketQua.push({ ...t, tenDuAn: ten })
+      const motDuAn = Array.isArray(duAn) ? duAn[0] : duAn
+      const ten = motDuAn?.ten ?? ''
+      const ma = motDuAn?.ma ?? ''
+      if (thoa(t, hoSo.id)) ketQua.push({ ...t, tenDuAn: ten, maDuAn: ma })
     })
     return thanhCong(ketQua)
   }
@@ -337,6 +352,7 @@ export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabas
           tieu_de: kt.giaTri.tieuDe,
           mo_ta: kt.giaTri.moTa,
           han: kt.giaTri.han,
+          muc_uu_tien: kt.giaTri.mucUuTien,
           nguoi_thuc_hien_id: nguoiThucHienId,
           nguoi_kiem_tra_id: nguoiKiemTraId,
         })
@@ -374,7 +390,7 @@ export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabas
         (db, nguoiDungId) => (tu, den) =>
           db
             .from('task')
-            .select(`${COT_TASK}, du_an(ten)`)
+            .select(`${COT_TASK}, du_an(ten, ma)`)
             .eq('nguoi_thuc_hien_id', nguoiDungId)
             .in('trang_thai', TRANG_THAI_CHUA_CHOT)
             .order('tao_luc', { ascending: false })
@@ -390,7 +406,7 @@ export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabas
         (db, nguoiDungId) => (tu, den) =>
           db
             .from('task')
-            .select(`${COT_TASK}, du_an(ten)`)
+            .select(`${COT_TASK}, du_an(ten, ma)`)
             .eq('nguoi_kiem_tra_id', nguoiDungId)
             .eq('trang_thai', 'CHO_DUYET')
             .order('tao_luc', { ascending: false })
@@ -414,11 +430,14 @@ export function taoLenhTaskSupabase(phuThuoc: PhuThuocLenhTask): LenhTaskSupabas
       const kt = kiemTraSuaTask.sua(dauVao)
       if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
       // Không gửi ô nào thì vẫn ghi lại tiêu đề cũ, để dấu vết chỉnh sửa được cập nhật như bản bộ nhớ.
-      const thayDoi: { tieu_de: string; mo_ta?: string; han?: string | null } = {
+      const thayDoi: { tieu_de: string; mo_ta?: string; han?: string | null; muc_uu_tien?: MucUuTien } = {
         tieu_de: kt.giaTri.tieuDe ?? task.tieu_de,
       }
       if (kt.giaTri.moTa !== undefined) thayDoi.mo_ta = kt.giaTri.moTa
       if (kt.giaTri.han !== undefined) thayDoi.han = kt.giaTri.han
+      // Dòng lịch sử đổi Mức ưu tiên do cơ sở dữ liệu ghi (trigger task_sau_khi_doi_muc_uu_tien, chỉ khi mức đổi
+      // sang mức khác), không phải client. Quyền như mọi lần sửa Task (trigger task_truoc_khi_sua).
+      if (kt.giaTri.mucUuTien !== undefined) thayDoi.muc_uu_tien = kt.giaTri.mucUuTien
       const { data, error } = await nguoiGoi.db
         .from('task')
         .update(thayDoi)

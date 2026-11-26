@@ -9,6 +9,7 @@ import { cacBuocLamDuoc, lyDoKhongCoBuoc, type TinhHuongChuyen } from '../luat/c
 import { THONG_BAO_SUA_TASK, TEN_TRANG_THAI_TASK, type TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, choTongQuanTaiXong, dongNganTruot, moTabDuAn, moTabTask } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC_TAO = new Date('2026-03-01T08:00:00+07:00')
@@ -51,7 +52,7 @@ interface BoiCanh {
 async function dungBoiCanh(): Promise<BoiCanh> {
   const kho = taoKhoBoNho({ pmBanDau: PM })
   const pm = await phienCua(kho, PM.email)
-  const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC_TAO))
+  const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC_TAO))
   const an = await taoNguoi(kho, 'an@vi-du.vn', 'An')
   const binh = await taoNguoi(kho, 'binh@vi-du.vn', 'Bình')
   for (const email of ['an@vi-du.vn', 'binh@vi-du.vn']) giaTri(await kho.themNguoiVaoDuAn(pm, duAn.id, { email }))
@@ -168,7 +169,8 @@ describe('Ngăn trượt của Task: mở mà không rời trang', () => {
 
     await user.click(bang.getByRole('button', { name: 'Việc của An' }))
     const ngan = await choNganTruot('Việc của An')
-    expect(within(ngan).getByText('Cửa hàng')).toBeInTheDocument()
+    // Dưới tiêu đề: Mã Dự án đứng cạnh tên Dự án.
+    expect(within(ngan).getByText(`${bc.duAn.ma} · Cửa hàng`)).toBeInTheDocument()
     expect(await within(ngan).findByRole('group', { name: 'Thông tin Task' })).toHaveTextContent('Người thực hiện: An')
     expect(screen.getByRole('heading', { level: 2, name: 'Việc của tôi' })).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Việc của tôi' })).toBeInTheDocument()

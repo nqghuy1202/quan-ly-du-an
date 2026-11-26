@@ -13,9 +13,11 @@ import type { Phien, TaskKemDuAn } from '../kho/khoDuLieu'
 import { xepViecCaNhan } from '../luat/kanban'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
+import type { MucUuTien } from '../luat/mucUuTien'
 import { useKho } from './khoContext'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 import { NganTruotTask } from './NganTruotTask'
+import { NhanMucUuTien } from './NhanMucUuTien'
 
 /** Hai danh sách cá nhân qua mọi Dự án. */
 export type LoaiViecCaNhan = 'viecCuaToi' | 'choToiDuyet'
@@ -54,8 +56,10 @@ const NOI_DUNG: Record<
 type Dong = {
   id: string
   tieuDe: string
+  maDuAn: string
   tenDuAn: string
   trangThai: TrangThaiTask
+  mucUuTien: MucUuTien
   nguoi: string
   han: string
 }
@@ -113,6 +117,12 @@ export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props)
         />
       ),
     },
+    {
+      key: 'maDuAn',
+      header: 'Mã Dự án',
+      width: proportional(1),
+      renderCell: (dong) => <Text weight="semibold">{dong.maDuAn}</Text>,
+    },
     { key: 'tenDuAn', header: 'Dự án', width: proportional(1), renderCell: (dong) => <Text>{dong.tenDuAn}</Text> },
     {
       key: 'trangThai',
@@ -121,6 +131,12 @@ export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props)
       renderCell: (dong) => (
         <Token label={TEN_TRANG_THAI_TASK[dong.trangThai]} color={MAU_TRANG_THAI_TASK[dong.trangThai]} />
       ),
+    },
+    {
+      key: 'mucUuTien',
+      header: 'Mức ưu tiên',
+      width: proportional(1),
+      renderCell: (dong) => <NhanMucUuTien mucUuTien={dong.mucUuTien} size="sm" />,
     },
     { key: 'nguoi', header: noiDung.cotNguoi, width: proportional(1), renderCell: (dong) => <Text>{dong.nguoi}</Text> },
     { key: 'han', header: 'Hạn', width: proportional(1), renderCell: (dong) => <Text>{dong.han}</Text> },
@@ -145,8 +161,10 @@ export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props)
     const dong: Dong[] = xepViecCaNhan(tai.giaTri).map((task) => ({
       id: task.id,
       tieuDe: task.tieuDe,
+      maDuAn: task.maDuAn,
       tenDuAn: task.tenDuAn,
       trangThai: task.trangThai,
+      mucUuTien: task.mucUuTien,
       nguoi: loai === 'viecCuaToi' ? task.nguoiKiemTra.tenHienThi : task.nguoiThucHien.tenHienThi,
       han: task.han === null ? 'Không có hạn' : dinhDangNgay(task.han),
     }))

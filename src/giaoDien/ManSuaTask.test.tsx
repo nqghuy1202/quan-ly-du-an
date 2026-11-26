@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_SUA_TASK } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, moTabDuAn, moTabTask } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 /** Đồng hồ ứng dụng dùng khi bấm lưu. */
@@ -60,7 +61,7 @@ interface BoiCanh {
 /** Dự án "Cửa hàng" có An, Bình, Chi (Thành viên) và một Task "Làm trang chủ": An làm, Bình duyệt. */
 async function dungBoiCanh(goc: KhoBoNho = taoKho()): Promise<BoiCanh> {
   const pm = await phienCua(goc, PM.email)
-  const duAn = giaTri(await goc.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await goc.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const anId = await taoNguoi(goc, 'an@vi-du.vn', 'An', 'THANH_VIEN')
   const binhId = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình', 'THANH_VIEN')
   const chiId = await taoNguoi(goc, 'chi@vi-du.vn', 'Chi', 'THANH_VIEN')

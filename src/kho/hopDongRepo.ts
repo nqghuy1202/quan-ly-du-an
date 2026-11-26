@@ -3,7 +3,7 @@
 // với cùng `BanCaiHopDong`. Chỉ kiểm hành vi nhìn thấy qua giao diện `KhoDuLieu`.
 import { describe, expect, it } from 'vitest'
 import type { KetQua, MaLoi } from './ketQua'
-import type { BanCaiHopDong, TuyChonHopDong } from './hopDong'
+import { taoBoDemMaDuAn, type BanCaiHopDong, type TuyChonHopDong } from './hopDong'
 import type { DuAn, KhoDuLieu, Phien } from './khoDuLieu'
 import { THONG_BAO_REPO } from '../luat/github'
 import { THONG_BAO_DU_AN } from '../luat/duAn'
@@ -27,6 +27,7 @@ export function chayHopDongRepo(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const maDuAnMoi = tuyChon.maDuAnMoi ?? taoBoDemMaDuAn()
 
   describe(`Repo GitHub của Dự án (hợp đồng) — ${tenBanCai}`, () => {
     let banCai: BanCaiHopDong
@@ -69,8 +70,8 @@ export function chayHopDongRepo(
     it('PM gắn repo đúng dạng chủ-sở-hữu/tên-repo: repo vào danh sách, nhiều repo, mỗi Dự án một danh sách riêng', async () => {
       await khoiTao()
       const pm = await taoPM('pm-gan')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
-      const khac = giaTri(await kho.taoDuAn(pm, { ten: 'Dự án khác' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
+      const khac = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Dự án khác' }, LUC))
       expect(await tenCacRepo(pm, duAn.id)).toEqual([])
 
       expect(giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'vercel/next.js' }))).toEqual({ tenRepo: 'vercel/next.js' })
@@ -83,7 +84,7 @@ export function chayHopDongRepo(
     it('định dạng sai trả REPO_KHONG_HOP_LE kèm lỗi ở ô repo, không gắn gì', async () => {
       await khoiTao()
       const pm = await taoPM('pm-sai')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       const sai = [
         '',
         '   ',
@@ -115,8 +116,8 @@ export function chayHopDongRepo(
     it('gắn trùng (không phân biệt hoa thường) trả REPO_DA_GAN và danh sách không đổi; Dự án khác gắn lại được', async () => {
       await khoiTao()
       const pm = await taoPM('pm-trung')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
-      const khac = giaTri(await kho.taoDuAn(pm, { ten: 'B' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
+      const khac = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'B' }, LUC))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'Vercel/Next.js' }))
       for (const repo of ['Vercel/Next.js', 'vercel/next.js', 'VERCEL/NEXT.JS', ' vercel/next.js ']) {
         expect(maLoi(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo })), repo).toBe('REPO_DA_GAN')
@@ -128,7 +129,7 @@ export function chayHopDongRepo(
     it('gỡ repo (không phân biệt hoa thường) thì repo ra khỏi danh sách và gắn lại được; gỡ repo chưa gắn trả KHONG_TIM_THAY', async () => {
       await khoiTao()
       const pm = await taoPM('pm-go')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/api' }))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/web' }))
 
@@ -153,7 +154,7 @@ export function chayHopDongRepo(
     it('Support của Dự án gắn và gỡ được repo như PM', async () => {
       await khoiTao()
       const pm = await taoPM('pm-sp')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       const support = await taoNguoi(pm, duAn, 'support-sp', 'SUPPORT', true)
       expect(maLoi(await kho.ganRepoVaoDuAn(support, duAn.id, { repo: 'acme/api' }))).toBe('THANH_CONG')
       expect(await tenCacRepo(pm, duAn.id)).toEqual(['acme/api'])
@@ -164,7 +165,7 @@ export function chayHopDongRepo(
     it('Thành viên (kể cả trong Dự án) và Support ngoài Dự án gắn hoặc gỡ repo nhận KHONG_CO_QUYEN, không đổi gì', async () => {
       await khoiTao()
       const pm = await taoPM('pm-quyen')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/api' }))
       const tvTrong = await taoNguoi(pm, duAn, 'tv-trong', 'THANH_VIEN', true)
       const tvNgoai = await taoNguoi(pm, duAn, 'tv-ngoai', 'THANH_VIEN', false)
@@ -184,7 +185,7 @@ export function chayHopDongRepo(
     it('Dự án đã Lưu trữ: gắn và gỡ trả DU_AN_DA_LUU_TRU (với người quản lý được), danh sách vẫn xem được', async () => {
       await khoiTao()
       const pm = await taoPM('pm-lt')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       const support = await taoNguoi(pm, duAn, 'support-lt', 'SUPPORT', true)
       const tv = await taoNguoi(pm, duAn, 'tv-lt', 'THANH_VIEN', true)
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/api' }))
@@ -208,7 +209,7 @@ export function chayHopDongRepo(
     it('mọi người trong dự án xem được danh sách repo, mọi vai; người ngoài nhận KHONG_TIM_THAY (PM thấy mọi Dự án)', async () => {
       await khoiTao()
       const pm = await taoPM('pm-xem')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/api' }))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/web' }))
 
@@ -230,7 +231,7 @@ export function chayHopDongRepo(
     it('người bị gỡ khỏi Dự án không còn thấy repo của Dự án đó', async () => {
       await khoiTao()
       const pm = await taoPM('pm-roi')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'A' }, LUC))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'A' }, LUC))
       giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo: 'acme/api' }))
       const chi = await taoNguoi(pm, duAn, 'chi-roi', 'THANH_VIEN', true)
       expect(await tenCacRepo(chi, duAn.id)).toEqual(['acme/api'])

@@ -9,6 +9,7 @@ import { THONG_BAO_CHUYEN_TRANG_THAI } from '../luat/chuyenTrangThai'
 import type { TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 /** Đồng hồ ứng dụng dùng khi bấm đổi trạng thái: 01/03/2026 08:00 giờ Việt Nam. */
@@ -48,7 +49,7 @@ interface BoiCanh {
 /** Dự án "Cửa hàng": An (làm), Bình (duyệt), Em (Thành viên khác) và Chi (Support) trong Dự án; Dũng ngoài Dự án. Một Task ở trạng thái `trangThai`. */
 async function dungBoiCanh(trangThai: TrangThaiTask = 'MOI', goc: KhoBoNho = taoKhoBoNho({ pmBanDau: PM })): Promise<BoiCanh> {
   const pm = await phienCua(goc, PM.email)
-  const duAn = giaTri(await goc.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await goc.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const anId = await taoNguoi(goc, 'an@vi-du.vn', 'An', 'THANH_VIEN')
   const binhId = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình', 'THANH_VIEN')
   await taoNguoi(goc, 'em@vi-du.vn', 'Em', 'THANH_VIEN')
@@ -123,7 +124,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
 
     await choCoNut('Bắt đầu làm')
     expect(tenCacNut()).toEqual(['Bắt đầu làm'])
-    expect(screen.getByRole('group', { name: 'Lịch sử trạng thái' })).toHaveTextContent('Chưa có lần đổi trạng thái nào.')
+    expect(screen.getByRole('group', { name: 'Lịch sử Task' })).toHaveTextContent('Chưa có lần đổi trạng thái hay Mức ưu tiên nào.')
 
     await user.click(screen.getByRole('button', { name: 'Bắt đầu làm' }))
     expect(await screen.findByText('Đã chuyển Task sang Đang làm.')).toBeInTheDocument()
@@ -131,9 +132,9 @@ describe('chi tiết Task: chuyển trạng thái', () => {
     expect(tenCacNut()).toEqual(['Báo chờ duyệt'])
     expect(screen.getByRole('group', { name: 'Thông tin Task' })).toHaveTextContent('Trạng thái: Đang làm')
 
-    const ls = await within(screen.getByRole('group', { name: 'Lịch sử trạng thái' })).findByText('Mới sang Đang làm')
+    const ls = await within(screen.getByRole('group', { name: 'Lịch sử Task' })).findByText('Mới sang Đang làm')
     expect(ls).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Lịch sử trạng thái' })).toHaveTextContent('An, 01/03/2026 08:00')
+    expect(screen.getByRole('group', { name: 'Lịch sử Task' })).toHaveTextContent('An, 01/03/2026 08:00')
 
     const task = await doiDen(bc.kho, bc.task.id)
     expect(task.trangThai).toBe('DANG_LAM')
@@ -209,7 +210,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       expect(await screen.findByText('Số lần bị Trả lại: 1')).toBeInTheDocument()
       expect(hopLyDoDaDong()).toBe(true)
       expect(screen.getByRole('group', { name: 'Thông tin Task' })).toHaveTextContent('Trạng thái: Trả lại')
-      const lichSuUi = screen.getByRole('group', { name: 'Lịch sử trạng thái' })
+      const lichSuUi = screen.getByRole('group', { name: 'Lịch sử Task' })
       expect(await within(lichSuUi).findByText('Chờ duyệt sang Trả lại')).toBeInTheDocument()
       expect(lichSuUi).toHaveTextContent('Lý do: Thiếu ảnh sản phẩm')
       expect(lichSuUi).toHaveTextContent('Bình, 01/03/2026 08:00')
@@ -329,14 +330,11 @@ describe('chi tiết Task: chuyển trạng thái', () => {
     it('đang kiểm các bước làm được: hiện đang tải, chưa có nút', async () => {
       const goc = taoKhoBoNho({ pmBanDau: PM })
       await dungBoiCanh('MOI', goc)
-      let lanGoi = 0
       const kho: KhoDuLieu = {
         ...goc,
-        // Lần đầu (màn Dự án của tôi) bình thường; lần sau (chi tiết Task) treo mãi.
-        danhSachDuAnCuaToi: (phien) => {
-          lanGoi += 1
-          return lanGoi <= 1 ? goc.danhSachDuAnCuaToi(phien) : new Promise(() => {})
-        },
+        // Màn Dự án của tôi đọc danh sách kèm số liệu (lệnh khác, vẫn bình thường); chi tiết Task đọc lệnh
+        // này để kiểm các bước làm được thì treo mãi.
+        danhSachDuAnCuaToi: () => new Promise(() => {}),
       }
       const { user } = dungApp(goc, kho)
       await moChiTiet(user, 'an@vi-du.vn')
@@ -350,9 +348,10 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       let lanGoi = 0
       const kho: KhoDuLieu = {
         ...goc,
+        // Lần đầu (chi tiết Task kiểm các bước làm được) lỗi; thử lại thì được.
         danhSachDuAnCuaToi: async (phien) => {
           lanGoi += 1
-          return lanGoi === 2 ? thatBai('LOI_HE_THONG') : goc.danhSachDuAnCuaToi(phien)
+          return lanGoi === 1 ? thatBai('LOI_HE_THONG') : goc.danhSachDuAnCuaToi(phien)
         },
       }
       const { user } = dungApp(goc, kho)
@@ -380,10 +379,10 @@ describe('chi tiết Task: chuyển trạng thái', () => {
       await moChiTiet(user, 'an@vi-du.vn')
       expect(await screen.findByRole('progressbar', { name: 'Đang tải lịch sử…' })).toBeInTheDocument()
       tiepTuc()
-      const vung = screen.getByRole('group', { name: 'Lịch sử trạng thái' })
-      expect(await within(vung).findByRole('alert')).toHaveTextContent('Không tải được lịch sử trạng thái.')
+      const vung = screen.getByRole('group', { name: 'Lịch sử Task' })
+      expect(await within(vung).findByRole('alert')).toHaveTextContent('Không tải được lịch sử Task.')
       await user.click(within(vung).getByRole('button', { name: 'Thử lại' }))
-      expect(await within(vung).findByText('Chưa có lần đổi trạng thái nào.')).toBeInTheDocument()
+      expect(await within(vung).findByText('Chưa có lần đổi trạng thái hay Mức ưu tiên nào.')).toBeInTheDocument()
     })
   })
 
@@ -396,7 +395,7 @@ describe('chi tiết Task: chuyển trạng thái', () => {
     giaTri(await bc.kho.doiTrangThaiTask(binh, bc.task.id, { sang: 'TRA_LAI', lyDo: 'Làm lại' }, new Date('2026-03-01T11:00:00+07:00')))
     const { user } = dungApp(bc.kho)
     await moChiTiet(user, 'em@vi-du.vn')
-    const vung = screen.getByRole('group', { name: 'Lịch sử trạng thái' })
+    const vung = screen.getByRole('group', { name: 'Lịch sử Task' })
     await within(vung).findByText('Mới sang Đang làm')
     const dong = within(vung).getAllByRole('listitem').map((d) => d.textContent ?? '')
     expect(dong).toHaveLength(3)

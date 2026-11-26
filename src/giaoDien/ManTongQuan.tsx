@@ -6,10 +6,12 @@ import { ClickableCard } from '@astryxdesign/core/ClickableCard'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Grid } from '@astryxdesign/core/Grid'
 import { Heading } from '@astryxdesign/core/Heading'
+import { HStack } from '@astryxdesign/core/HStack'
 import { ProgressBar } from '@astryxdesign/core/ProgressBar'
 import { Spinner } from '@astryxdesign/core/Spinner'
 import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
 import { Text } from '@astryxdesign/core/Text'
+import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { Phien } from '../kho/khoDuLieu'
@@ -17,7 +19,7 @@ import { docTongQuan, type DongTongQuan, type TaskCuaTongQuan, type TongQuan } f
 import { duocTaoDuAn } from '../luat/duAn'
 import { CAC_TRANG_THAI_TASK, TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
-import { nhanTienDo } from '../luat/tienDo'
+import { NHAN_QUA_HAN_DU_KIEN, nhanTienDo } from '../luat/tienDo'
 import { SO_NGAY_TOI_HAN, type OSoTongQuan } from '../luat/tongQuan'
 import { useKho } from './khoContext'
 import { ManChiTietDuAn } from './ManChiTietDuAn'
@@ -38,6 +40,9 @@ interface Props {
   onHetPhien: () => void
 }
 
+/** Dấu trên dòng Dự án đang hoạt động chưa có Người phụ trách (chỉ PM và Support thấy). */
+export const NHAN_CHUA_CO_NGUOI_PHU_TRACH = 'Chưa có Người phụ trách'
+
 /** Độ rộng tối thiểu (điểm ảnh) của một ô số và một cột trước khi lưới xuống dòng; là độ rộng cấu trúc. */
 const RONG_O_SO = 176
 const RONG_COT = 420
@@ -46,6 +51,7 @@ type ManCon = { loai: 'tongQuan' } | { loai: 'duAn'; duAnId: string }
 
 const NHAN_O_SO: Record<keyof OSoTongQuan, string> = {
   duAnDangHoatDong: 'Dự án đang hoạt động',
+  duAnQuaHanDuKien: 'Dự án Quá hạn dự kiến',
   taskDangMo: 'Task đang mở',
   taskTreHan: 'Task Trễ hạn',
   choToiDuyet: 'Chờ tôi duyệt',
@@ -65,8 +71,10 @@ function NoiDungOSo({ nhan, so }: { nhan: string; so: number }) {
 }
 
 function HangOSo({ oSo, onMoTrang }: { oSo: OSoTongQuan; onMoTrang: (trang: TrangTuOSo) => void }) {
-  const oThuong = (khoa: 'duAnDangHoatDong' | 'taskDangMo' | 'taskTreHan') => (
-    <Card key={khoa} variant={khoa === 'taskTreHan' && oSo.taskTreHan > 0 ? 'red' : 'default'}>
+  const oThuong = (khoa: 'duAnDangHoatDong' | 'duAnQuaHanDuKien' | 'taskDangMo' | 'taskTreHan') => (
+    <Card
+      key={khoa}
+      variant={(khoa === 'taskTreHan' || khoa === 'duAnQuaHanDuKien') && oSo[khoa] > 0 ? 'red' : 'default'}>
       <NoiDungOSo nhan={NHAN_O_SO[khoa]} so={oSo[khoa]} />
     </Card>
   )
@@ -80,8 +88,9 @@ function HangOSo({ oSo, onMoTrang }: { oSo: OSoTongQuan; onMoTrang: (trang: Tran
   )
   return (
     <VStack role="group" aria-label="Số liệu chính">
-      <Grid columns={{ minWidth: RONG_O_SO, max: 5, repeat: 'fit' }} gap={4}>
+      <Grid columns={{ minWidth: RONG_O_SO, max: 6, repeat: 'fit' }} gap={4}>
         {oThuong('duAnDangHoatDong')}
+        {oThuong('duAnQuaHanDuKien')}
         {oThuong('taskDangMo')}
         {oThuong('taskTreHan')}
         {oMoTrang('choToiDuyet')}
@@ -92,15 +101,36 @@ function HangOSo({ oSo, onMoTrang }: { oSo: OSoTongQuan; onMoTrang: (trang: Tran
 }
 
 /** Một dòng bảng Dự án (kiểu đối tượng thuần, như Table đòi). */
-type DongDuAn = { id: string; ten: string; dong: DongTongQuan }
+type DongDuAn = { id: string; ma: string; ten: string; dong: DongTongQuan }
 
 function BangDuAnHoatDong({ dong, onMo }: { dong: DongTongQuan[]; onMo: (duAnId: string) => void }) {
   const cot: TableColumn<DongDuAn>[] = [
+    { key: 'ma', header: 'Mã', width: proportional(1), renderCell: (d) => <Text weight="semibold">{d.ma}</Text> },
     {
       key: 'ten',
       header: 'Dự án',
       width: proportional(2),
-      renderCell: (d) => <Button label={d.ten} variant="ghost" onClick={() => onMo(d.id)} />,
+      renderCell: (d) => (
+        <HStack gap={2} vAlign="center" wrap="wrap">
+          <Button label={d.ten} variant="ghost" onClick={() => onMo(d.id)} />
+          {d.dong.quaHanDuKien && (
+            <Token
+              label={NHAN_QUA_HAN_DU_KIEN}
+              color="red"
+              size="sm"
+              description="Đã qua Ngày kết thúc dự kiến mà Tiến độ chưa đủ 100%."
+            />
+          )}
+          {d.dong.chuaCoNguoiPhuTrach && (
+            <Token
+              label={NHAN_CHUA_CO_NGUOI_PHU_TRACH}
+              color="yellow"
+              size="sm"
+              description="Dự án đang hoạt động chưa có Người phụ trách."
+            />
+          )}
+        </HStack>
+      ),
     },
     {
       key: 'tienDo',
@@ -120,7 +150,7 @@ function BangDuAnHoatDong({ dong, onMo }: { dong: DongTongQuan[]; onMo: (duAnId:
       ),
     },
   ]
-  const du: DongDuAn[] = dong.map((d) => ({ id: d.duAn.id, ten: d.duAn.ten, dong: d }))
+  const du: DongDuAn[] = dong.map((d) => ({ id: d.duAn.id, ma: d.duAn.ma, ten: d.duAn.ten, dong: d }))
   return (
     <VStack gap={3} role="group" aria-label="Dự án đang hoạt động">
       <Heading level={3}>Dự án đang hoạt động</Heading>
@@ -130,7 +160,7 @@ function BangDuAnHoatDong({ dong, onMo }: { dong: DongTongQuan[]; onMo: (duAnId:
 }
 
 /** Một dòng danh sách Task (kiểu đối tượng thuần, như Table đòi). */
-type DongTask = { id: string; tieuDe: string; tenDuAn: string; nguoiThucHien: string; han: string }
+type DongTask = { id: string; tieuDe: string; maDuAn: string; tenDuAn: string; nguoiThucHien: string; han: string }
 
 function DanhSachTask({
   tieuDe,
@@ -161,6 +191,7 @@ function DanhSachTask({
         />
       ),
     },
+    { key: 'maDuAn', header: 'Mã Dự án', width: proportional(1), renderCell: (d) => <Text weight="semibold">{d.maDuAn}</Text> },
     { key: 'tenDuAn', header: 'Dự án', width: proportional(1), renderCell: (d) => <Text>{d.tenDuAn}</Text> },
     {
       key: 'nguoiThucHien',
@@ -173,6 +204,7 @@ function DanhSachTask({
   const du: DongTask[] = task.map((t) => ({
     id: t.id,
     tieuDe: t.tieuDe,
+    maDuAn: t.maDuAn,
     tenDuAn: t.tenDuAn,
     nguoiThucHien: t.nguoiThucHien.tenHienThi,
     han: t.han === null ? 'Không có hạn' : dinhDangNgay(t.han),

@@ -15,6 +15,7 @@ import type { KetQua, LoiKho, MaLoi } from '../kho/ketQua'
 import type { NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
 import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, vaiGiuTask, xepTask } from '../luat/task'
 import { TEN_VAI, xepTheoTen, type VaiHeThong } from '../luat/taiKhoan'
+import { DO_DAI_VAI_TRO_TRONG_DU_AN_TOI_DA } from '../luat/duAn'
 import { useKho } from './khoContext'
 import { trangThaiO } from './trangThaiO'
 
@@ -28,6 +29,8 @@ interface Props {
   onThuLai: () => void
   /** Cập nhật danh sách sau một lần thêm hoặc gỡ thành công. */
   onDoiDanhSach: (capNhat: (cu: NguoiTrongDuAn[]) => NguoiTrongDuAn[]) => void
+  /** Thay một người trong danh sách bằng bản mới (vừa sửa Vai trò trong Dự án); không đổi gì khác. */
+  onThayNguoi: (moi: NguoiTrongDuAn) => void
   /** Kho từ chối vì Dự án hay quyền đã đổi ở nơi khác: đọc lại để nút và lý do khớp với Kho. */
   onCanDocLai: () => void
   /** Mở một Task (để giao lại trước khi gỡ người giữ nó); không truyền thì danh sách Task chỉ để xem. */
@@ -41,6 +44,18 @@ type Dong = {
   tenHienThi: string
   email: string
   vai: VaiHeThong
+  vaiTroTrongDuAn: string | null
+  chucDanh: string | null
+  soDienThoai: string | null
+  soTaskDangGiu: number
+}
+
+/** Ô Vai trò trong Dự án đang sửa ngay trên hàng: người đó, giá trị đang gõ và lỗi của lần lưu gần nhất. */
+type DangSuaVaiTro = { id: string; tenHienThi: string; giaTri: string; loi: LoiKho | null }
+
+/** Ô chữ tuỳ chọn: chưa có thì hiện "Chưa có" màu phụ (Thông tin nhân sự chưa nhập hay không được xem). */
+function oTuyChon(giaTri: string | null) {
+  return giaTri === null ? <Text color="secondary">Chưa có</Text> : <Text>{giaTri}</Text>
 }
 
 /**
@@ -57,7 +72,11 @@ type ThongBao = { loai: 'thanhCong'; noiDung: string } | { loai: 'loi'; tieuDe: 
 /** Lỗi cho thấy Dự án hay quyền của người dùng đã đổi ở nơi khác. */
 const LOI_CAN_DOC_LAI: readonly MaLoi[] = ['DU_AN_DA_LUU_TRU', 'KHONG_CO_QUYEN', 'KHONG_TIM_THAY']
 
-/** Phần "Người trong dự án" của màn chi tiết Dự án: xem, thêm bằng email và gỡ người. */
+/**
+ * Phần "Người trong dự án" của màn chi tiết Dự án: bảng người (tên, Vai trò trong Dự án, Chức danh, Số
+ * điện thoại, số Task đang giữ), thêm bằng email (kèm Vai trò trong Dự án tuỳ chọn), sửa Vai trò trong Dự
+ * án ngay trên hàng và gỡ người. Quyền thêm, sửa vai trò và gỡ là cùng một luật (`lyDoKhongGhi`).
+ */
 export function PhanNguoiTrongDuAn({
   phien,
   duAnId,
@@ -65,13 +84,17 @@ export function PhanNguoiTrongDuAn({
   lyDoKhongGhi,
   onThuLai,
   onDoiDanhSach,
+  onThayNguoi,
   onCanDocLai,
   onMoTask,
   onHetPhien,
 }: Props) {
   const kho = useKho()
   const [email, setEmail] = useState('')
+  const [vaiTroMoi, setVaiTroMoi] = useState('')
   const [dangThem, setDangThem] = useState(false)
+  const [dangSua, setDangSua] = useState<DangSuaVaiTro | null>(null)
+  const [dangLuuVaiTro, setDangLuuVaiTro] = useState(false)
   const [dangGoId, setDangGoId] = useState<string | null>(null)
   // Chặn lệnh trùng (bấm hai lần trước khi kịp vẽ lại) bằng ref chứ không bằng state.
   const dangGuiRef = useRef(false)
@@ -93,16 +116,45 @@ export function PhanNguoiTrongDuAn({
     dangGuiRef.current = true
     setDangThem(true)
     setThongBao(null)
-    const kq = await kho.themNguoiVaoDuAn(phien, duAnId, { email })
+    const kq = await kho.themNguoiVaoDuAn(phien, duAnId, { email, vaiTroTrongDuAn: vaiTroMoi })
     dangGuiRef.current = false
     setDangThem(false)
     if (kq.ok) {
       const moi = kq.giaTri
       onDoiDanhSach((cu) => [...cu.filter((nguoi) => nguoi.id !== moi.id), moi])
       setEmail('')
+      setVaiTroMoi('')
       setThongBao({ loai: 'thanhCong', noiDung: `Đã thêm ${moi.tenHienThi} vào Dự án.` })
     } else {
       xuLyLoi('Chưa thêm được người vào Dự án.', kq.loi)
+    }
+  }
+
+  /** Mở ô sửa Vai trò trong Dự án ngay trên hàng của người đó (đóng ô đang mở ở hàng khác nếu có). */
+  function moSuaVaiTro(nguoi: Dong) {
+    if (!duocGhi) return
+    setThongBao(null)
+    setDangSua({ id: nguoi.id, tenHienThi: nguoi.tenHienThi, giaTri: nguoi.vaiTroTrongDuAn ?? '', loi: null })
+  }
+
+  async function luuVaiTro() {
+    if (!dangSua || dangGuiRef.current || !duocGhi) return
+    dangGuiRef.current = true
+    setDangLuuVaiTro(true)
+    setThongBao(null)
+    const kq = await kho.suaVaiTroTrongDuAn(phien, duAnId, dangSua.id, { vaiTroTrongDuAn: dangSua.giaTri })
+    dangGuiRef.current = false
+    setDangLuuVaiTro(false)
+    if (kq.ok) {
+      onThayNguoi(kq.giaTri)
+      setDangSua(null)
+      setThongBao({ loai: 'thanhCong', noiDung: `Đã lưu Vai trò trong Dự án của ${kq.giaTri.tenHienThi}.` })
+    } else if (kq.loi.ma === 'KHONG_HOP_LE') {
+      // Lỗi theo ô: giữ ô đang sửa, hiện lỗi ngay cạnh ô.
+      setDangSua((cu) => (cu ? { ...cu, loi: kq.loi } : cu))
+    } else {
+      setDangSua(null)
+      xuLyLoi(`Chưa lưu được Vai trò trong Dự án của ${dangSua.tenHienThi}.`, kq.loi)
     }
   }
 
@@ -168,19 +220,75 @@ export function PhanNguoiTrongDuAn({
     { key: 'vai', header: 'Đang giữ ở vai', width: proportional(1), renderCell: (task) => <Text>{task.vai}</Text> },
   ]
 
+  /** Ô Vai trò trong Dự án: chữ đang có (kèm nút sửa nếu được ghi), hoặc ô nhập ngay trên hàng đang sửa. */
+  function oVaiTro(nguoi: Dong) {
+    if (duocGhi && dangSua?.id === nguoi.id) {
+      return (
+        <VStack gap={1}>
+          <TextInput
+            label={`Vai trò trong Dự án của ${nguoi.tenHienThi}`}
+            isLabelHidden
+            size="sm"
+            hasAutoFocus
+            autoComplete="off"
+            value={dangSua.giaTri}
+            onChange={(giaTri) => setDangSua((cu) => (cu ? { ...cu, giaTri } : cu))}
+            onEnter={luuVaiTro}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setDangSua(null)
+            }}
+            status={trangThaiO(dangSua.loi, 'vaiTroTrongDuAn')}
+          />
+          <HStack gap={1} wrap="wrap">
+            <Button label="Lưu vai trò" variant="primary" size="sm" isLoading={dangLuuVaiTro} onClick={luuVaiTro} />
+            <Button label="Huỷ" variant="ghost" size="sm" onClick={() => setDangSua(null)} />
+          </HStack>
+        </VStack>
+      )
+    }
+    return (
+      <HStack gap={1} align="center" wrap="wrap">
+        {oTuyChon(nguoi.vaiTroTrongDuAn)}
+        {duocGhi && (
+          <Button label={`Sửa vai trò của ${nguoi.tenHienThi}`} variant="ghost" size="sm" onClick={() => moSuaVaiTro(nguoi)}>
+            Sửa
+          </Button>
+        )}
+      </HStack>
+    )
+  }
+
   const cot: TableColumn<Dong>[] = [
     {
       key: 'tenHienThi',
       header: 'Tên',
-      width: proportional(1),
-      renderCell: (nguoi) => <Text weight="semibold">{nguoi.tenHienThi}</Text>,
+      width: proportional(2),
+      renderCell: (nguoi) => (
+        <VStack gap={0.5}>
+          <Text weight="semibold">{nguoi.tenHienThi}</Text>
+          <Text type="supporting" color="secondary">
+            {nguoi.email}
+          </Text>
+          <HStack gap={1}>
+            <Token label={TEN_VAI[nguoi.vai]} />
+          </HStack>
+        </VStack>
+      ),
     },
-    { key: 'email', header: 'Email', width: proportional(1), renderCell: (nguoi) => <Text>{nguoi.email}</Text> },
+    { key: 'vaiTroTrongDuAn', header: 'Vai trò trong Dự án', width: proportional(2), renderCell: oVaiTro },
+    { key: 'chucDanh', header: 'Chức danh', width: proportional(1), renderCell: (nguoi) => oTuyChon(nguoi.chucDanh) },
     {
-      key: 'vai',
-      header: 'Vai hệ thống',
+      key: 'soDienThoai',
+      header: 'Số điện thoại',
       width: proportional(1),
-      renderCell: (nguoi) => <Token label={TEN_VAI[nguoi.vai]} />,
+      renderCell: (nguoi) => oTuyChon(nguoi.soDienThoai),
+    },
+    {
+      key: 'soTaskDangGiu',
+      header: 'Task đang giữ',
+      width: proportional(1),
+      align: 'end',
+      renderCell: (nguoi) => <Text hasTabularNumbers>{String(nguoi.soTaskDangGiu)}</Text>,
     },
   ]
   if (duocGhi) {
@@ -226,11 +334,15 @@ export function PhanNguoiTrongDuAn({
       />
     )
   } else {
-    const dong: Dong[] = xepTheoTen(tai.giaTri).map(({ id, tenHienThi, email: e, vai }) => ({
-      id,
-      tenHienThi,
-      email: e,
-      vai,
+    const dong: Dong[] = xepTheoTen(tai.giaTri).map((nguoi) => ({
+      id: nguoi.id,
+      tenHienThi: nguoi.tenHienThi,
+      email: nguoi.email,
+      vai: nguoi.vai,
+      vaiTroTrongDuAn: nguoi.vaiTroTrongDuAn,
+      chucDanh: nguoi.chucDanh,
+      soDienThoai: nguoi.soDienThoai,
+      soTaskDangGiu: nguoi.soTaskDangGiu,
     }))
     danhSach = <Table aria-label="Danh sách người trong dự án" data={dong} columns={cot} idKey="id" />
   }
@@ -298,6 +410,18 @@ export function PhanNguoiTrongDuAn({
           isDisabled={!duocGhi}
           disabledMessage={lyDoKhongGhi ?? undefined}
           status={trangThaiO(loiO, 'email')}
+        />
+        <TextInput
+          label="Vai trò trong Dự án"
+          description={`Việc người này đảm nhận ở Dự án, ví dụ Trưởng nhóm. Tối đa ${DO_DAI_VAI_TRO_TRONG_DU_AN_TOI_DA} ký tự, không đổi quyền.`}
+          isOptional
+          autoComplete="off"
+          value={vaiTroMoi}
+          onChange={setVaiTroMoi}
+          onEnter={duocGhi ? them : undefined}
+          isDisabled={!duocGhi}
+          disabledMessage={lyDoKhongGhi ?? undefined}
+          status={trangThaiO(loiO, 'vaiTroTrongDuAn')}
         />
       </FormLayout>
       {duocGhi && (

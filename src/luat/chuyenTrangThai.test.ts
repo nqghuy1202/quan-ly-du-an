@@ -248,7 +248,7 @@ describe('bộ đếm Trả lại và lịch sử', () => {
   it('dòng lịch sử ghi người, giờ (bản sao), từ, sang, lý do', () => {
     const gio = new Date('2026-06-02T08:30:00+07:00')
     const dong = dongLichSuMoi('an', gio, { tu: 'CHO_DUYET', sang: 'TRA_LAI' }, 'Thiếu ảnh')
-    expect(dong).toEqual({ nguoiDoi: 'an', luc: gio, tu: 'CHO_DUYET', sang: 'TRA_LAI', lyDo: 'Thiếu ảnh' })
+    expect(dong).toEqual({ loai: 'TRANG_THAI', nguoiDoi: 'an', luc: gio, tu: 'CHO_DUYET', sang: 'TRA_LAI', lyDo: 'Thiếu ảnh' })
     expect(dong.luc).not.toBe(gio)
   })
 

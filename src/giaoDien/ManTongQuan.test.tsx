@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import type { TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, dongNganTruot } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC_TAO = new Date('2026-03-01T08:00:00+07:00')
@@ -41,7 +42,7 @@ async function taoNguoi(kho: KhoBoNho, email: string, tenHienThi: string, vai: V
 
 async function taoDuAn(kho: KhoBoNho, ten: string, emails: string[] = []): Promise<DuAn> {
   const pm = await phienCua(kho, PM.email)
-  const duAn = giaTri(await kho.taoDuAn(pm, { ten }, LUC_TAO))
+  const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten }, LUC_TAO))
   for (const email of emails) giaTri(await kho.themNguoiVaoDuAn(pm, duAn.id, { email }))
   return duAn
 }
@@ -295,14 +296,15 @@ describe('Tổng quan', () => {
         .slice(1)
         .map((dong) => within(dong).getAllByRole('cell').map((o) => o.textContent))
     const treHan = await screen.findByRole('table', { name: 'Task Trễ hạn' })
+    // Mã Dự án đứng cạnh tên Dự án.
     expect(dongCua(treHan)).toEqual([
-      ['Trễ 6 ngày', 'Kho hàng', 'Bình', '20/11/2026'],
-      ['Trễ 1 ngày', 'Cửa hàng', 'An', '25/11/2026'],
+      ['Trễ 6 ngày', khoHang.ma, 'Kho hàng', 'Bình', '20/11/2026'],
+      ['Trễ 1 ngày', cuaHang.ma, 'Cửa hàng', 'An', '25/11/2026'],
     ])
     const toiHan = screen.getByRole('table', { name: 'Task tới hạn trong 7 ngày' })
     expect(dongCua(toiHan)).toEqual([
-      ['Hạn hôm nay', 'Kho hàng', 'Bình', '26/11/2026'],
-      ['Hạn ngày thứ bảy', 'Cửa hàng', 'An', '03/12/2026'],
+      ['Hạn hôm nay', khoHang.ma, 'Kho hàng', 'Bình', '26/11/2026'],
+      ['Hạn ngày thứ bảy', cuaHang.ma, 'Cửa hàng', 'An', '03/12/2026'],
     ])
     expect(await soTrongO('Task Trễ hạn')).toBe('2')
 
@@ -365,6 +367,7 @@ describe('Tổng quan', () => {
       const ngan = within(await choNganTruot('Tạo Dự án'))
       // Tổng quan ở nguyên phía sau ngăn.
       expect(ungDung.getByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
+      await user.type(ngan.getByLabelText(/Mã Dự án/), 'da-1')
       await user.type(ngan.getByLabelText(/Tên Dự án/), 'Dự án 1')
       await user.click(ngan.getByRole('button', { name: 'Tạo Dự án' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

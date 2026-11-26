@@ -18,12 +18,17 @@ export type TongQuan = SoLieuTongQuan<DuAn, Task>
 /**
  * Đọc Tổng quan của người gọi. PM thấy mọi Dự án; Support và Thành viên chỉ Dự án mình ở trong (do
  * `danhSachDuAn` quyết định). Chỉ Dự án đang hoạt động được đọc: Task của Dự án Lưu trữ không tính ở
- * đâu trên Tổng quan. Người chưa ở Dự án nào nhận mọi số 0 và danh sách rỗng. Lỗi của lệnh Kho nào
+ * đâu trên Tổng quan. Dấu "chưa có Người phụ trách" chỉ bật khi người gọi là PM hoặc Support (vai đọc
+ * từ hồ sơ). Người chưa ở Dự án nào nhận mọi số 0 và danh sách rỗng. Lỗi của lệnh Kho nào
  * (vd. `CHUA_DANG_NHAP`, `LOI_HE_THONG`) được trả nguyên.
  */
 export async function docTongQuan(kho: KhoDuLieu, phien: Phien | null, bayGio: Date): Promise<KetQua<TongQuan>> {
   const duAn = await kho.danhSachDuAn(phien, { trangThai: 'HOAT_DONG' })
   if (!duAn.ok) return duAn
+  // Vai hệ thống của người gọi lấy từ hồ sơ trong Kho (không tin giao diện): quyết định dấu "chưa có
+  // Người phụ trách".
+  const hoSo = await kho.layHoSoCuaToi(phien)
+  if (!hoSo.ok) return hoSo
   const taskTheoDuAn = await Promise.all(duAn.giaTri.map((d) => kho.danhSachTask(phien, d.id)))
   const duLieu = []
   for (let i = 0; i < duAn.giaTri.length; i++) {
@@ -31,5 +36,5 @@ export async function docTongQuan(kho: KhoDuLieu, phien: Phien | null, bayGio: D
     if (!task.ok) return task
     duLieu.push({ duAn: duAn.giaTri[i], task: task.giaTri })
   }
-  return thanhCong(tinhTongQuan(duLieu, bayGio, phien?.nguoiDungId ?? ''))
+  return thanhCong(tinhTongQuan(duLieu, bayGio, hoSo.giaTri.id, hoSo.giaTri.vai))
 }

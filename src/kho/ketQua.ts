@@ -18,7 +18,10 @@ export type MaLoi =
   | 'DA_TRONG_DU_AN'
   /** Task thiếu Người thực hiện hoặc Người kiểm tra. */
   | 'THIEU_NGUOI'
-  /** Người được chọn cho Task không ở trong Dự án (hoặc không tồn tại). */
+  /**
+   * Người được chọn (Người thực hiện, Người kiểm tra của Task, hoặc Người phụ trách của Dự án) không ở
+   * trong Dự án (hoặc không tồn tại). Với Người phụ trách, Kho trả thông báo riêng kèm lỗi ở ô `nguoiPhuTrachId`.
+   */
   | 'NGUOI_NGOAI_DU_AN'
   /** Cùng một người vừa là Người thực hiện vừa là Người kiểm tra. */
   | 'TRUNG_NGUOI'
@@ -40,6 +43,8 @@ export type MaLoi =
   | 'BUOC_KHONG_HOP_LE'
   /** Trả lại, Bị lỗi hay Huỷ mà lý do rỗng hoặc chỉ khoảng trắng. */
   | 'LY_DO_BAT_BUOC'
+  /** Mã Dự án đã được dùng cho một Dự án khác (không phân biệt hoa thường); khác với Mã sai dạng (`KHONG_HOP_LE`). */
+  | 'MA_DU_AN_DA_DUNG'
 
 export interface LoiKho {
   ma: MaLoi
@@ -94,4 +99,5 @@ export const THONG_BAO_MAC_DINH: Record<MaLoi, string> = {
   LINK_TRUNG: 'Link này đã có trên Task.',
   BUOC_KHONG_HOP_LE: 'Bước đổi trạng thái này không có trong vòng duyệt của Task.',
   LY_DO_BAT_BUOC: 'Hãy nhập lý do. Trả lại, báo Bị lỗi và Huỷ Task đều bắt buộc có lý do.',
+  MA_DU_AN_DA_DUNG: 'Mã Dự án này đã được dùng cho một Dự án khác (không phân biệt hoa thường). Hãy chọn mã khác.',
 }

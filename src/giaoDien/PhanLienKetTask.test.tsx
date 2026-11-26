@@ -10,6 +10,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_GITHUB_MAC_DINH, THONG_BAO_LIEN_KET, khoaLienKet, type LienKetGitHub } from '../luat/github'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, dongNganTruot, moTabTask } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -49,7 +50,7 @@ interface BoiCanh {
 async function dungBoiCanh(cacLink: string[] = []): Promise<BoiCanh> {
   const kho = taoKhoBoNho({ pmBanDau: PM })
   const pm = await phienCua(kho, PM.email)
-  const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const anId = await taoNguoi(kho, 'an@vi-du.vn', 'An', 'THANH_VIEN')
   const binhId = await taoNguoi(kho, 'binh@vi-du.vn', 'Bình', 'THANH_VIEN')
   giaTri(await kho.themNguoiVaoDuAn(pm, duAn.id, { email: 'an@vi-du.vn' }))

@@ -10,13 +10,14 @@ import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { DuAn, NguoiCuaTask, NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
-import { dinhDangNgayGio, type TrangThaiDuAn } from '../luat/duAn'
+import { dinhDangNgayGio, tenKemMa, type TrangThaiDuAn } from '../luat/duAn'
 import { lyDoKhongGhiLienKet } from '../luat/github'
 import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay, lyDoKhongSuaTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { useKho } from './khoContext'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 import { NganTruot } from './NganTruot'
+import { NhanMucUuTien } from './NhanMucUuTien'
 import { PhanChuyenTrangThaiTask } from './PhanChuyenTrangThaiTask'
 import { PhanLichSuTask } from './PhanLichSuTask'
 import { PhanLienKetTask } from './PhanLienKetTask'
@@ -29,6 +30,8 @@ export interface TaskCanMo {
   tieuDe: string
   /** Tên Dự án chứa Task, hiện dưới tiêu đề khi mở từ danh sách qua mọi Dự án. */
   tenDuAn?: string
+  /** Mã của Dự án chứa Task, hiện cạnh tên Dự án. */
+  maDuAn?: string
 }
 
 interface Props {
@@ -69,7 +72,9 @@ export function NganTruotTask({ phien, vai, dongHo, task, trangThaiDuAn, onDong,
     <NganTruot
       isOpen={task !== null}
       tieuDe={tieuDe}
-      phuDe={dangHien?.tenDuAn}
+      phuDe={
+        dangHien?.tenDuAn === undefined ? undefined : tenKemMa({ ma: dangHien.maDuAn ?? '', ten: dangHien.tenDuAn })
+      }
       onDong={onDong}
       onDaDongXong={() => {
         if (refTask.current === null) setDangHien(null)
@@ -311,6 +316,8 @@ function ChiTietTaskTrongNgan({
         onDaCapNhat={(moi, thongBao) => {
           capNhat(moi)
           setThongBaoSua(thongBao)
+          // Đổi Mức ưu tiên ghi một dòng lịch sử: tab Lịch sử đọc lại.
+          setLanLichSu((n) => n + 1)
         }}
         onCanDocLai={() => {
           setLanTai((n) => n + 1)
@@ -337,6 +344,10 @@ function ChiTietTaskTrongNgan({
         <Text>{`Trạng thái: ${TEN_TRANG_THAI_TASK[task.trangThai]}`}</Text>
         <DongNguoi nhan="Người thực hiện" nguoi={task.nguoiThucHien} />
         <DongNguoi nhan="Người kiểm tra" nguoi={task.nguoiKiemTra} />
+        <HStack gap={2} vAlign="center">
+          <Text>Mức ưu tiên:</Text>
+          <NhanMucUuTien mucUuTien={task.mucUuTien} size="sm" />
+        </HStack>
         <Text>{`Hạn: ${task.han === null ? 'Không có hạn' : dinhDangNgay(task.han)}`}</Text>
         <Text>{`Số lần bị Trả lại: ${task.soLanTraLai}`}</Text>
       </VStack>

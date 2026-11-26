@@ -116,6 +116,13 @@ export function taoBoBanCaiSupabase(cauHinh: CauHinhTestSupabase): BoBanCaiSupab
   let soCa = 0
 
   const emailMoi = (ten: string) => `${ten}.${maLanChay}-${soCa}@${cauHinh.tenMien}`.toLowerCase()
+  // Mã Dự án duy nhất trên mọi Dự án và Supabase thật không xoá dữ liệu giữa các lần chạy: mỗi lần
+  // chạy một tiền tố riêng (6 ký tự), rồi đếm tăng dần; vẫn đúng dạng 2 đến 12 ký tự.
+  let soMa = 0
+  const maDuAnMoi = () => {
+    soMa += 1
+    return `${maLanChay}-${soMa}`.toUpperCase()
+  }
 
   const service = createClient(cauHinh.url, cauHinh.khoaService, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -183,6 +190,7 @@ export function taoBoBanCaiSupabase(cauHinh: CauHinhTestSupabase): BoBanCaiSupab
     taoBanCai,
     tuyChon: {
       emailMoi,
+      maDuAnMoi,
       // Supabase thật đã (hoặc sẽ) có PM của chủ dự án và của các lần chạy trước.
       khoChuaCoPM: false,
       // Giờ do máy chủ đặt; Supabase Auth không phân biệt mã sai, đã dùng hay hết hạn.

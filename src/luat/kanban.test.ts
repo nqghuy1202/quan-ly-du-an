@@ -10,23 +10,37 @@ import {
   laViecCuaToi,
   locTask,
   nhomTheoCot,
+  xepTrongCot,
   xepViecCaNhan,
   type LocTask,
 } from './kanban'
 import { CAC_TRANG_THAI_TASK, type TrangThaiTask } from './task'
+import type { MucUuTien } from './mucUuTien'
 
 interface TaskMau {
   tieuDe: string
   trangThai: TrangThaiTask
+  mucUuTien: MucUuTien
+  han: string | null
   nguoiThucHien: { id: string }
   nguoiKiemTra: { id: string }
   dauVet: { taoLuc: Date }
 }
 
-function task(tieuDe: string, trangThai: TrangThaiTask, thucHien = 'an', kiemTra = 'binh', ngay = 1): TaskMau {
+function task(
+  tieuDe: string,
+  trangThai: TrangThaiTask,
+  thucHien = 'an',
+  kiemTra = 'binh',
+  ngay = 1,
+  mucUuTien: MucUuTien = 'TRUNG_BINH',
+  han: string | null = null,
+): TaskMau {
   return {
     tieuDe,
     trangThai,
+    mucUuTien,
+    han,
     nguoiThucHien: { id: thucHien },
     nguoiKiemTra: { id: kiemTra },
     dauVet: { taoLuc: new Date(2026, 0, ngay) },
@@ -55,18 +69,66 @@ describe('các cột Kanban', () => {
     expect(Object.values(rong).every((c) => c.length === 0)).toBe(true)
   })
 
-  it('trong một cột, Task mới tạo xếp trước', () => {
+  it('trong một cột, cùng Mức ưu tiên và cùng hạn thì Task mới tạo xếp trước', () => {
     const cot = nhomTheoCot([task('Cũ', 'MOI', 'an', 'binh', 1), task('Mới', 'MOI', 'an', 'binh', 5)])
     expect(cot.MOI.map((t) => t.tieuDe)).toEqual(['Mới', 'Cũ'])
   })
 })
 
+describe('thứ tự trong một cột Kanban', () => {
+  const tieuDe = (ds: TaskMau[]) => ds.map((t) => t.tieuDe)
+  const mau = (ten: string, muc: MucUuTien, han: string | null, ngay = 1) => task(ten, 'MOI', 'an', 'binh', ngay, muc, han)
+
+  it('Cao trước Trung bình trước Thấp, bất kể hạn và ngày tạo', () => {
+    const xep = xepTrongCot([
+      mau('Thấp gấp', 'THAP', '2026-01-01', 9),
+      mau('Trung bình', 'TRUNG_BINH', '2026-06-01', 1),
+      mau('Cao không hạn', 'CAO', null, 1),
+    ])
+    expect(tieuDe(xep)).toEqual(['Cao không hạn', 'Trung bình', 'Thấp gấp'])
+  })
+
+  it('cùng mức thì hạn gần hơn trước; Task không có hạn đứng sau', () => {
+    const xep = xepTrongCot([
+      mau('Không hạn', 'CAO', null, 9),
+      mau('Hạn xa', 'CAO', '2026-05-20', 1),
+      mau('Hạn gần', 'CAO', '2026-05-02', 1),
+      mau('Hạn đã qua', 'CAO', '2026-04-01', 1),
+    ])
+    expect(tieuDe(xep)).toEqual(['Hạn đã qua', 'Hạn gần', 'Hạn xa', 'Không hạn'])
+  })
+
+  it('cùng mức, cùng hạn thì giữ thứ tự hiện có: mới tạo trước, rồi theo tiêu đề', () => {
+    const xep = xepTrongCot([
+      mau('B cũ', 'THAP', '2026-05-02', 1),
+      mau('A cũ', 'THAP', '2026-05-02', 1),
+      mau('Mới', 'THAP', '2026-05-02', 5),
+    ])
+    expect(tieuDe(xep)).toEqual(['Mới', 'A cũ', 'B cũ'])
+  })
+
+  it('nhomTheoCot áp đúng thứ tự đó trong từng cột; không đổi danh sách đầu vào', () => {
+    const dauVao = [
+      task('Thấp', 'DANG_LAM', 'an', 'binh', 1, 'THAP', '2026-05-01'),
+      task('Trung bình không hạn', 'DANG_LAM', 'an', 'binh', 1, 'TRUNG_BINH', null),
+      task('Trung bình có hạn', 'DANG_LAM', 'an', 'binh', 1, 'TRUNG_BINH', '2026-06-01'),
+      task('Cao', 'DANG_LAM', 'an', 'binh', 1, 'CAO', null),
+      task('Mới cao', 'MOI', 'an', 'binh', 1, 'CAO', null),
+    ]
+    const truoc = [...dauVao]
+    const cot = nhomTheoCot(dauVao)
+    expect(tieuDe(cot.DANG_LAM)).toEqual(['Cao', 'Trung bình có hạn', 'Trung bình không hạn', 'Thấp'])
+    expect(tieuDe(cot.MOI)).toEqual(['Mới cao'])
+    expect(dauVao).toEqual(truoc)
+  })
+})
+
 describe('lọc Task', () => {
   const danhSach = [
-    task('A', 'MOI', 'an', 'binh'),
-    task('B', 'DANG_LAM', 'an', 'chi'),
-    task('C', 'DANG_LAM', 'binh', 'an'),
-    task('D', 'HOAN_THANH', 'chi', 'binh'),
+    task('A', 'MOI', 'an', 'binh', 1, 'CAO'),
+    task('B', 'DANG_LAM', 'an', 'chi', 1, 'TRUNG_BINH'),
+    task('C', 'DANG_LAM', 'binh', 'an', 1, 'CAO'),
+    task('D', 'HOAN_THANH', 'chi', 'binh', 1, 'THAP'),
   ]
   const tieuDe = (ds: TaskMau[]) => ds.map((t) => t.tieuDe)
 
@@ -82,12 +144,22 @@ describe('lọc Task', () => {
     expect(dangLoc(loc({ trangThai: 'MOI' }))).toBe(true)
   })
 
+  it('lọc theo Mức ưu tiên: chỉ còn Task đúng mức đó', () => {
+    expect(tieuDe(locTask(danhSach, loc({ mucUuTien: 'CAO' })))).toEqual(['A', 'C'])
+    expect(tieuDe(locTask(danhSach, loc({ mucUuTien: 'THAP' })))).toEqual(['D'])
+    expect(dangLoc(loc({ mucUuTien: 'TRUNG_BINH' }))).toBe(true)
+  })
+
   it('kết hợp nhiều bộ lọc cùng lúc là "và"', () => {
     expect(tieuDe(locTask(danhSach, loc({ nguoiThucHienId: 'an', trangThai: 'DANG_LAM' })))).toEqual(['B'])
     expect(
       tieuDe(locTask(danhSach, loc({ nguoiThucHienId: 'an', nguoiKiemTraId: 'chi', trangThai: 'DANG_LAM' }))),
     ).toEqual(['B'])
     expect(locTask(danhSach, loc({ nguoiThucHienId: 'an', nguoiKiemTraId: 'an' }))).toEqual([])
+    // Mức ưu tiên kết hợp với các bộ lọc đang có.
+    expect(tieuDe(locTask(danhSach, loc({ mucUuTien: 'CAO', trangThai: 'DANG_LAM' })))).toEqual(['C'])
+    expect(tieuDe(locTask(danhSach, loc({ mucUuTien: 'CAO', nguoiThucHienId: 'an' })))).toEqual(['A'])
+    expect(locTask(danhSach, loc({ mucUuTien: 'THAP', nguoiThucHienId: 'an' }))).toEqual([])
   })
 
   it('bỏ lọc thì trả lại đầy đủ', () => {
@@ -106,13 +178,15 @@ describe('lọc Task', () => {
 describe('kiểm bộ lọc ở ranh giới', () => {
   it('trống, null hay thiếu là không lọc; có giá trị thì giữ', () => {
     expect(kiemTraLocTask.loc({})).toEqual({ ok: true, giaTri: LOC_TASK_TRONG })
-    expect(kiemTraLocTask.loc({ nguoiThucHienId: '', nguoiKiemTraId: null, trangThai: ' ' })).toEqual({
+    expect(kiemTraLocTask.loc({ nguoiThucHienId: '', nguoiKiemTraId: null, trangThai: ' ', mucUuTien: '' })).toEqual({
       ok: true,
       giaTri: LOC_TASK_TRONG,
     })
-    expect(kiemTraLocTask.loc({ nguoiThucHienId: ' an ', nguoiKiemTraId: 'binh', trangThai: 'CHO_DUYET' })).toEqual({
+    expect(
+      kiemTraLocTask.loc({ nguoiThucHienId: ' an ', nguoiKiemTraId: 'binh', trangThai: 'CHO_DUYET', mucUuTien: 'CAO' }),
+    ).toEqual({
       ok: true,
-      giaTri: { nguoiThucHienId: 'an', nguoiKiemTraId: 'binh', trangThai: 'CHO_DUYET' },
+      giaTri: { nguoiThucHienId: 'an', nguoiKiemTraId: 'binh', trangThai: 'CHO_DUYET', mucUuTien: 'CAO' },
     })
   })
 
@@ -120,6 +194,10 @@ describe('kiểm bộ lọc ở ranh giới', () => {
     expect(kiemTraLocTask.loc({ trangThai: 'XOA' })).toEqual({
       ok: false,
       loiTheoO: { trangThai: THONG_BAO_KANBAN.trangThaiLocSai },
+    })
+    expect(kiemTraLocTask.loc({ mucUuTien: 'KHAN_CAP' })).toEqual({
+      ok: false,
+      loiTheoO: { mucUuTien: THONG_BAO_KANBAN.mucUuTienLocSai },
     })
     expect(kiemTraLocTask.loc({ nguoiThucHienId: 5 })).toEqual({
       ok: false,

@@ -1,6 +1,7 @@
 // Luật thuần về Tiến độ và Trễ hạn của Dự án. Không I/O, không đọc đồng hồ: "ngày hôm nay" luôn
 // được truyền vào (một thời điểm `Date`, đổi sang ngày theo giờ Việt Nam ở đây).
 // Kho dữ liệu và giao diện cùng dùng các hàm ở đây.
+import type { TrangThaiDuAn } from './duAn'
 import { CAC_TRANG_THAI_TASK, laTaskDaChot, type TrangThaiTask } from './task'
 
 /** Việt Nam lệch UTC +7 quanh năm, không có giờ mùa hè nên cộng thẳng 7 giờ là đủ. */
@@ -55,6 +56,52 @@ export function tinhTienDo(danhSach: readonly Pick<TaskDeTinhTienDo, 'trangThai'
   const hoanThanh = danhSach.filter((task) => task.trangThai === 'HOAN_THANH').length
   // Chia nguyên: hoanThanh * 100 / mau, không qua số thực nên không có sai số làm tròn lên.
   return { chuaCoTask: false, phanTram: Math.floor((hoanThanh * 100) / mau) }
+}
+
+/** Nhãn hiện trên Dự án có Quá hạn dự kiến (chữ, không chỉ dựa vào màu). */
+export const NHAN_QUA_HAN_DU_KIEN = 'Quá hạn dự kiến'
+
+/** Phần Dự án mà luật Quá hạn dự kiến cần đọc. */
+export interface DuAnDeTinhQuaHan {
+  trangThai: TrangThaiDuAn
+  /** `YYYY-MM-DD`; null khi chưa có Ngày kết thúc dự kiến. */
+  ngayKetThucDuKien: string | null
+}
+
+/**
+ * Dự án có Quá hạn dự kiến không: đang hoạt động, có Ngày kết thúc dự kiến, ngày đó trước ngày hôm nay
+ * theo giờ Việt Nam (`bayGio` truyền vào), và Tiến độ chưa đủ 100%. Dự án "chưa có task" vẫn tính là
+ * chưa đủ. Kết thúc đúng hôm nay thì chưa quá hạn. Khác với Trễ hạn (của Task).
+ */
+export function laDuAnQuaHanDuKien(duAn: DuAnDeTinhQuaHan, tienDo: TienDo, bayGio: Date): boolean {
+  if (duAn.trangThai !== 'HOAT_DONG' || duAn.ngayKetThucDuKien === null) return false
+  if (!tienDo.chuaCoTask && tienDo.phanTram >= 100) return false
+  // `YYYY-MM-DD` cùng độ dài nên so chuỗi chính là so ngày.
+  return duAn.ngayKetThucDuKien < homNayGioVietNam(bayGio)
+}
+
+/** Số liệu của một Dự án cho bảng Dự án: Tiến độ, số Task Trễ hạn, cờ Quá hạn dự kiến. */
+export interface SoLieuDuAn {
+  tienDo: TienDo
+  soTaskTreHan: number
+  quaHanDuKien: boolean
+}
+
+/**
+ * Gom số liệu của một Dự án từ các Task của nó, theo ngày hôm nay của `bayGio` (giờ Việt Nam, truyền
+ * vào). Kho dữ liệu dùng hàm này để trả danh sách Dự án kèm số liệu trong một lần đọc.
+ */
+export function tinhSoLieuDuAn(
+  duAn: DuAnDeTinhQuaHan,
+  danhSachTask: readonly TaskDeTinhTienDo[],
+  bayGio: Date,
+): SoLieuDuAn {
+  const tienDo = tinhTienDo(danhSachTask)
+  return {
+    tienDo,
+    soTaskTreHan: taskTreHan(danhSachTask, bayGio).length,
+    quaHanDuKien: laDuAnQuaHanDuKien(duAn, tienDo, bayGio),
+  }
 }
 
 /** Nhãn Tiến độ để hiện: "chưa có task" hoặc "NN%". */

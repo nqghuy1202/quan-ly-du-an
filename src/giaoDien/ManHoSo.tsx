@@ -9,6 +9,7 @@ import { VStack } from '@astryxdesign/core/VStack'
 import type { LoiKho } from '../kho/ketQua'
 import type { HoSo, Phien } from '../kho/khoDuLieu'
 import { TEN_VAI } from '../luat/taiKhoan'
+import { DO_DAI_CHUC_DANH_TOI_DA, DO_DAI_PHONG_BAN_TOI_DA } from '../luat/thongTinNhanSu'
 import { useKho } from './khoContext'
 
 interface Props {
@@ -18,11 +19,14 @@ interface Props {
   onHetPhien: () => void
 }
 
-/** Sửa hồ sơ của chính mình: tên hiển thị và GitHub username. */
+/** Sửa hồ sơ của chính mình: tên hiển thị, GitHub username và Thông tin nhân sự (PM cũng không sửa hộ ai). */
 export function ManHoSo({ phien, hoSo, onDaLuu, onHetPhien }: Props) {
   const kho = useKho()
   const [tenHienThi, setTenHienThi] = useState(hoSo.tenHienThi)
   const [githubUsername, setGithubUsername] = useState(hoSo.githubUsername ?? '')
+  const [soDienThoai, setSoDienThoai] = useState(hoSo.soDienThoai ?? '')
+  const [chucDanh, setChucDanh] = useState(hoSo.chucDanh ?? '')
+  const [phongBan, setPhongBan] = useState(hoSo.phongBan ?? '')
   const [loi, setLoi] = useState<LoiKho | null>(null)
   const [daLuu, setDaLuu] = useState(false)
   const [dangGui, setDangGui] = useState(false)
@@ -32,11 +36,15 @@ export function ManHoSo({ phien, hoSo, onDaLuu, onHetPhien }: Props) {
     setDangGui(true)
     setLoi(null)
     setDaLuu(false)
-    const kq = await kho.suaHoSo(phien, hoSo.id, { tenHienThi, githubUsername })
+    const kq = await kho.suaHoSo(phien, hoSo.id, { tenHienThi, githubUsername, soDienThoai, chucDanh, phongBan })
     setDangGui(false)
     if (kq.ok) {
       setTenHienThi(kq.giaTri.tenHienThi)
       setGithubUsername(kq.giaTri.githubUsername ?? '')
+      // Hiện đúng giá trị đã lưu (Số điện thoại ở dạng đã chuẩn hoá).
+      setSoDienThoai(kq.giaTri.soDienThoai ?? '')
+      setChucDanh(kq.giaTri.chucDanh ?? '')
+      setPhongBan(kq.giaTri.phongBan ?? '')
       setDaLuu(true)
       onDaLuu(kq.giaTri)
     } else if (kq.loi.ma === 'CHUA_DANG_NHAP') {
@@ -78,6 +86,35 @@ export function ManHoSo({ phien, hoSo, onDaLuu, onHetPhien }: Props) {
           onChange={setGithubUsername}
           onEnter={luu}
           status={trangThaiO('githubUsername')}
+        />
+        <TextInput
+          label="Số điện thoại"
+          type="tel"
+          inputMode="tel"
+          description="Tuỳ chọn. 10 chữ số bắt đầu bằng 0 (vd 0901 234 567), hoặc +84 và 9 chữ số."
+          autoComplete="tel"
+          value={soDienThoai}
+          onChange={setSoDienThoai}
+          onEnter={luu}
+          status={trangThaiO('soDienThoai')}
+        />
+        <TextInput
+          label="Chức danh"
+          description={`Tuỳ chọn. Tối đa ${DO_DAI_CHUC_DANH_TOI_DA} ký tự.`}
+          autoComplete="organization-title"
+          value={chucDanh}
+          onChange={setChucDanh}
+          onEnter={luu}
+          status={trangThaiO('chucDanh')}
+        />
+        <TextInput
+          label="Phòng ban"
+          description={`Tuỳ chọn. Tối đa ${DO_DAI_PHONG_BAN_TOI_DA} ký tự.`}
+          autoComplete="off"
+          value={phongBan}
+          onChange={setPhongBan}
+          onEnter={luu}
+          status={trangThaiO('phongBan')}
         />
       </FormLayout>
       <HStack gap={2}>

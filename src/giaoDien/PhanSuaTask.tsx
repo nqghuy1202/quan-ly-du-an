@@ -13,7 +13,9 @@ import { THONG_BAO_MAC_DINH, type LoiKho, type MaLoi } from '../kho/ketQua'
 import type { NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
 import { DO_DAI_TIEU_DE_TASK_TOI_DA, THONG_BAO_SUA_TASK, THONG_BAO_TASK } from '../luat/task'
 import { xepTheoTen } from '../luat/taiKhoan'
+import { laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 import { useKho } from './khoContext'
+import { LUA_CHON_MUC_UU_TIEN } from './mauMucUuTien'
 import { trangThaiO } from './trangThaiO'
 
 /** Ngày `YYYY-MM-DD` như DateInput của Astryx nhận và trả. */
@@ -43,7 +45,8 @@ const TIEU_DE_LOI: Record<Viec, string> = {
 }
 
 /**
- * Tab "Sửa" của ngăn Task: sửa tiêu đề, mô tả, hạn và đổi Người thực hiện, Người kiểm tra. Ngăn chỉ
+ * Tab "Sửa" của ngăn Task: sửa tiêu đề, mô tả, hạn, Mức ưu tiên (đổi mức thì Kho ghi một dòng lịch sử)
+ * và đổi Người thực hiện, Người kiểm tra. Ngăn chỉ
  * hiện tab này khi luật cho phép sửa (PM hoặc Support của Dự án, Task chưa ở trạng thái cuối, Dự án
  * chưa Lưu trữ); Kho vẫn kiểm lại và từ chối kèm lý do nếu quyền vừa đổi ở nơi khác.
  */
@@ -53,6 +56,7 @@ export function PhanSuaTask({ phien, task, nguoiTrong, dongHo, onDaCapNhat, onCa
   const [moTa, setMoTa] = useState(task.moTa)
   const [han, setHan] = useState<NgayISO | undefined>((task.han ?? undefined) as NgayISO | undefined)
   const [loiNhapHan, setLoiNhapHan] = useState(false)
+  const [mucUuTien, setMucUuTien] = useState<MucUuTien>(task.mucUuTien)
   const [nguoiThucHienId, setNguoiThucHienId] = useState<string | undefined>(task.nguoiThucHien.id)
   const [nguoiKiemTraId, setNguoiKiemTraId] = useState<string | undefined>(task.nguoiKiemTra.id)
   const [loi, setLoi] = useState<{ viec: Viec; loi: LoiKho } | null>(null)
@@ -84,6 +88,7 @@ export function PhanSuaTask({ phien, task, nguoiTrong, dongHo, onDaCapNhat, onCa
     setTieuDe(moi.tieuDe)
     setMoTa(moi.moTa)
     setHan((moi.han ?? undefined) as NgayISO | undefined)
+    setMucUuTien(moi.mucUuTien)
     setNguoiThucHienId(moi.nguoiThucHien.id)
     setNguoiKiemTraId(moi.nguoiKiemTra.id)
   }
@@ -103,7 +108,7 @@ export function PhanSuaTask({ phien, task, nguoiTrong, dongHo, onDaCapNhat, onCa
     const bayGio = dongHo()
     const kq =
       viec === 'sua'
-        ? await kho.suaTask(phien, task.id, { tieuDe, moTa, han: han ?? null }, bayGio)
+        ? await kho.suaTask(phien, task.id, { tieuDe, moTa, han: han ?? null, mucUuTien }, bayGio)
         : await kho.doiNguoiTask(
             phien,
             task.id,
@@ -153,6 +158,16 @@ export function PhanSuaTask({ phien, task, nguoiTrong, dongHo, onDaCapNhat, onCa
           onChange={setHan}
           onEntryErrorChange={(loiNhap) => setLoiNhapHan(loiNhap !== null)}
           status={loiNhapHan ? { type: 'error', message: THONG_BAO_TASK.hanSai } : trangThaiO(loiSua, 'han')}
+        />
+        <Selector
+          label="Mức ưu tiên"
+          description="Thấp, Trung bình hoặc Cao. Đổi mức thì lịch sử Task ghi lại."
+          options={LUA_CHON_MUC_UU_TIEN}
+          value={mucUuTien}
+          onChange={(muc) => {
+            if (laMucUuTien(muc)) setMucUuTien(muc)
+          }}
+          status={trangThaiO(loiSua, 'mucUuTien')}
         />
       </FormLayout>
       <HStack gap={2}>

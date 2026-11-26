@@ -12,13 +12,15 @@ import type { KetQua, LoiKho } from '../kho/ketQua'
 import type { DuAn, NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
 import { TEN_TRANG_THAI_DU_AN, dinhDangNgayGio, kiemMoLaiDuAn, lyDoKhongSuaDuAn } from '../luat/duAn'
 import { lyDoKhongGanRepo } from '../luat/github'
+import { dinhDangNgay } from '../luat/ngay'
 import { lyDoKhongTaoTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
-import { nhanTienDo, taskTreHan, tinhTienDo } from '../luat/tienDo'
+import { NHAN_QUA_HAN_DU_KIEN, laDuAnQuaHanDuKien, nhanTienDo, taskTreHan, tinhTienDo } from '../luat/tienDo'
 import { useKho } from './khoContext'
 import { NganTruotSuaDuAn } from './NganTruotDuAn'
 import { NganTruotTaoTask } from './NganTruotTaoTask'
 import { NganTruotTask, type TaskCanMo } from './NganTruotTask'
+import { NhanMucUuTien } from './NhanMucUuTien'
 import { PhanNguoiTrongDuAn } from './PhanNguoiTrongDuAn'
 import { PhanRepoGitHub } from './PhanRepoGitHub'
 import { PhanTaskCuaDuAn } from './PhanTaskCuaDuAn'
@@ -182,6 +184,34 @@ export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhi
   function doiDanhSachNguoi(capNhat: (cu: NguoiTrongDuAn[]) => NguoiTrongDuAn[]) {
     setLanTaiTask((n) => n + 1)
     setDaTaiNguoi((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq: { ok: true, giaTri: capNhat(cu.kq.giaTri) } } : cu))
+    // Gỡ Người phụ trách làm ô đó về trống ở Kho: đọc lại Dự án ngầm để dải tóm tắt khớp.
+    void docLaiDuAnNgam()
+  }
+
+  /** Thay một người trong danh sách đã tải (vừa sửa Vai trò trong Dự án): không đụng tới Task hay Dự án. */
+  function thayNguoi(moi: NguoiTrongDuAn) {
+    setDaTaiNguoi((cu) =>
+      cu && cu.kq.ok
+        ? { lan: cu.lan, kq: { ok: true, giaTri: cu.kq.giaTri.map((nguoi) => (nguoi.id === moi.id ? moi : nguoi)) } }
+        : cu,
+    )
+  }
+
+  /**
+   * Đọc lại người trong dự án mà không qua trạng thái đang tải (khi mở tab Người trong dự án), để số Task
+   * đang giữ khớp với Task vừa tạo hay vừa đổi ở tab khác. Đọc lỗi, hay danh sách đang lỗi, thì giữ nguyên.
+   */
+  async function docLaiNguoiNgam() {
+    const kq = await kho.danhSachNguoiTrongDuAn(phien, duAnId)
+    if (kq.ok) setDaTaiNguoi((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq } : cu))
+    else if (kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
+  }
+
+  /** Đọc lại Dự án mà không qua trạng thái đang tải; đọc lỗi thì giữ bản đang hiện. */
+  async function docLaiDuAnNgam() {
+    const kq = await kho.layDuAn(phien, duAnId)
+    if (kq.ok) setDaTai((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq } : cu))
+    else if (kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
   }
 
   /** Dự án hay quyền đã đổi ở nơi khác: đọc lại Dự án và người trong dự án. */
@@ -284,6 +314,11 @@ export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhi
 
   const thongTin = (
     <VStack gap={4}>
+      <VStack gap={1} role="group" aria-label="Khách hàng của Dự án">
+        <Heading level={3}>Khách hàng</Heading>
+        <Text>{duAn.khachHang === '' ? 'Chưa ghi Khách hàng.' : duAn.khachHang}</Text>
+      </VStack>
+
       <VStack gap={1} role="group" aria-label="Mô tả Dự án">
         <Heading level={3}>Mô tả</Heading>
         <Text>{duAn.moTa === '' ? 'Dự án chưa có mô tả.' : duAn.moTa}</Text>
@@ -360,6 +395,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhi
         lyDoKhongGhi={lyDoKhongSua}
         onThuLai={() => setLanTaiNguoi((n) => n + 1)}
         onDoiDanhSach={doiDanhSachNguoi}
+        onThayNguoi={thayNguoi}
         onCanDocLai={docLai}
         onMoTask={(taskId) => moTask(taskId)}
         onHetPhien={onHetPhien}
@@ -400,7 +436,9 @@ export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhi
         hasDivider
         value={tab}
         onChange={(giaTri) => {
-          if (laTabDuAn(giaTri)) setTab(giaTri)
+          if (!laTabDuAn(giaTri)) return
+          setTab(giaTri)
+          if (giaTri === 'nguoi' && giaTri !== tab) void docLaiNguoiNgam()
         }}
       >
         {CAC_TAB.map((t) => (
@@ -440,6 +478,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhi
         isOpen={dangSuaDuAn}
         phien={phien}
         duAn={duAn}
+        nguoiTrongDuAn={taiNguoi}
         lyDoKhongSua={lyDoKhongSua}
         dongHo={dongHo}
         onDong={() => setDangSuaDuAn(false)}
@@ -457,24 +496,63 @@ export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhi
 }
 
 /**
- * Dải tóm tắt ở đầu trang chi tiết Dự án: tên, trạng thái, Tiến độ và số Task Trễ hạn (cùng luật với
- * Tổng quan). Task chưa tải xong hay tải lỗi thì nói rõ thay vì hiện số sai.
+ * Dải tóm tắt ở đầu trang chi tiết Dự án: Mã cạnh tên, trạng thái, nhãn Quá hạn dự kiến (nếu có),
+ * Khách hàng, Mức ưu tiên (chữ kèm màu), Người phụ trách, Ngày bắt đầu, Ngày kết thúc dự kiến (ngày/tháng/năm), Tiến độ và số Task Trễ hạn (cùng
+ * luật với Tổng quan). Task chưa tải xong hay tải lỗi thì nói rõ thay vì hiện số sai, và chưa kết luận
+ * Quá hạn dự kiến vì chưa biết Tiến độ.
  */
 function DaiTomTat({ duAn, taiTask, bayGio }: { duAn: DuAn; taiTask: KetQua<Task[]> | null; bayGio: Date }) {
-  const tienDo =
-    taiTask === null ? 'Đang tính…' : taiTask.ok ? nhanTienDo(tinhTienDo(taiTask.giaTri)) : 'Chưa tính được'
+  const tienDoDaTinh = taiTask?.ok ? tinhTienDo(taiTask.giaTri) : null
+  const tienDo = taiTask === null ? 'Đang tính…' : tienDoDaTinh ? nhanTienDo(tienDoDaTinh) : 'Chưa tính được'
+  const quaHanDuKien = tienDoDaTinh !== null && laDuAnQuaHanDuKien(duAn, tienDoDaTinh, bayGio)
   const soTreHan =
     taiTask === null ? 'Đang tính…' : taiTask.ok ? String(taskTreHan(taiTask.giaTri, bayGio).length) : 'Chưa tính được'
   return (
     <VStack gap={2} role="group" aria-label="Tóm tắt Dự án">
       <HStack gap={2} vAlign="center" wrap="wrap">
+        <Text weight="semibold" color="secondary">
+          {duAn.ma}
+        </Text>
         <Heading level={2}>{duAn.ten}</Heading>
         <Token
           label={TEN_TRANG_THAI_DU_AN[duAn.trangThai]}
           color={duAn.trangThai === 'LUU_TRU' ? 'gray' : 'green'}
         />
+        {quaHanDuKien && (
+          <Token
+            label={NHAN_QUA_HAN_DU_KIEN}
+            color="red"
+            description="Đã qua Ngày kết thúc dự kiến mà Tiến độ chưa đủ 100%."
+          />
+        )}
       </HStack>
       <HStack gap={6} wrap="wrap">
+        <VStack gap={1} role="group" aria-label="Khách hàng">
+          <Text type="supporting">Khách hàng</Text>
+          <Text weight="semibold">{duAn.khachHang === '' ? 'Chưa ghi' : duAn.khachHang}</Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Mức ưu tiên">
+          <Text type="supporting">Mức ưu tiên</Text>
+          <HStack>
+            <NhanMucUuTien mucUuTien={duAn.mucUuTien} />
+          </HStack>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Người phụ trách">
+          <Text type="supporting">Người phụ trách</Text>
+          <Text weight="semibold">{duAn.nguoiPhuTrach === null ? 'Chưa có' : duAn.nguoiPhuTrach.tenHienThi}</Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Ngày bắt đầu">
+          <Text type="supporting">Ngày bắt đầu</Text>
+          <Text weight="semibold" hasTabularNumbers>
+            {duAn.ngayBatDau === null ? 'Chưa ghi' : dinhDangNgay(duAn.ngayBatDau)}
+          </Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Ngày kết thúc dự kiến">
+          <Text type="supporting">Ngày kết thúc dự kiến</Text>
+          <Text weight="semibold" hasTabularNumbers>
+            {duAn.ngayKetThucDuKien === null ? 'Chưa ghi' : dinhDangNgay(duAn.ngayKetThucDuKien)}
+          </Text>
+        </VStack>
         <VStack gap={1} role="group" aria-label="Tiến độ của Dự án">
           <Text type="supporting">Tiến độ</Text>
           <Text weight="semibold" hasTabularNumbers>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { THONG_BAO_MUC_UU_TIEN } from './mucUuTien'
 import {
   CAC_TRANG_THAI_TASK,
   THONG_BAO_SUA_TASK,
@@ -62,6 +63,11 @@ describe('kiểm dữ liệu sửa Task', () => {
   it('tiêu đề và hạn tuân luật của ticket 07', () => {
     expect(kiemTraSuaTask.sua({ tieuDe: '  ' })).toEqual({ ok: false, loiTheoO: { tieuDe: THONG_BAO_TASK.tieuDeTrong } })
     expect(kiemTraSuaTask.sua({ han: '2026-02-30' })).toEqual({ ok: false, loiTheoO: { han: THONG_BAO_TASK.hanSai } })
+  })
+
+  it('Mức ưu tiên: không gửi thì vắng mặt (giữ nguyên), gửi mức hợp lệ thì giữ, mức lạ báo ở ô mucUuTien', () => {
+    expect(kiemTraSuaTask.sua({ mucUuTien: 'THAP' })).toEqual({ ok: true, giaTri: { mucUuTien: 'THAP' } })
+    expect(kiemTraSuaTask.sua({ mucUuTien: 'Cao' })).toEqual({ ok: false, loiTheoO: { mucUuTien: THONG_BAO_MUC_UU_TIEN.sai } })
   })
 
   it('đổi người: ô trống thành null, ô không gửi thì vắng mặt', () => {

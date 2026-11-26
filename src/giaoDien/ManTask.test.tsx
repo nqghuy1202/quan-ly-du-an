@@ -8,6 +8,7 @@ import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { THONG_BAO_TASK } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { choNganTruot, choTongQuanTaiXong, dongNganTruot } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 /** Đồng hồ ứng dụng dùng khi bấm tạo Task. */
@@ -57,7 +58,7 @@ interface BoiCanh {
 
 /** Một Dự án "Cửa hàng" với hai Thành viên trong đó: An và Bình. */
 async function dungBoiCanh(goc: KhoBoNho = taoKho()): Promise<BoiCanh> {
-  const duAn = giaTri(await goc.taoDuAn(await phienCua(goc, PM.email), { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await goc.taoDuAn(await phienCua(goc, PM.email), { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const anId = await taoNguoi(goc, 'an@vi-du.vn', 'An', 'THANH_VIEN')
   const binhId = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình', 'THANH_VIEN')
   await themVao(goc, duAn, 'an@vi-du.vn')
@@ -363,7 +364,7 @@ describe('Task trong trang Dự án: tạo và xem', () => {
     const bc = await dungBoiCanh()
     await taoTaskSan(bc, 'Việc ở Cửa hàng')
     const pm = await phienCua(bc.kho, PM.email)
-    giaTri(await bc.kho.taoDuAn(pm, { ten: 'Kho hàng' }, LUC))
+    giaTri(await bc.kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Kho hàng' }, LUC))
     const { user } = dungApp(bc.kho)
     await dangNhap(user, PM.email)
     await pmMoDuAn(user, 'Kho hàng')

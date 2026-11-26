@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Phien } from '../kho/khoDuLieu'
-import type { TrangThaiDuAn } from '../luat/duAn'
+import { LOC_TAT_CA_DU_AN_BAN_DAU, type LocDuAn } from '../luat/timDuAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { ManChiTietDuAn } from './ManChiTietDuAn'
 import { ManDanhSachDuAn } from './ManDanhSachDuAn'
@@ -19,8 +19,8 @@ type ManCon = { loai: 'danhSach' } | { loai: 'chiTiet'; duAnId: string }
 /** Mục "Tất cả Dự án": danh sách (tạo Dự án trong Ngăn trượt) và chi tiết. */
 export function ManDuAn({ phien, vai, dongHo, onHetPhien }: Props) {
   const [man, setMan] = useState<ManCon>({ loai: 'danhSach' })
-  // Giữ bộ lọc khi đi vào chi tiết rồi quay lại.
-  const [boLoc, setBoLoc] = useState<TrangThaiDuAn>('HOAT_DONG')
+  // Giữ bộ tìm và lọc khi đi vào chi tiết rồi quay lại.
+  const [loc, setLoc] = useState<LocDuAn>(LOC_TAT_CA_DU_AN_BAN_DAU)
 
   if (man.loai === 'chiTiet') {
     return (
@@ -41,8 +41,8 @@ export function ManDuAn({ phien, vai, dongHo, onHetPhien }: Props) {
       phien={phien}
       vai={vai}
       dongHo={dongHo}
-      boLoc={boLoc}
-      onDoiBoLoc={setBoLoc}
+      loc={loc}
+      onDoiLoc={setLoc}
       onMo={(duAnId) => setMan({ loai: 'chiTiet', duAnId })}
       onHetPhien={onHetPhien}
     />
