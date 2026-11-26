@@ -1,12 +1,10 @@
 # 03: Logo SDVICO ở màn đăng nhập và khung ứng dụng
 
-**What to build:** Logo SDVICO hiện ở đầu màn đăng nhập và ở đầu khung ứng dụng sau khi đăng nhập, kèm văn bản thay thế "SDVICO" cho người dùng đọc màn hình. Logo dùng đúng file chủ dự án cung cấp, không tải từ website.
+**What to build:** Logo SDVICO hiện ở đầu màn đăng nhập và ở đầu khung ứng dụng sau khi đăng nhập, kèm văn bản thay thế "SDVICO" cho người dùng đọc màn hình. Logo dùng đúng file đã có trong repo: logo SDVICO dạng PNG vuông 350 × 350, nền trong suốt (biểu tượng chữ S xanh dương và đỏ trên vòng tròn, chữ "SDVICO" màu xanh dương bên dưới), chủ dự án đã duyệt lấy từ website của công ty. Không tải thêm hay vẽ lại logo; chỉ có một bản cho cả hai nền, nên phải kiểm logo còn nhìn rõ trên nền tối và báo lại nếu không.
 
-**Blocked by:** 01
+**Blocked by:** 01, 02
 
-**Status:** needs-info
-
-> Chưa đặt `ready-for-agent`: chủ dự án chưa đưa file logo. Khi file đã nằm trong repo (và chủ dự án nói chỗ để file, định dạng, bản cho nền sáng và nền tối nếu có hai bản), bổ sung vào mô tả bên trên, đổi Status thành `ready-for-agent` và chuyển file này vào thư mục `issues/`.
+**Status:** ready-for-agent
 
 - [ ] Màn đăng nhập hiện logo SDVICO với văn bản thay thế "SDVICO".
 - [ ] Đầu khung ứng dụng sau khi đăng nhập hiện logo SDVICO với văn bản thay thế "SDVICO".

@@ -1,12 +1,10 @@
 # 02: Tên SDVICO ở tiêu đề trang và màn đăng nhập
 
-**What to build:** Tên hiển thị của ứng dụng gắn với SDVICO. Tên xuất hiện ở tiêu đề tab của trình duyệt, ở màn đăng nhập và ở đầu khung ứng dụng sau khi đăng nhập. Tên đề xuất là "Quản lý dự án SDVICO" (xem spec của tính năng này). Không đổi chữ nào khác của giao diện.
+**What to build:** Tên hiển thị của ứng dụng gắn với SDVICO. Tên xuất hiện ở tiêu đề tab của trình duyệt, ở màn đăng nhập và ở đầu khung ứng dụng sau khi đăng nhập. Tên đã được chủ dự án chốt là "Quản lý dự án SDVICO". Không đổi chữ nào khác của giao diện.
 
 **Blocked by:** 01
 
-**Status:** needs-info
-
-> Chưa đặt `ready-for-agent`: chủ dự án chưa duyệt tên hiển thị. Khi duyệt xong (giữ hoặc đổi tên), thay "Quản lý dự án SDVICO" bên dưới bằng tên đã chốt, đổi Status thành `ready-for-agent` và chuyển file này vào thư mục `issues/`.
+**Status:** ready-for-agent
 
 - [ ] Tiêu đề tab của ứng dụng là "Quản lý dự án SDVICO".
 - [ ] Màn đăng nhập hiện tên "Quản lý dự án SDVICO" ở phần đầu màn.
