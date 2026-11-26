@@ -57,7 +57,7 @@ Làm hai đợt, đợt A trước.
 15. Là người dùng, tôi thấy phân bố Task theo từng trạng thái (số lượng và thanh tỉ lệ), để biết việc đang dồn ở đâu.
 16. Là người dùng chưa thuộc Dự án nào, tôi thấy trạng thái trống có lời giải thích; PM và Support thấy thêm nút tạo Dự án.
 17. Là người dùng, khi Tổng quan đang tải tôi thấy chỉ báo tải; khi lỗi tôi thấy thông báo và nút Thử lại.
-18. Là người dùng, tôi không còn thấy bảng Dự án đã Lưu trữ ở Tổng quan; PM và Support xem chúng ở trang Tất cả Dự án.
+18. Là người dùng, tôi không còn thấy bảng Dự án đã Lưu trữ ở Tổng quan; PM xem chúng ở trang Tất cả Dự án, người khác xem ở Dự án của tôi.
 19. (Đợt B) Là người dùng, tôi thấy thêm ô số "Dự án Quá hạn dự kiến" và nhãn Quá hạn dự kiến trên dòng Dự án tương ứng.
 20. (Đợt B) Là PM hoặc Support, tôi thấy dấu "chưa có Người phụ trách" trên Dự án đang hoạt động chưa có Người phụ trách.
 
