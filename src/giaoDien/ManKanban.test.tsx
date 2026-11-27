@@ -517,7 +517,8 @@ describe('"Việc của tôi" và "Chờ tôi duyệt"', () => {
     await dangNhap(user, 'an@vi-du.vn')
     await moMuc(user, 'Việc của tôi')
     const nut = await screen.findByRole('button', { name: 'Việc bàn phím' })
-    for (let i = 0; i < 10 && document.activeElement !== nut; i++) await user.tab()
+    // Trước bảng còn ô tìm và các chip lọc (mỗi chip một lần Tab).
+    for (let i = 0; i < 30 && document.activeElement !== nut; i++) await user.tab()
     expect(document.activeElement).toBe(nut)
     await user.keyboard('{Enter}')
     const ngan = await choNganTruot('Việc bàn phím')

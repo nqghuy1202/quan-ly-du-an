@@ -435,6 +435,9 @@ describe('Ngăn trượt của Task: trang phía sau đọc lại khi Task đổ
 
     await waitFor(() => expect(soTrongO('Task Trễ hạn')).toBe('0'))
     expect(soTrongO('Chờ tôi duyệt')).toBe('0')
-    expect(within(screen.getByRole('table', { name: 'Task Trễ hạn' })).queryByRole('button', { name: 'Đã trễ' })).not.toBeInTheDocument()
+    // Hết Task Trễ hạn: vùng chỉ còn dòng báo trống, không còn bảng (Tổng quan xếp dọc, ticket sap-xep-giao-dien 01).
+    expect(screen.queryByRole('table', { name: 'Task Trễ hạn' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đã trễ' })).not.toBeInTheDocument()
+    expect(screen.getByText('Không có Task Trễ hạn.')).toBeInTheDocument()
   })
 })

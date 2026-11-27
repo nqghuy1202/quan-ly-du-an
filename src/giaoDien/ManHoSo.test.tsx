@@ -121,3 +121,61 @@ describe('Thông tin nhân sự trên trang Hồ sơ', () => {
     expect(await hoSoTrongKho(kho)).toMatchObject({ chucDanh: null, phongBan: null })
   })
 })
+
+// Ticket sap-xep-giao-dien 03: Hồ sơ xếp ba hàng (2, 2, 3 ô). Bố cục theo điểm ảnh không kiểm ở đây (chủ dự án
+// xem tận mắt); test chỉ giữ nhãn, thứ tự trong tài liệu, thứ tự Tab và việc lưu như trước.
+const THU_TU_O = ['Email', 'Vai', 'Tên hiển thị', 'GitHub username', 'Số điện thoại', 'Chức danh', 'Phòng ban']
+
+describe('Hồ sơ xếp nhiều ô trên một hàng', () => {
+  it('có đủ bảy ô với đúng nhãn; chỉ Email và Vai là chỉ đọc', async () => {
+    await moHoSo()
+    for (const nhan of THU_TU_O) {
+      const o = screen.getByLabelText(nhan)
+      if (nhan === 'Email' || nhan === 'Vai') expect(o).toHaveAttribute('readonly')
+      else expect(o).not.toHaveAttribute('readonly')
+    }
+    expect(screen.getByLabelText('Email')).toHaveValue(EMAIL)
+  })
+
+  it('thứ tự các ô trong tài liệu và thứ tự Tab đúng như trên, nút Lưu hồ sơ đứng sau ô cuối', async () => {
+    const { user } = await moHoSo()
+    const cacO = THU_TU_O.map((nhan) => screen.getByLabelText(nhan))
+    const nutLuu = screen.getByRole('button', { name: 'Lưu hồ sơ' })
+    const theoThuTu = [...cacO, nutLuu]
+    for (let i = 1; i < theoThuTu.length; i++) {
+      expect(theoThuTu[i - 1].compareDocumentPosition(theoThuTu[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+
+    await user.click(cacO[0])
+    expect(cacO[0]).toHaveFocus()
+    for (const o of theoThuTu.slice(1)) {
+      await user.tab()
+      expect(o).toHaveFocus()
+    }
+  })
+
+  it('sửa bốn ô rồi lưu: thấy "Đã lưu hồ sơ.", mở lại trang vẫn còn giá trị mới', async () => {
+    const { kho, user, ungDung } = await moHoSo()
+    await dien(user, 'Tên hiển thị', 'Lan Nguyễn')
+    await dien(user, 'Số điện thoại', '+84 901 234 567')
+    await dien(user, 'Chức danh', 'Trưởng nhóm')
+    await dien(user, 'Phòng ban', 'Phòng Kỹ thuật')
+    await user.click(screen.getByRole('button', { name: 'Lưu hồ sơ' }))
+    expect(await ungDung.findByText('Đã lưu hồ sơ.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Tổng quan' }))
+    await user.click(await screen.findByRole('button', { name: 'Hồ sơ' }))
+    await screen.findByRole('heading', { level: 2, name: 'Hồ sơ của tôi' })
+    expect(screen.getByLabelText('Tên hiển thị')).toHaveValue('Lan Nguyễn')
+    expect(screen.getByLabelText('Số điện thoại')).toHaveValue('+84901234567')
+    expect(screen.getByLabelText('Chức danh')).toHaveValue('Trưởng nhóm')
+    expect(screen.getByLabelText('Phòng ban')).toHaveValue('Phòng Kỹ thuật')
+    expect(ungDung.queryByText('Đã lưu hồ sơ.')).not.toBeInTheDocument()
+    expect(await hoSoTrongKho(kho)).toMatchObject({
+      tenHienThi: 'Lan Nguyễn',
+      soDienThoai: '+84901234567',
+      chucDanh: 'Trưởng nhóm',
+      phongBan: 'Phòng Kỹ thuật',
+    })
+  })
+})

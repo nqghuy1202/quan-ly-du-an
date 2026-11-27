@@ -326,8 +326,9 @@ describe('Tổng quan', () => {
     const { user } = dungApp(kho)
     await dangNhap(user, PM.email)
     await moTongQuan(user)
-    expect(await screen.findByRole('heading', { name: 'Không có Task Trễ hạn.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Không có Task tới hạn trong 7 ngày.' })).toBeInTheDocument()
+    // Vùng trống chỉ còn một dòng chữ (không còn bảng rỗng có tiêu đề báo trống).
+    expect(await screen.findByText('Không có Task Trễ hạn.')).toBeInTheDocument()
+    expect(screen.getByText('Không có Task tới hạn trong 7 ngày.')).toBeInTheDocument()
   })
 
   it('bấm ô Chờ tôi duyệt, Việc của tôi mở đúng trang; bấm dòng Dự án mở Dự án đó', async () => {

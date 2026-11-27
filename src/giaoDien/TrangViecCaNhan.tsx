@@ -3,6 +3,7 @@ import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Heading } from '@astryxdesign/core/Heading'
+import { HStack } from '@astryxdesign/core/HStack'
 import { Spinner } from '@astryxdesign/core/Spinner'
 import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
 import { Text } from '@astryxdesign/core/Text'
@@ -11,6 +12,13 @@ import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { Phien, TaskKemDuAn } from '../kho/khoDuLieu'
 import { xepViecCaNhan } from '../luat/kanban'
+import {
+  LOC_VIEC_CA_NHAN_TRONG,
+  dangLocViecCaNhan,
+  demChipViecCaNhan,
+  locViecCaNhan,
+  type LocViecCaNhan,
+} from '../luat/timViecCaNhan'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
 import type { MucUuTien } from '../luat/mucUuTien'
@@ -18,6 +26,7 @@ import { useKho } from './khoContext'
 import { MAU_TRANG_THAI_TASK } from './mauTrangThaiTask'
 import { NganTruotTask } from './NganTruotTask'
 import { NhanMucUuTien } from './NhanMucUuTien'
+import { ThanhTimLocViecCaNhan } from './ThanhTimLocViecCaNhan'
 
 /** Hai danh sách cá nhân qua mọi Dự án. */
 export type LoaiViecCaNhan = 'viecCuaToi' | 'choToiDuyet'
@@ -68,6 +77,9 @@ type Dong = {
  * "Việc của tôi" hoặc "Chờ tôi duyệt": Task qua mọi Dự án của người dùng, mỗi dòng kèm tên Dự án.
  * Bấm một Task thì mở Task trong Ngăn trượt, danh sách ở nguyên phía sau; Task đổi trong ngăn thì
  * danh sách đọc lại. Có trạng thái trống, đang tải và lỗi.
+ *
+ * Khi đã có Task, phía trên bảng có thanh tìm và lọc. Bộ lọc là trạng thái của trang: mở và đóng Ngăn
+ * trượt hay đọc lại danh sách đều giữ bộ lọc; rời trang (trang bị bỏ) thì lần sau mở lại về trống.
  */
 export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props) {
   const kho = useKho()
@@ -75,6 +87,7 @@ export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props)
   const [tai, setTai] = useState<KetQua<TaskKemDuAn[]> | null>(null)
   const [lanTai, setLanTai] = useState(0)
   const [taskDangMo, setTaskDangMo] = useState<TaskKemDuAn | null>(null)
+  const [loc, setLoc] = useState<LocViecCaNhan>(LOC_VIEC_CA_NHAN_TRONG)
 
   useEffect(() => {
     let huy = false
@@ -158,7 +171,10 @@ export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props)
   } else if (tai.giaTri.length === 0) {
     phanNoiDung = <EmptyState headingLevel={3} title={noiDung.trongTieuDe} description={noiDung.trongMoTa} />
   } else {
-    const dong: Dong[] = xepViecCaNhan(tai.giaTri).map((task) => ({
+    const bayGio = dongHo()
+    const daXep = xepViecCaNhan(tai.giaTri)
+    const daLoc = locViecCaNhan(daXep, loc, bayGio)
+    const dong: Dong[] = daLoc.map((task) => ({
       id: task.id,
       tieuDe: task.tieuDe,
       maDuAn: task.maDuAn,
@@ -168,7 +184,36 @@ export function TrangViecCaNhan({ loai, phien, vai, dongHo, onHetPhien }: Props)
       nguoi: loai === 'viecCuaToi' ? task.nguoiKiemTra.tenHienThi : task.nguoiThucHien.tenHienThi,
       han: task.han === null ? 'Không có hạn' : dinhDangNgay(task.han),
     }))
-    phanNoiDung = <Table aria-label={noiDung.tieuDe} data={dong} columns={cot} idKey="id" />
+    const dangLoc = dangLocViecCaNhan(loc)
+    const nutXoaLoc = <Button label="Xoá bộ lọc" variant="secondary" onClick={() => setLoc(LOC_VIEC_CA_NHAN_TRONG)} />
+    phanNoiDung = (
+      <VStack gap={3}>
+        <ThanhTimLocViecCaNhan
+          loc={loc}
+          onDoiLoc={setLoc}
+          soChip={demChipViecCaNhan(tai.giaTri, bayGio)}
+          coNhomTrangThai={loai === 'viecCuaToi'}
+        />
+        {dangLoc && (
+          <HStack gap={3} vAlign="center" wrap="wrap">
+            <Text type="supporting" role="status" aria-label="Số Task đang hiện">
+              {`Hiện ${daLoc.length} trên ${tai.giaTri.length} Task`}
+            </Text>
+            {daLoc.length > 0 && nutXoaLoc}
+          </HStack>
+        )}
+        {daLoc.length > 0 ? (
+          <Table aria-label={noiDung.tieuDe} data={dong} columns={cot} idKey="id" />
+        ) : (
+          <EmptyState
+            headingLevel={3}
+            title="Không có Task khớp bộ lọc"
+            description="Thử từ khoá khác, hoặc xoá bộ lọc để xem lại mọi Task."
+            actions={nutXoaLoc}
+          />
+        )}
+      </VStack>
+    )
   }
 
   return (

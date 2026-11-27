@@ -43,9 +43,11 @@ interface Props {
 /** Dấu trên dòng Dự án đang hoạt động chưa có Người phụ trách (chỉ PM và Support thấy). */
 export const NHAN_CHUA_CO_NGUOI_PHU_TRACH = 'Chưa có Người phụ trách'
 
-/** Độ rộng tối thiểu (điểm ảnh) của một ô số và một cột trước khi lưới xuống dòng; là độ rộng cấu trúc. */
+/** Độ rộng tối thiểu (điểm ảnh) của một ô số trước khi hàng ô số xuống dòng; là độ rộng cấu trúc. */
 const RONG_O_SO = 176
-const RONG_COT = 420
+
+/** Số dòng đầu một vùng Task ở Tổng quan hiện khi chưa bấm "Xem tất cả". */
+const SO_DONG_TASK_GON = 5
 
 type ManCon = { loai: 'tongQuan' } | { loai: 'duAn'; duAnId: string }
 
@@ -201,7 +203,9 @@ function DanhSachTask({
     },
     { key: 'han', header: 'Hạn', width: proportional(1), renderCell: (d) => <Text>{d.han}</Text> },
   ]
-  const du: DongTask[] = task.map((t) => ({
+  const [moHet, setMoHet] = useState(false)
+  const gon = !moHet && task.length > SO_DONG_TASK_GON
+  const du: DongTask[] = (gon ? task.slice(0, SO_DONG_TASK_GON) : task).map((t) => ({
     id: t.id,
     tieuDe: t.tieuDe,
     maDuAn: t.maDuAn,
@@ -215,14 +219,18 @@ function DanhSachTask({
         <Heading level={3}>{tieuDe}</Heading>
         <Text color="secondary">{moTa}</Text>
       </VStack>
-      <Table
-        aria-label={tieuDe}
-        data={du}
-        columns={cot}
-        idKey="id"
-        density="compact"
-        emptyState={<EmptyState isCompact headingLevel={4} title={trong} />}
-      />
+      {task.length === 0 ? (
+        <Text>{trong}</Text>
+      ) : (
+        <VStack gap={2}>
+          <Table aria-label={tieuDe} data={du} columns={cot} idKey="id" density="compact" />
+          {gon && (
+            <HStack>
+              <Button label={`Xem tất cả (${task.length})`} variant="secondary" onClick={() => setMoHet(true)} />
+            </HStack>
+          )}
+        </VStack>
+      )}
     </VStack>
   )
 }
@@ -254,9 +262,10 @@ function PhanBoTheoTrangThai({ phanBo }: { phanBo: Record<TrangThaiTask, number>
 
 /**
  * Trang Tổng quan: chỗ nắm tổng thể, chỉ tính trong các Dự án người dùng được xem (Dự án Lưu trữ không
- * tính). Ba tầng: hàng ô số (bấm Chờ tôi duyệt, Việc của tôi để tới trang đó); bảng Dự án đang hoạt
- * động cạnh hai danh sách Task Trễ hạn và tới hạn trong 7 ngày; phân bố Task theo trạng thái. Có trạng
- * thái trống, đang tải và lỗi. Mọi số liệu do `luat/tongQuan.ts` tính; màn này chỉ hiển thị. Bấm một Task
+ * tính). Các vùng xếp dọc một cột, mỗi vùng chiếm hết chiều ngang: hàng ô số (bấm Chờ tôi duyệt, Việc
+ * của tôi để tới trang đó); Task Trễ hạn; Task tới hạn trong 7 ngày; bảng Dự án đang hoạt động; phân bố
+ * Task theo trạng thái. Mỗi vùng Task hiện tối đa 5 dòng đầu, nhiều hơn thì có nút "Xem tất cả (N)"; trạng
+ * thái mở hết nằm trong vùng nên về 5 dòng khi rời Tổng quan rồi quay lại. Có trạng thái trống, đang tải và lỗi. Mọi số liệu do `luat/tongQuan.ts` tính; màn này chỉ hiển thị. Bấm một Task
  * thì mở Task trong Ngăn trượt, Tổng quan ở nguyên phía sau và đọc lại khi Task đổi trong ngăn.
  */
 export function ManTongQuan({ phien, vai, dongHo, onMoTrang, onHetPhien }: Props) {
@@ -361,28 +370,21 @@ export function ManTongQuan({ phien, vai, dongHo, onMoTrang, onHetPhien }: Props
     noiDung = (
       <VStack gap={8}>
         <HangOSo oSo={tq.oSo} onMoTrang={onMoTrang} />
-        <Grid columns={{ minWidth: RONG_COT, max: 2, repeat: 'fit' }} gap={8} align="start">
-          <BangDuAnHoatDong
-            dong={tq.hoatDong}
-            onMo={(duAnId) => setMan({ loai: 'duAn', duAnId })}
-          />
-          <VStack gap={8}>
-            <DanhSachTask
-              tieuDe="Task Trễ hạn"
-              moTa="Hạn đã qua mà chưa Hoàn thành, chưa Huỷ; trễ lâu nhất đứng đầu."
-              trong="Không có Task Trễ hạn."
-              task={tq.taskTreHan}
-              onMo={moTask}
-            />
-            <DanhSachTask
-              tieuDe={`Task tới hạn trong ${SO_NGAY_TOI_HAN} ngày`}
-              moTa={`Chưa Hoàn thành, chưa Huỷ, hạn từ hôm nay đến hết ${SO_NGAY_TOI_HAN} ngày tới; hạn gần nhất đứng đầu.`}
-              trong={`Không có Task tới hạn trong ${SO_NGAY_TOI_HAN} ngày.`}
-              task={tq.taskToiHan}
-              onMo={moTask}
-            />
-          </VStack>
-        </Grid>
+        <DanhSachTask
+          tieuDe="Task Trễ hạn"
+          moTa="Hạn đã qua mà chưa Hoàn thành, chưa Huỷ; trễ lâu nhất đứng đầu."
+          trong="Không có Task Trễ hạn."
+          task={tq.taskTreHan}
+          onMo={moTask}
+        />
+        <DanhSachTask
+          tieuDe={`Task tới hạn trong ${SO_NGAY_TOI_HAN} ngày`}
+          moTa={`Chưa Hoàn thành, chưa Huỷ, hạn từ hôm nay đến hết ${SO_NGAY_TOI_HAN} ngày tới; hạn gần nhất đứng đầu.`}
+          trong={`Không có Task tới hạn trong ${SO_NGAY_TOI_HAN} ngày.`}
+          task={tq.taskToiHan}
+          onMo={moTask}
+        />
+        <BangDuAnHoatDong dong={tq.hoatDong} onMo={(duAnId) => setMan({ loai: 'duAn', duAnId })} />
         <PhanBoTheoTrangThai phanBo={tq.phanBo} />
       </VStack>
     )
