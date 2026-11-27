@@ -5,7 +5,8 @@
 //   supabase/migrations/20261125000100_lat_1_ho_so_du_an.sql.
 // - Quyền được kiểm hai lần: ở đây bằng chính luật thuần (src/luat/) để trả đúng mã lỗi và đúng
 //   thứ tự như bản bộ nhớ, và ở cơ sở dữ liệu (phân quyền từng dòng, trigger, hàm) vì trình duyệt
-//   không đáng tin. Cơ sở dữ liệu là hàng rào thật; lỗi nó ném ra mang mã lỗi của Kho.
+//   không đáng tin. Cơ sở dữ liệu là hàng rào thật; lỗi nó ném ra mang mã lỗi của Kho. Lưu trữ, mở lại Dự án
+//   không kiểm trước (ticket toi-uu-hieu-nang 05): hàm của cơ sở dữ liệu kiểm đúng luật, đúng thứ tự và ném đúng mã.
 // - Chỉ dùng địa chỉ và khoá công khai; không bao giờ nhận khoá service (xem cauHinh.ts).
 //
 // Khác bản bộ nhớ (do Supabase quyết, đã ghi trong supabase/README.md):
@@ -22,6 +23,9 @@
 // Thông tin nhân sự của hồ sơ, Vai trò trong Dự án và Mức ưu tiên của Task (ticket truong-moi 10):
 // supabase/migrations/20261126000600_truong_task_ho_so_nguoi.sql.
 //
+// Xác định người gọi (phiên đang mở, hồ sơ nhớ theo phiên, kiểm ở trong Dự án, đọc Dự án theo luật xem và ghi)
+// nằm ở một chỗ: khoSupabaseNguoiGoi.ts (ticket toi-uu-hieu-nang 01). Mọi lệnh nhận phiên chạy theo vai mới nhất.
+//
 // CỔNG CHƯA KIỂM: các lệnh cần mạng chỉ chạy được với Supabase thật (lệnh riêng, xem
 // src/kho/khoSupabase.test.ts). Cổng chỉ kiểm các nhánh không gọi mạng.
 import {
@@ -31,10 +35,20 @@ import {
   type SupabaseClient,
 } from '@supabase/supabase-js'
 import { THONG_BAO_MAC_DINH, thanhCong, thatBai, type KetQua, type MaLoi } from './ketQua'
-import { docDuAnKemSoLieu } from './duAnKemSoLieu'
+import { taoDocLoSupabase } from './khoSupabaseDocLo'
 import { taoLenhGitHubSupabase } from './khoSupabaseGitHub'
-import { taoLenhTaskSupabase } from './khoSupabaseTask'
+import {
+  COT_TASK_KEM_LIEN_KET,
+  SO_LIEN_KET_TOI_DA,
+  docDongTaskCuaDuAn,
+  taoLenhTaskSupabase,
+  trangThaiTaskTuDong,
+  type DongTask,
+  type DongTaskKemLienKet,
+} from './khoSupabaseTask'
 import { taoLenhVongDuyetSupabase } from './khoSupabaseVongDuyet'
+import { taoXacDinhNguoiGoi, type DongTaskKemDuAn } from './khoSupabaseNguoiGoi'
+import type { DocTongQuanTheoLo } from './tongQuan'
 import { THONG_BAO_NHAN_SU, THONG_TIN_NHAN_SU_TRONG } from '../luat/thongTinNhanSu'
 import type {
   DuAn,
@@ -46,20 +60,17 @@ import type {
   Phien,
   ThongTinNhanSu,
 } from './khoDuLieu'
-import { CAC_TRANG_THAI_TASK, soTaskDangGiu, type TrangThaiTask } from '../luat/task'
+import { soTaskDangGiu } from '../luat/task'
 import { MUC_UU_TIEN_MAC_DINH, THONG_BAO_MUC_UU_TIEN, laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 import {
-  duocQuanLyDuAn,
   duocTaoDuAn,
-  duocXemDuAn,
   kiemGhiDuAn,
-  kiemMoLaiDuAn,
+  duocQuanLyDuAn,
   kiemSuaVaiTroTrongDuAn,
   kiemTraDuAn,
   ngayDuAnSauSua,
   THONG_BAO_DU_AN,
   type LocDuAnDauVao,
-  type NguoiGoiDuAn,
   type SuaDuAnDauVao,
   type SuaVaiTroTrongDuAnDauVao,
   type TaoDuAnDauVao,
@@ -183,6 +194,34 @@ function laUuid(id: string): boolean {
   return UUID.test(id)
 }
 
+/** Id người cần tên hiển thị trên một Dự án: người tạo, người sửa, Người phụ trách. */
+function idNguoiCuaDuAn(d: DongDuAn): string[] {
+  return [d.tao_boi, ...(d.sua_boi ? [d.sua_boi] : []), ...(d.nguoi_phu_trach_id ? [d.nguoi_phu_trach_id] : [])]
+}
+
+/** Dự án như giao diện Kho trả ra từ một dòng; `ten` cho tên hiển thị hiện tại theo id. */
+function duAnTuDong(d: DongDuAn, ten: (id: string) => string): DuAn {
+  const nguoi = (id: string) => ({ id, tenHienThi: ten(id) })
+  return {
+    id: d.id,
+    ma: d.ma ?? '',
+    ten: d.ten,
+    moTa: d.mo_ta,
+    khachHang: d.khach_hang ?? '',
+    ngayBatDau: d.ngay_bat_dau ?? null,
+    ngayKetThucDuKien: d.ngay_ket_thuc_du_kien ?? null,
+    mucUuTien: laMucUuTien(d.muc_uu_tien) ? d.muc_uu_tien : MUC_UU_TIEN_MAC_DINH,
+    nguoiPhuTrach: d.nguoi_phu_trach_id ? nguoi(d.nguoi_phu_trach_id) : null,
+    trangThai: trangThaiTuDong(d.trang_thai),
+    dauVet: {
+      taoBoi: nguoi(d.tao_boi),
+      taoLuc: new Date(d.tao_luc),
+      suaBoi: d.sua_boi ? nguoi(d.sua_boi) : null,
+      suaLuc: d.sua_luc ? new Date(d.sua_luc) : null,
+    },
+  }
+}
+
 function laVai(giaTri: string): giaTri is VaiHeThong {
   return (CAC_VAI as readonly string[]).includes(giaTri)
 }
@@ -243,13 +282,41 @@ interface DongNguoiTrongDuAn {
   ho_so: DongHoSo | null
 }
 
+/** Dòng Người trong dự án kèm id người (đọc lúc kiểm xem Dự án, dùng cả cho danh sách Người trong dự án). */
+interface DongNguoiTrongDuAnKemId extends DongNguoiTrongDuAn {
+  nguoi_dung_id: string
+}
+
 /** Cột đọc của bảng nguoi_trong_du_an: Vai trò trong Dự án và hồ sơ của người đó. */
 const COT_NGUOI_TRONG_DU_AN = `vai_tro, ho_so!nguoi_trong_du_an_nguoi_dung_id_fkey(${COT_HO_SO})`
+const COT_NGUOI_TRONG_DU_AN_KEM_ID = `nguoi_dung_id, ${COT_NGUOI_TRONG_DU_AN}`
+
+/** Lượt kiểm quản lý Dự án (`quanLyDuAn`): dòng Dự án kèm id mọi Người trong dự án nhúng. */
+const COT_DU_AN_KEM_ID_NGUOI_TRONG = `${COT_DU_AN}, nguoi_trong_du_an!nguoi_trong_du_an_du_an_id_fkey(nguoi_dung_id)`
+
+/** Lượt đọc Task theo id (`docTaskKemDuAn`): Task, link, và Dự án kèm Người trong dự án nhúng lồng. */
+const COT_TASK_KEM_DU_AN = `${COT_TASK_KEM_LIEN_KET}, du_an!task_du_an_id_fkey(${COT_DU_AN}, nguoi_trong_du_an!nguoi_trong_du_an_du_an_id_fkey(${COT_NGUOI_TRONG_DU_AN_KEM_ID}))`
+
+/** Dòng Task như lượt đọc `COT_TASK_KEM_DU_AN` trả về (Dự án nhúng là một dòng, PostgREST trả đối tượng). */
+interface DongTaskNhungDuAn extends DongTaskKemLienKet {
+  du_an: DongDuAnNhungNguoiTrong | DongDuAnNhungNguoiTrong[] | null
+}
+
+type DongDuAnNhungNguoiTrong = DongDuAn & { nguoi_trong_du_an?: DongNguoiTrongDuAnKemId[] | null }
 
 /**
  * Một Người trong dự án từ dòng của cơ sở dữ liệu; số Task đang giữ tính phía client (`demTask`) bằng luật
  * thuần trên bảng task mà người gọi đọc được (ai thấy Dự án thì thấy mọi Task của nó, nên đếm đủ).
  */
+/**
+ * Bộ đếm số Task đang giữ (Task chưa Hoàn thành, chưa Huỷ mà người đó là Người thực hiện) trên các dòng Task của
+ * một Dự án, bằng luật thuần `soTaskDangGiu`. Giá trị trạng thái lạ (không thể có nhờ ràng buộc) coi như Huỷ.
+ */
+function boDemTaskDangGiu(dong: readonly Pick<DongTask, 'nguoi_thuc_hien_id' | 'trang_thai'>[]): (id: string) => number {
+  const task = dong.map((d) => ({ nguoiThucHienId: d.nguoi_thuc_hien_id, trangThai: trangThaiTaskTuDong(d.trang_thai) }))
+  return (id: string) => soTaskDangGiu(task, id)
+}
+
 function nguoiTrongDuAnTuDong(hoSo: DongHoSo, vaiTro: string | null | undefined, demTask: (id: string) => number): NguoiTrongDuAn {
   return { ...tomTatTuDong(hoSo), vaiTroTrongDuAn: vaiTro ?? null, soTaskDangGiu: demTask(hoSo.id) }
 }
@@ -373,7 +440,9 @@ function loiAuthChung<T = never>(loi: AuthError): KetQua<T> {
   return thatBai('LOI_HE_THONG')
 }
 
-export type KhoSupabase = KhoDuLieu & {
+export type KhoSupabase = KhoDuLieu &
+  // Tổng quan đọc theo lô (ticket toi-uu-hieu-nang 02, khoSupabaseDocLo.ts): docTongQuan ở tongQuan.ts dùng lối này.
+  DocTongQuanTheoLo & {
   /**
    * Mã truy cập (JWT) của phiên đăng nhập đang mở gần nhất, hoặc null nếu chưa có phiên nào. Dành
    * cho Cổng GitHub gọi Edge Function bằng chính phiên của người dùng (hàm kiểm đăng nhập và quyền
@@ -382,6 +451,30 @@ export type KhoSupabase = KhoDuLieu & {
    */
   maTruyCapHienTai(): Promise<string | null>
 }
+
+/**
+ * Lệnh chỉ đọc: không bỏ các lượt đọc đang bay dùng chung (khoSupabaseNguoiGoi.ts, `bocQuenDangBayKhiGhi`). Mọi
+ * lệnh khác, kể cả lệnh mới thêm vào Kho mà chưa ghi ở đây, được coi là lệnh ghi.
+ */
+const LENH_CHI_DOC: ReadonlySet<keyof KhoSupabase> = new Set<keyof KhoSupabase>([
+  'layHoSoCuaToi',
+  'danhSachDuAnCuaToi',
+  'danhSachNguoiDung',
+  'danhSachDuAn',
+  'danhSachDuAnKemSoLieu',
+  'docDuLieuTongQuan',
+  'layDuAn',
+  'danhSachNguoiTrongDuAn',
+  'danhSachTask',
+  'layTask',
+  'lichSuTask',
+  'danhSachRepoCuaDuAn',
+  'viecCuaToi',
+  'choToiDuyet',
+  'danhSachTaskNguoiDangGiu',
+  'danhSachLienKetCuaTask',
+  'maTruyCapHienTai',
+])
 
 export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
   const { url, khoaCongKhai, duongDanQuayLai } = tuyChon
@@ -408,39 +501,11 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
 
   const clientChung = taoClient(false)
 
-  interface PhienMo {
-    db: SupabaseClient
-    nguoiDungId: string
-  }
-  const phienDangMo = new Map<string, PhienMo>()
-
-  interface NguoiGoi {
-    db: SupabaseClient
-    hoSo: HoSo
-  }
-
-  /** Người gọi đã đăng nhập, kèm hồ sơ đọc mới (vai có hiệu lực ngay ở lần đọc sau). */
-  async function xacThuc(phien: Phien | null): Promise<KetQua<NguoiGoi>> {
-    if (!phien) return thatBai('CHUA_DANG_NHAP')
-    const mo = phienDangMo.get(phien.maPhien)
-    if (!mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
-    const { data, error } = await mo.db.from('ho_so').select(COT_HO_SO).eq('id', mo.nguoiDungId).maybeSingle()
+  async function docHoSo(db: SupabaseClient, id: string): Promise<KetQua<HoSo | null>> {
+    const { data, error } = await db.from('ho_so').select(COT_HO_SO).eq('id', id).maybeSingle()
     if (error) return loiTuCsdl(error)
     const dong = data as unknown as DongHoSo | null
-    if (!dong) return thatBai('CHUA_DANG_NHAP')
-    return thanhCong({ db: mo.db, hoSo: hoSoTuDong(dong) })
-  }
-
-  async function laNguoiTrongDuAn(nguoiGoi: NguoiGoi, duAnId: string): Promise<KetQua<boolean>> {
-    if (!laUuid(duAnId)) return thanhCong(false)
-    const { data, error } = await nguoiGoi.db
-      .from('nguoi_trong_du_an')
-      .select('du_an_id')
-      .eq('du_an_id', duAnId)
-      .eq('nguoi_dung_id', nguoiGoi.hoSo.id)
-      .maybeSingle()
-    if (error) return loiTuCsdl(error)
-    return thanhCong(data !== null)
+    return thanhCong(dong ? hoSoTuDong(dong) : null)
   }
 
   async function docDongDuAn(db: SupabaseClient, duAnId: string): Promise<KetQua<DongDuAn | null>> {
@@ -450,13 +515,59 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     return thanhCong(data as unknown as DongDuAn | null)
   }
 
+  /**
+   * Một dòng Dự án kèm id mọi Người trong dự án nhúng, trong MỘT lượt (`quanLyDuAn`, ticket toi-uu-hieu-nang 05).
+   * Gọi đúng tên khoá ngoại: du_an và nguoi_trong_du_an nối nhau bằng hai khoá (`du_an_nguoi_phu_trach_fkey`).
+   */
+  async function docDongDuAnKemIdNguoiTrong(
+    db: SupabaseClient,
+    duAnId: string,
+  ): Promise<KetQua<{ duAn: DongDuAn; idNguoiTrong: string[] } | null>> {
+    const { data, error } = await db.from('du_an').select(COT_DU_AN_KEM_ID_NGUOI_TRONG).eq('id', duAnId).maybeSingle()
+    if (error) return loiTuCsdl(error)
+    const dong = data as unknown as (DongDuAn & { nguoi_trong_du_an?: { nguoi_dung_id: string }[] | null }) | null
+    if (!dong) return thanhCong(null)
+    const { nguoi_trong_du_an: nguoiTrong, ...duAn } = dong
+    return thanhCong({ duAn, idNguoiTrong: (nguoiTrong ?? []).map((n) => n.nguoi_dung_id) })
+  }
+
+  /** Mọi Người trong dự án người gọi đọc được, kèm hồ sơ và Vai trò trong Dự án. */
+  async function docNguoiTrongDuAn(db: SupabaseClient, duAnId: string): Promise<KetQua<DongNguoiTrongDuAnKemId[]>> {
+    const { data, error } = await db.from('nguoi_trong_du_an').select(COT_NGUOI_TRONG_DU_AN_KEM_ID).eq('du_an_id', duAnId)
+    if (error) return loiTuCsdl(error)
+    return thanhCong((data ?? []) as unknown as DongNguoiTrongDuAnKemId[])
+  }
+
+  /**
+   * Một Task theo id kèm link (theo thứ tự thêm), dòng Dự án và mọi Người trong dự án của nó, trong MỘT lượt
+   * (ticket toi-uu-hieu-nang 04). Phần nhúng theo cùng phân quyền từng dòng và cùng cột như `docDongDuAn`,
+   * `docNguoiTrongDuAn`, lượt đọc link riêng. Gọi đúng tên khoá ngoại: du_an và nguoi_trong_du_an nối nhau bằng hai
+   * khoá (`du_an_nguoi_phu_trach_fkey`).
+   */
+  async function docTaskKemDuAn(
+    db: SupabaseClient,
+    taskId: string,
+  ): Promise<KetQua<DongTaskKemDuAn<DongTaskKemLienKet, DongDuAn, DongNguoiTrongDuAnKemId> | null>> {
+    const { data, error } = await db
+      .from('task')
+      .select(COT_TASK_KEM_DU_AN)
+      .eq('id', taskId)
+      .order('thu_tu', { referencedTable: 'lien_ket_task' })
+      .limit(SO_LIEN_KET_TOI_DA, { referencedTable: 'lien_ket_task' })
+      .maybeSingle()
+    if (error) return loiTuCsdl(error)
+    const dong = data as unknown as DongTaskNhungDuAn | null
+    if (!dong) return thanhCong(null)
+    const { du_an: nhung, ...task } = dong
+    const duAnNhung = Array.isArray(nhung) ? (nhung[0] ?? null) : nhung
+    if (!duAnNhung) return thanhCong({ task, duAn: null, nguoiTrong: [] })
+    const { nguoi_trong_du_an: nguoiTrong, ...duAn } = duAnNhung
+    return thanhCong({ task, duAn, nguoiTrong: nguoiTrong ?? [] })
+  }
+
   /** Dự án như giao diện Kho trả ra: dấu vết kèm tên hiển thị hiện tại của người tạo và người sửa. */
   async function docCacDuAn(db: SupabaseClient, dong: readonly DongDuAn[]): Promise<KetQua<DuAn[]>> {
-    const ids = [
-      ...new Set(
-        dong.flatMap((d) => [d.tao_boi, ...(d.sua_boi ? [d.sua_boi] : []), ...(d.nguoi_phu_trach_id ? [d.nguoi_phu_trach_id] : [])]),
-      ),
-    ]
+    const ids = [...new Set(dong.flatMap(idNguoiCuaDuAn))]
     const tenTheoId = new Map<string, string>()
     if (ids.length > 0) {
       const { data, error } = await db.rpc('ten_nguoi_dau_vet', { p_ids: ids })
@@ -465,27 +576,7 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
         tenTheoId.set(nguoi.id, nguoi.ten_hien_thi)
       }
     }
-    const nguoi = (id: string) => ({ id, tenHienThi: tenTheoId.get(id) ?? '' })
-    return thanhCong(
-      dong.map((d) => ({
-        id: d.id,
-        ma: d.ma ?? '',
-        ten: d.ten,
-        moTa: d.mo_ta,
-        khachHang: d.khach_hang ?? '',
-        ngayBatDau: d.ngay_bat_dau ?? null,
-        ngayKetThucDuKien: d.ngay_ket_thuc_du_kien ?? null,
-        mucUuTien: laMucUuTien(d.muc_uu_tien) ? d.muc_uu_tien : MUC_UU_TIEN_MAC_DINH,
-        nguoiPhuTrach: d.nguoi_phu_trach_id ? nguoi(d.nguoi_phu_trach_id) : null,
-        trangThai: trangThaiTuDong(d.trang_thai),
-        dauVet: {
-          taoBoi: nguoi(d.tao_boi),
-          taoLuc: new Date(d.tao_luc),
-          suaBoi: d.sua_boi ? nguoi(d.sua_boi) : null,
-          suaLuc: d.sua_luc ? new Date(d.sua_luc) : null,
-        },
-      })),
-    )
+    return thanhCong(dong.map((d) => duAnTuDong(d, (id) => tenTheoId.get(id) ?? '')))
   }
 
   async function docMotDuAn(db: SupabaseClient, dong: DongDuAn): Promise<KetQua<DuAn>> {
@@ -494,44 +585,28 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     return thanhCong(kq.giaTri[0])
   }
 
-  interface NguCanh {
-    nguoiGoi: NguoiGoi
-    duAn: DongDuAn
-    nhin: NguoiGoiDuAn
-  }
+  /**
+   * Xác định người gọi (ticket toi-uu-hieu-nang 01): phiên đang mở, hồ sơ nhớ theo phiên, và chuỗi kiểm ở đầu
+   * lệnh trên một Dự án (`xemDuAn`, `quanLyDuAn`). Mọi lệnh dùng chung một chỗ này; xem khoSupabaseNguoiGoi.ts.
+   */
+  const xacDinh = taoXacDinhNguoiGoi<DongDuAn, DongNguoiTrongDuAnKemId, DongTaskKemLienKet>({
+    docHoSo,
+    docDongDuAn,
+    docDongDuAnKemIdNguoiTrong,
+    docNguoiTrongDuAn,
+    docTaskKemDuAn,
+    laUuid,
+    loiTuCsdl,
+  })
+  const { xacThuc, xemDuAnKemNguoiTrong, quanLyDuAn } = xacDinh
 
   /**
-   * Đọc một Dự án: không tồn tại và không thấy được trả cùng một lỗi `KHONG_TIM_THAY` (phân quyền
-   * từng dòng đã giấu Dự án người gọi không thấy; luật thuần kiểm lại lần nữa).
+   * Mọi Task của Dự án, dùng chung khi đang bay giữa các lệnh gọi cùng lúc của phiên (ticket toi-uu-hieu-nang 03):
+   * màn Chi tiết Dự án gọi cùng lúc `danhSachTask` và `danhSachNguoiTrongDuAn` (bộ đếm Task đang giữ), cả hai chỉ
+   * tốn một lượt đọc Task. Chỉ gọi sau khi người gọi đã được kiểm là xem được Dự án.
    */
-  async function xemDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<NguCanh>> {
-    const xt = await xacThuc(phien)
-    if (!xt.ok) return xt
-    const dong = await docDongDuAn(xt.giaTri.db, duAnId)
-    if (!dong.ok) return dong
-    if (!dong.giaTri) return thatBai('KHONG_TIM_THAY')
-    const trong = await laNguoiTrongDuAn(xt.giaTri, duAnId)
-    if (!trong.ok) return trong
-    const nhin: NguoiGoiDuAn = { vaiNguoiGoi: xt.giaTri.hoSo.vai, laNguoiTrongDuAn: trong.giaTri }
-    if (!duocXemDuAn(nhin)) return thatBai('KHONG_TIM_THAY')
-    return thanhCong({ nguoiGoi: xt.giaTri, duAn: dong.giaTri, nhin })
-  }
-
-  /**
-   * Ghi lên một Dự án: kiểm quyền trước khi xem Dự án có tồn tại, như bản bộ nhớ (người không phải
-   * PM luôn nhận `KHONG_CO_QUYEN` với Dự án không phải của mình, dù có tồn tại hay không).
-   */
-  async function quanLyDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<NguCanh>> {
-    const xt = await xacThuc(phien)
-    if (!xt.ok) return xt
-    const trong = await laNguoiTrongDuAn(xt.giaTri, duAnId)
-    if (!trong.ok) return trong
-    const nhin: NguoiGoiDuAn = { vaiNguoiGoi: xt.giaTri.hoSo.vai, laNguoiTrongDuAn: trong.giaTri }
-    if (!duocQuanLyDuAn(nhin)) return thatBai('KHONG_CO_QUYEN')
-    const dong = await docDongDuAn(xt.giaTri.db, duAnId)
-    if (!dong.ok) return dong
-    if (!dong.giaTri) return thatBai('KHONG_TIM_THAY')
-    return thanhCong({ nguoiGoi: xt.giaTri, duAn: dong.giaTri, nhin })
+  function docTaskCuaDuAn(phien: Phien, db: SupabaseClient, duAnId: string): Promise<KetQua<DongTask[]>> {
+    return xacDinh.dungChungKhiDangBay(phien, `task-cua-du-an|${duAnId}`, () => docDongTaskCuaDuAn(db, duAnId, loiTuCsdl))
   }
 
   /**
@@ -541,14 +616,7 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
   async function demTaskDangGiu(db: SupabaseClient, duAnId: string): Promise<KetQua<(id: string) => number>> {
     const { data, error } = await db.from('task').select('nguoi_thuc_hien_id, trang_thai').eq('du_an_id', duAnId)
     if (error) return loiTuCsdl(error)
-    const task = ((data ?? []) as unknown as { nguoi_thuc_hien_id: string; trang_thai: string }[]).map((d) => ({
-      nguoiThucHienId: d.nguoi_thuc_hien_id,
-      // Giá trị lạ (không thể có nhờ ràng buộc) coi như Huỷ: không tính.
-      trangThai: (CAC_TRANG_THAI_TASK as readonly string[]).includes(d.trang_thai)
-        ? (d.trang_thai as TrangThaiTask)
-        : ('HUY' as const),
-    }))
-    return thanhCong((id: string) => soTaskDangGiu(task, id))
+    return thanhCong(boDemTaskDangGiu((data ?? []) as unknown as Pick<DongTask, 'nguoi_thuc_hien_id' | 'trang_thai'>[]))
   }
 
   /** Đọc lại Dự án sau một lệnh ghi. */
@@ -559,32 +627,53 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     return docMotDuAn(db, dong.giaTri)
   }
 
-  /** Đổi trạng thái Dự án: chỉ qua hàm của cơ sở dữ liệu, không ghi thẳng cột trạng thái. */
+  /**
+   * Đổi trạng thái Dự án: chỉ qua hàm của cơ sở dữ liệu, không ghi thẳng cột trạng thái.
+   *
+   * Không đọc trước khi ghi (ticket toi-uu-hieu-nang 05): hàm luu_tru_du_an, mo_lai_du_an (migration
+   * 20261125000100_lat_1_ho_so_du_an.sql) tự kiểm đúng luật và đúng thứ tự của `kiemGhiDuAn`, `kiemMoLaiDuAn` theo vai
+   * hiện tại của người gọi: quyền quản lý (`KHONG_CO_QUYEN`), Dự án tồn tại (`KHONG_TIM_THAY`), rồi trạng thái
+   * (`DU_AN_DA_LUU_TRU`, `DU_AN_DANG_HOAT_DONG`), và ném đúng các mã đó. Vai theo bản nhớ chỉ khác vai thật khi vừa
+   * đổi vai; khi đó `theoVaiMoiNhat` đọc lại hồ sơ sau lần bị từ chối. Ba lượt: gọi hàm, đọc lại dòng Dự án, tên.
+   */
   async function doiTrangThaiDuAn(
     phien: Phien | null,
     duAnId: string,
     ham: 'luu_tru_du_an' | 'mo_lai_du_an',
   ): Promise<KetQua<DuAn>> {
-    const xt = await quanLyDuAn(phien, duAnId)
+    const xt = await xacThuc(phien)
     if (!xt.ok) return xt
-    const { nguoiGoi, duAn, nhin } = xt.giaTri
-    const tinhHuong = { ...nhin, trangThai: trangThaiTuDong(duAn.trang_thai) }
-    const lyDo = ham === 'luu_tru_du_an' ? kiemGhiDuAn(tinhHuong) : kiemMoLaiDuAn(tinhHuong)
-    if (lyDo) return thatBai(lyDo)
-    const { error } = await nguoiGoi.db.rpc(ham, { p_du_an_id: duAnId })
+    const { db, hoSo } = xt.giaTri
+    // Id không phải uuid: chắc chắn không có Dự án này (gửi đi sẽ thành lỗi kiểu), và người gọi không ở trong nó;
+    // trả như luật thuần: không quản lý được thì KHONG_CO_QUYEN, rồi mới KHONG_TIM_THAY.
+    if (!laUuid(duAnId)) {
+      return thatBai(duocQuanLyDuAn({ vaiNguoiGoi: hoSo.vai, laNguoiTrongDuAn: false }) ? 'KHONG_TIM_THAY' : 'KHONG_CO_QUYEN')
+    }
+    const { error } = await db.rpc(ham, { p_du_an_id: duAnId })
     if (error) return loiTuCsdl(error)
-    return docLaiDuAn(nguoiGoi.db, duAnId)
+    return docLaiDuAn(db, duAnId)
   }
 
+  /** Các hàm dùng chung đưa vào lệnh Task và lệnh GitHub (không import vòng). */
+  const phuThuocLenh = { ...xacDinh, docTaskCuaDuAn, laUuid, loiTuCsdl }
   /** Lệnh Task (ticket 10): xem khoSupabaseTask.ts. Dùng chung xác thực và luật xem, ghi Dự án ở đây. */
-  const lenhTask = taoLenhTaskSupabase({ xacThuc, xemDuAn, quanLyDuAn, laUuid, loiTuCsdl })
+  const lenhTask = taoLenhTaskSupabase(phuThuocLenh)
   /** Lệnh vòng duyệt (ticket 14): xem khoSupabaseVongDuyet.ts. Đổi trạng thái chỉ qua hàm của cơ sở dữ liệu. */
-  const lenhVongDuyet = taoLenhVongDuyetSupabase({ xacThuc, xemDuAn, layTask: lenhTask.layTask, laUuid, loiTuCsdl })
+  const lenhVongDuyet = taoLenhVongDuyetSupabase({
+    xacThuc,
+    xemTaskDeGhi: xacDinh.xemTaskDeGhi,
+    layTask: lenhTask.layTask,
+    laUuid,
+    loiTuCsdl,
+  })
 
   /** Lệnh repo GitHub và link của Task (ticket 17): xem khoSupabaseGitHub.ts. */
-  const lenhGitHub = taoLenhGitHubSupabase({ xacThuc, xemDuAn, quanLyDuAn, laUuid, loiTuCsdl })
+  const lenhGitHub = taoLenhGitHubSupabase(phuThuocLenh)
 
-  const kho: KhoSupabase = {
+  /** Tổng quan và Dự án kèm số liệu đọc theo lô (ticket toi-uu-hieu-nang 02): xem khoSupabaseDocLo.ts. */
+  const docLo = taoDocLoSupabase<DongDuAn>({ xacThuc, cotDuAn: COT_DU_AN, idNguoiCuaDuAn, duAnTuDong, loiTuCsdl })
+
+  const khoGoc: KhoSupabase = {
     async dangKy(dauVao: DangKyDauVao) {
       const kt = kiemTra(dangKySchema, dauVao)
       if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
@@ -646,7 +735,8 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       if (!data.user || !data.session) return thatBai('SAI_THONG_TIN_DANG_NHAP')
       demPhien += 1
       const phien: Phien = { maPhien: `phien-supabase-${demPhien}`, nguoiDungId: data.user.id }
-      phienDangMo.set(phien.maPhien, { db, nguoiDungId: data.user.id })
+      // Hồ sơ đọc một lần ở đây và nhớ theo phiên; đọc không được thì lệnh sau tự đọc (đăng nhập vẫn thành công).
+      await xacDinh.moPhien(phien, db)
       return thanhCong(phien)
     },
 
@@ -704,18 +794,18 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     },
 
     async dangXuat(phien: Phien | null) {
-      if (!phien) return thatBai('CHUA_DANG_NHAP')
-      const mo = phienDangMo.get(phien.maPhien)
-      if (!mo || mo.nguoiDungId !== phien.nguoiDungId) return thatBai('CHUA_DANG_NHAP')
-      phienDangMo.delete(phien.maPhien)
-      await mo.db.auth.stopAutoRefresh()
+      // Bỏ phiên cùng hồ sơ đã nhớ: phiên cũ không dùng lại được bản nhớ.
+      const db = xacDinh.dongPhien(phien)
+      if (!db) return thatBai('CHUA_DANG_NHAP')
+      await db.auth.stopAutoRefresh()
       // Chỉ kết thúc phiên này; lỗi mạng lúc đăng xuất không giữ phiên lại phía ứng dụng.
-      await mo.db.auth.signOut({ scope: 'local' })
+      await db.auth.signOut({ scope: 'local' })
       return thanhCong(null)
     },
 
     async layHoSoCuaToi(phien: Phien | null) {
-      const xt = await xacThuc(phien)
+      // Luôn đọc mới từ cơ sở dữ liệu và làm mới bản nhớ.
+      const xt = await xacDinh.docLaiHoSo(phien)
       if (!xt.ok) return xt
       return thanhCong(xt.giaTri.hoSo)
     },
@@ -738,7 +828,12 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       if (kt.giaTri.soDienThoai !== undefined) thayDoi.so_dien_thoai = kt.giaTri.soDienThoai
       if (kt.giaTri.chucDanh !== undefined) thayDoi.chuc_danh = kt.giaTri.chucDanh
       if (kt.giaTri.phongBan !== undefined) thayDoi.phong_ban = kt.giaTri.phongBan
-      if (Object.keys(thayDoi).length === 0) return thanhCong(xt.giaTri.hoSo)
+      // Không gửi ô nào: trả hồ sơ mới nhất (đọc lại, làm mới bản nhớ) như khi hồ sơ còn đọc ở đầu mọi lệnh.
+      if (Object.keys(thayDoi).length === 0) {
+        const moi = await xacDinh.docLaiHoSo(phien)
+        if (!moi.ok) return moi
+        return thanhCong(moi.giaTri.hoSo)
+      }
       // Trigger ho_so_truoc_khi_sua chỉ cho chủ hồ sơ đổi các cột này và chuẩn hoá Thông tin nhân sự; ràng buộc
       // của bảng kiểm lại dạng Số điện thoại và độ dài (lỗi đổi về đúng ô như luật thuần).
       const { data, error } = await xt.giaTri.db
@@ -749,8 +844,14 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
         .maybeSingle()
       if (error) return loiGhiHoSo(error)
       const dong = data as unknown as DongHoSo | null
-      if (!dong) return thatBai('CHUA_DANG_NHAP')
-      return thanhCong(hoSoTuDong(dong))
+      if (!dong) {
+        xacDinh.quenHoSo(phien)
+        return thatBai('CHUA_DANG_NHAP')
+      }
+      const hoSo = hoSoTuDong(dong)
+      // Lệnh kế tiếp thấy ngay tên mới.
+      xacDinh.ghiNhoHoSo(phien, hoSo)
+      return thanhCong(hoSo)
     },
 
     async danhSachDuAnCuaToi(phien: Phien | null) {
@@ -779,7 +880,19 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       if (!duocQuanLyNguoiDung(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
       const { data, error } = await xt.giaTri.db.from('ho_so').select(COT_HO_SO)
       if (error) return loiTuCsdl(error)
-      return thanhCong(((data ?? []) as unknown as DongHoSo[]).map(tomTatTuDong))
+      const dong = (data ?? []) as unknown as DongHoSo[]
+      // Hồ sơ của chính người gọi luôn có trong kết quả (ho_so_doc: id = auth.uid()) và là bản mới nhất: dùng nó
+      // để kiểm lại vai mà không tốn thêm lượt gọi. PM vừa bị hạ vai (cơ sở dữ liệu vẫn trả các hồ sơ người đó
+      // thấy được, không từ chối) nhận KHONG_CO_QUYEN như luật thuần; hồ sơ không còn thì như phiên đã hết.
+      const cuaToi = dong.find((d) => d.id === xt.giaTri.hoSo.id)
+      if (!cuaToi) {
+        xacDinh.quenHoSo(phien)
+        return thatBai('CHUA_DANG_NHAP')
+      }
+      const hoSoMoi = hoSoTuDong(cuaToi)
+      xacDinh.ghiNhoHoSo(phien, hoSoMoi)
+      if (!duocQuanLyNguoiDung(hoSoMoi.vai)) return thatBai('KHONG_CO_QUYEN')
+      return thanhCong(dong.map(tomTatTuDong))
     },
 
     async doiVai(phien: Phien | null, nguoiDungId: string, dauVao: DoiVaiDauVao) {
@@ -814,6 +927,8 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       if (error) return loiTuCsdl(error)
       const dong = data as unknown as DongHoSo | null
       if (!dong) return thatBai('KHONG_TIM_THAY')
+      // PM tự đổi vai mình: lệnh sau theo vai mới ngay.
+      xacDinh.ghiNhoHoSo(phien, hoSoTuDong(dong))
       return thanhCong(tomTatTuDong(dong))
     },
 
@@ -854,12 +969,15 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
       return docCacDuAn(xt.giaTri.db, (data ?? []) as unknown as DongDuAn[])
     },
 
-    // Dự án kèm số liệu (truong-moi 07): ghép từ danhSachDuAn, danhSachDuAnCuaToi, danhSachTask và tính
-    // phía client bằng luật thuần; chưa có hàm cơ sở dữ liệu riêng (đọc nhiều lần, một lần mỗi Dự án).
-    danhSachDuAnKemSoLieu: (phien, phamVi, bayGio) => docDuAnKemSoLieu(kho, phien, phamVi, bayGio),
+    // Dự án kèm số liệu (truong-moi 07) và dữ liệu Tổng quan: đọc theo lô, số lượt gọi cố định (ticket
+    // toi-uu-hieu-nang 02), tính phía client bằng luật thuần; xem khoSupabaseDocLo.ts.
+    danhSachDuAnKemSoLieu: docLo.danhSachDuAnKemSoLieu,
+    docDuLieuTongQuan: docLo.docDuLieuTongQuan,
 
     async layDuAn(phien: Phien | null, duAnId: string) {
-      const xt = await xemDuAn(phien, duAnId)
+      // Gọi cùng lúc với `danhSachNguoiTrongDuAn`, `danhSachTask` (màn Chi tiết Dự án): dùng chung lượt kiểm xem
+      // Dự án đang bay (ticket toi-uu-hieu-nang 03).
+      const xt = await xemDuAnKemNguoiTrong(phien, duAnId)
       if (!xt.ok) return xt
       return docMotDuAn(xt.giaTri.nguoiGoi.db, xt.giaTri.duAn)
     },
@@ -928,16 +1046,16 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     },
 
     async danhSachNguoiTrongDuAn(phien: Phien | null, duAnId: string) {
-      const xt = await xemDuAn(phien, duAnId)
+      // Danh sách Người trong dự án đã đọc cùng lượt kiểm xem Dự án; bộ đếm Task đang giữ tính trên lượt đọc Task
+      // dùng chung với `danhSachTask` khi hai lệnh gọi cùng lúc (ticket toi-uu-hieu-nang 03).
+      const xt = await xemDuAnKemNguoiTrong(phien, duAnId)
       if (!xt.ok) return xt
-      const db = xt.giaTri.nguoiGoi.db
-      const { data, error } = await db.from('nguoi_trong_du_an').select(COT_NGUOI_TRONG_DU_AN).eq('du_an_id', duAnId)
-      if (error) return loiTuCsdl(error)
-      const dem = await demTaskDangGiu(db, duAnId)
-      if (!dem.ok) return dem
-      const dong = (data ?? []) as unknown as DongNguoiTrongDuAn[]
+      if (!phien) return thatBai('CHUA_DANG_NHAP')
+      const task = await docTaskCuaDuAn(phien, xt.giaTri.nguoiGoi.db, duAnId)
+      if (!task.ok) return task
+      const dem = boDemTaskDangGiu(task.giaTri)
       return thanhCong(
-        dong.flatMap(({ ho_so, vai_tro }) => (ho_so ? [nguoiTrongDuAnTuDong(ho_so, vai_tro, dem.giaTri)] : [])),
+        xt.giaTri.nguoiTrong.flatMap(({ ho_so, vai_tro }) => (ho_so ? [nguoiTrongDuAnTuDong(ho_so, vai_tro, dem)] : [])),
       )
     },
 
@@ -1025,14 +1143,32 @@ export function taoKhoSupabase(tuyChon: TuyChonKhoSupabase): KhoSupabase {
     ...lenhGitHub,
 
     async maTruyCapHienTai() {
-      // Phiên mở sau cùng (Map giữ thứ tự thêm vào); ứng dụng chỉ giữ một phiên một lúc.
-      const cacPhien = [...phienDangMo.values()]
-      const mo = cacPhien[cacPhien.length - 1]
-      if (!mo) return null
-      const { data, error } = await mo.db.auth.getSession()
+      const db = xacDinh.clientPhienCuoi()
+      if (!db) return null
+      const { data, error } = await db.auth.getSession()
       if (error || !data.session) return null
       return data.session.access_token
     },
   }
-  return kho
+
+  // Mọi lệnh nhận phiên chạy theo vai mới nhất (khoSupabaseNguoiGoi.ts, `theoVaiMoiNhat`): bị từ chối khi đang
+  // dùng hồ sơ đã nhớ thì đọc lại hồ sơ một lần, vai đã đổi thì chạy lại. Không bọc: lệnh không có phiên, lệnh
+  // luôn đọc hồ sơ mới hay không dùng vai (hồ sơ của tôi).
+  const theoVai = xacDinh.bocTheoVaiMoiNhat(
+    khoGoc,
+    new Set<keyof KhoSupabase>([
+      'dangKy',
+      'dangNhap',
+      'guiLaiThuXacNhan',
+      'yeuCauDatLaiMatKhau',
+      'datLaiMatKhau',
+      'dangXuat',
+      'layHoSoCuaToi',
+      'suaHoSo',
+      'maTruyCapHienTai',
+    ]),
+  )
+  // Lệnh ngoài LENH_CHI_DOC bỏ mọi lượt đọc đang bay dùng chung lúc bắt đầu và lúc xong: kết quả dùng chung không
+  // sống qua lệnh ghi (ticket toi-uu-hieu-nang 03).
+  return xacDinh.bocQuenDangBayKhiGhi(theoVai, LENH_CHI_DOC)
 }

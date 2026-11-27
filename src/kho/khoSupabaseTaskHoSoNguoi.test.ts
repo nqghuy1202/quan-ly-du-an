@@ -284,9 +284,14 @@ function taoFetchGia(du: DuLieuGia): typeof fetch {
       const nhung = /ho_so!nguoi_trong_du_an_nguoi_dung_id_fkey\(([^)]*)\)/.exec(chon)
       if (!nhung) return dong.map((t) => chonCot(t, chon.split(',')))
       const cotHoSo = nhung[1].split(',')
+      // Các cột thường được hỏi cạnh phần nhúng (vd. `nguoi_dung_id`) trả về như PostgREST.
+      const cotThuong = chon
+        .replace(nhung[0], '')
+        .split(',')
+        .filter((c) => c !== '')
       return dong.map((t) => {
         const hoSo = du.hoSo.find((h) => h.id === t.nguoi_dung_id)
-        return { vai_tro: t.vai_tro, ho_so: hoSo && thayHoSo(hoSo.id) ? chonCot(hoSo, cotHoSo) : null }
+        return { ...chonCot(t, cotThuong), ho_so: hoSo && thayHoSo(hoSo.id) ? chonCot(hoSo, cotHoSo) : null }
       })
     }
 
@@ -342,8 +347,31 @@ function taoFetchGia(du: DuLieuGia): typeof fetch {
     const bang = url.pathname.slice('/rest/v1/'.length)
     if (phuongThuc === 'GET') {
       if (bang === 'ho_so') return tra(200, loc(du.hoSo.filter((h) => thayHoSo(h.id)), url.searchParams).map((h) => chonCot(h, chon.split(','))))
-      if (bang === 'du_an') return tra(200, loc(du.duAn.filter((d) => duAnThay(d.id)), url.searchParams))
+      if (bang === 'du_an') {
+        const dong = loc(du.duAn.filter((d) => duAnThay(d.id)), url.searchParams)
+        // Nhúng id Người trong dự án (lượt kiểm quản lý Dự án, ticket toi-uu-hieu-nang 05).
+        if (!chon.includes('nguoi_trong_du_an!nguoi_trong_du_an_du_an_id_fkey(nguoi_dung_id)')) return tra(200, dong)
+        return tra(
+          200,
+          dong.map((d) => ({
+            ...d,
+            nguoi_trong_du_an: du.thanhVien.filter((t) => t.du_an_id === d.id).map((t) => ({ nguoi_dung_id: t.nguoi_dung_id })),
+          })),
+        )
+      }
       if (bang === 'nguoi_trong_du_an') return tra(200, dongNguoiTrongDuAn(loc(du.thanhVien.filter((t) => duAnThay(t.du_an_id)), url.searchParams)))
+      if (bang === 'task' && chon.includes('du_an!task_du_an_id_fkey(')) {
+        // Lượt đọc Task theo id nhúng link và Dự án kèm Người trong dự án (ticket toi-uu-hieu-nang 04); nhúng theo
+        // cùng phân quyền từng dòng. Bản giả không có link.
+        return tra(
+          200,
+          loc(du.task.filter((t) => duAnThay(t.du_an_id)), url.searchParams).map((t) => {
+            const duAn = du.duAn.find((d) => d.id === t.du_an_id && duAnThay(d.id))
+            const nguoiTrong = du.thanhVien.filter((n) => n.du_an_id === t.du_an_id)
+            return { ...t, lien_ket_task: [], du_an: duAn ? { ...duAn, nguoi_trong_du_an: nguoiTrong } : null }
+          }),
+        )
+      }
       if (bang === 'task') return tra(200, loc(du.task.filter((t) => duAnThay(t.du_an_id)), url.searchParams))
       return tra(404, { code: 'PGRST205', message: `Không có bảng ${bang}` })
     }

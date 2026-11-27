@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Phien } from '../kho/khoDuLieu'
 import { LOC_TAT_CA_DU_AN_BAN_DAU, type LocDuAn } from '../luat/timDuAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
-import { ManChiTietDuAn } from './ManChiTietDuAn'
+import { ManChiTietDuAnTaiLuoi } from './cacManTaiLuoi'
 import { ManDanhSachDuAn } from './ManDanhSachDuAn'
 
 interface Props {
@@ -24,7 +24,7 @@ export function ManDuAn({ phien, vai, dongHo, onHetPhien }: Props) {
 
   if (man.loai === 'chiTiet') {
     return (
-      <ManChiTietDuAn
+      <ManChiTietDuAnTaiLuoi
         key={man.duAnId}
         phien={phien}
         vai={vai}

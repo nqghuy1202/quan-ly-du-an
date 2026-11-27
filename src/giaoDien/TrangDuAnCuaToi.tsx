@@ -12,7 +12,7 @@ import type { VaiHeThong } from '../luat/taiKhoan'
 import { LOC_DU_AN_TRONG, type LocDuAn } from '../luat/timDuAn'
 import { BangDuAn } from './BangDuAn'
 import { useKho } from './khoContext'
-import { ManChiTietDuAn } from './ManChiTietDuAn'
+import { ManChiTietDuAnTaiLuoi } from './cacManTaiLuoi'
 import { NganTruotTaoDuAn } from './NganTruotDuAn'
 
 interface Props {
@@ -63,7 +63,7 @@ export function TrangDuAnCuaToi({ phien, vai, dongHo, onHetPhien }: Props) {
 
   if (duAnDangMo !== null) {
     return (
-      <ManChiTietDuAn
+      <ManChiTietDuAnTaiLuoi
         key={duAnDangMo}
         phien={phien}
         vai={vai}

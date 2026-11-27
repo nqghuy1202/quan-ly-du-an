@@ -1,5 +1,5 @@
-// Hàm ghép `docDuAnKemSoLieu` (bản Supabase dùng) chạy qua cùng bộ test hợp đồng, trên các lệnh đọc của bản
-// bộ nhớ: phần ghép và tính phía client được kiểm trong cổng dù bản Supabase thì chỉ chạy tay.
+// Hàm ghép `docDuAnKemSoLieu` (cách ghép tham chiếu mà bản Supabase đọc theo lô phải khớp) chạy qua cùng bộ test
+// hợp đồng, trên các lệnh đọc của bản bộ nhớ: phần ghép và tính phía client được kiểm trong cổng.
 import { chayHopDongDuAnKemSoLieu } from './hopDongDuAnKemSoLieu'
 import type { BanCaiHopDong } from './hopDong'
 import { docDuAnKemSoLieu } from './duAnKemSoLieu'
@@ -24,4 +24,4 @@ function taoBanCai(): BanCaiHopDong {
   }
 }
 
-chayHopDongDuAnKemSoLieu('hàm ghép từ các lệnh đọc (bản Supabase dùng), trên bản bộ nhớ', taoBanCai)
+chayHopDongDuAnKemSoLieu('hàm ghép từ các lệnh đọc (tham chiếu của bản Supabase), trên bản bộ nhớ', taoBanCai)

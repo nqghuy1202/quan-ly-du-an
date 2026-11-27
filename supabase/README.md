@@ -153,7 +153,7 @@ secret, không đụng Supabase thật). **Kiểm** là cách biết bước đ�
 
 - **Ai làm:** chủ dự án, trên project thật hoặc một project dựng đúng như project thật.
 - **Kiểm:** cả bảy mục kiểm của Phần B đạt, cùng các mục kiểm tay "Trường mới của Dự án" và "Task, hồ sơ
-  và Người trong dự án" ở Phần D.
+  và Người trong dự án" ở Phần D, và mục "Sau lô tối ưu hiệu năng" (ngay dưới "Nâng cấp lên trường mới").
 
 ### Bước 13. Chỉ khi bảy mục đạt mới đưa lên mạng
 
@@ -190,6 +190,37 @@ Dành cho project đã áp lát 1 đến lát 4 và nay nhận bản ứng dụn
    `down/20261126000600_truong_task_ho_so_nguoi.down.sql`, rồi `down/20261126000500_truong_du_an.down.sql`.
    Mọi giá trị của trường mới mất hẳn (áp lại thì Dự án nhận lại mã tạm `DA-…`), nên đưa ứng dụng về bản trước
    trường mới cùng lúc: bản mới đọc và ghi các cột đã bỏ sẽ lỗi.
+
+### Sau lô tối ưu hiệu năng (ticket toi-uu-hieu-nang 01 đến 06)
+
+Lô này đổi cách bản Supabase của Kho đọc và ghi (nhớ hồ sơ theo phiên, đọc Task theo lô, nhúng bảng theo tên khoá
+ngoại, dùng chung lượt đọc của các lệnh gọi cùng lúc, gọi hàm cơ sở dữ liệu trước rồi mới đọc khi bị từ chối), không
+đổi migration. Cổng chỉ đếm lượt gọi và kiểm mã lỗi trên `fetch` giả, nên chủ dự án kiểm tay trên Supabase thật.
+
+- **Ai làm:** chủ dự án, sau khi project nhận bản ứng dụng của lô này.
+- **Làm gì:**
+  1. Chạy lại bộ test hợp đồng và bảng ca dùng chung trên Supabase thật, trên project **test** (Bước 11):
+     `npx vitest run --config vitest.supabase.config.ts`.
+  2. Mở từng màn trên mây (bản đã đưa lên mạng hoặc `npm run dev` trỏ tới project thật), bật tab mạng của trình
+     duyệt, lọc `/rest/v1/` (không tính `/auth/v1/` và Edge Function `doc-github`), và đếm số yêu cầu của mỗi lần mở
+     màn hay mỗi lệnh, bằng PM, bằng Support của Dự án và bằng Thành viên:
+
+     | Việc | Nhiều nhất |
+     |---|---|
+     | Mở Tổng quan | 4 |
+     | Mở Tất cả Dự án (PM), Dự án của tôi | 4 |
+     | Mở Chi tiết Dự án | 5 |
+     | Mở Ngăn trượt Task từ Tổng quan, Kanban, Việc của tôi, Chờ tôi duyệt (chưa tính tab Link GitHub) | 6 |
+     | Một lệnh ghi: tạo, sửa, Lưu trữ, mở lại Dự án; thêm, gỡ người, sửa Vai trò trong Dự án; gắn, gỡ repo; tạo, sửa Task, đổi người, đổi trạng thái (kể cả kéo thả trên Kanban), thêm, gỡ link | 3 |
+
+     Trên 500 Task người gọi thấy được thì Tổng quan, hai danh sách Dự án và Chi tiết Dự án thêm một yêu cầu mỗi
+     500 Task. Đường bị từ chối có thể tốn thêm yêu cầu (không có trần).
+  3. Thử vài đường bị từ chối và xem lời từ chối như trước: Thành viên đổi trạng thái một bước không phải của mình
+     (lời giải thích nêu ai làm được bước đó), Support ngoài Dự án Lưu trữ hay mở lại Dự án, kéo thả Task của Dự án
+     đã Lưu trữ; PM đổi vai một người rồi người đó làm ngay lệnh kế tiếp (được nâng thì làm được, bị hạ thì bị từ chối).
+- **Kiểm:** lệnh ở bước 1 **xanh** và không có ca nào mang chữ "CHƯA KIỂM"; mọi số đếm ở bước 2 không vượt cột
+  "Nhiều nhất" và số liệu, nội dung các màn như trước; lời từ chối ở bước 3 đúng như trước. Số nào vượt thì ghi lại
+  màn, vai và số yêu cầu, rồi báo lại (chi tiết những gì cổng không kiểm: Phần D, mục "Cổng chưa kiểm").
 
 ## Phần B. Danh sách kiểm tay bắt buộc
 
@@ -422,11 +453,14 @@ với ký tự ngoài bảng chữ cơ bản (emoji), nên cơ sở dữ liệu 
 ngược lại.
 
 Cổng **có kiểm** (`src/kho/khoSupabaseVongDuyet.test.ts`, không mạng, không DB): với một `fetch` giả trong bộ
-nhớ, luật thuần từ chối trước khi gọi hàm (không ghi gì), lý do được cắt khoảng trắng, lỗi hàm ném được đổi
-về đúng mã của Kho, lịch sử được xếp lại đúng; và cấu trúc file migration bằng cách đọc chữ: ma trận trong
+nhớ, bị từ chối thì đúng mã của luật thuần và không ghi gì (dữ liệu biểu mẫu sai thì không gọi hàm; từ ticket
+toi-uu-hieu-nang 06 các lỗi khác do hàm từ chối trước, rồi Kho đọc Task để trả đúng lời của luật thuần), lý do
+được cắt khoảng trắng, lỗi hàm ném được đổi về đúng mã của Kho, lịch sử được xếp lại đúng; và cấu trúc file
+migration bằng cách đọc chữ: ma trận trong
 SQL giống hệt `MA_TRAN_CHUYEN_TRANG_THAI`, mọi mã lỗi hàm ném là mã của Kho, hàm không nhận người gọi qua
 tham số, cờ giao dịch chỉ bật sau mọi lệnh kiểm, bảng lịch sử không mở quyền ghi cho client, bản xuống bỏ
-đủ đối tượng. `fetch` giả KHÔNG mô phỏng SQL, nên không thay cho việc chạy trên Supabase thật.
+đủ đối tượng. `fetch` giả chỉ bắt chước thô bảy bước kiểm của hàm, KHÔNG chạy SQL, nên không thay cho việc
+chạy trên Supabase thật.
 
 **Cổng không kiểm** (chủ dự án phải chạy tay): toàn bộ SQL của lát 3 (hàm, bảng, ràng buộc, trigger, RLS);
 bộ test hợp đồng và bảng ca chuyển trạng thái (`src/kho/hopDongChuyenTrangThai.ts`, mọi dòng của
@@ -726,6 +760,35 @@ phân quyền từng dòng và quyền cột mới; bản Supabase với các tr
   lệnh riêng ở mục "Lệnh chạy bộ test trên Supabase thật"; trong `npm test` mang tên "CHƯA KIỂM").
 - Supabase Auth thật: đăng ký, xác nhận email, đăng nhập, đặt lại mật khẩu, thư gửi đi và mẫu thư.
 - Mọi lệnh của bản Supabase có gọi mạng.
+
+Lô tối ưu hiệu năng (ticket toi-uu-hieu-nang 01 đến 06): cổng đếm lượt gọi và kiểm mã lỗi trên `fetch` giả,
+**không kiểm** trên máy chủ thật những gì các lệnh mới dựa vào (cách kiểm tay: Phần A, mục "Sau lô tối ưu hiệu năng"):
+
+- Nhớ hồ sơ theo phiên, đọc lại hồ sơ một lần trước khi trả lỗi khi đang dùng bản nhớ (ticket 01,
+  `src/kho/khoSupabaseNguoiGoi.ts`, `src/kho/khoSupabaseNguoiGoi.test.ts`).
+- Tổng quan và danh sách Dự án kèm số liệu đọc theo lô (ticket 02, `src/kho/khoSupabaseDocLo.ts`,
+  `src/kho/khoSupabaseDocLo.test.ts`): lượt đọc `du_an` nhúng
+  `nguoi_trong_du_an!nguoi_trong_du_an_du_an_id_fkey(nguoi_dung_id)` (hai bảng nối nhau bằng hai khoá ngoại nên phải
+  gọi đúng tên khoá; sai tên thì PostgREST báo `PGRST201` và màn hiện lỗi hệ thống). Phần Dự án kèm số liệu của bộ
+  test hợp đồng đi qua lối đọc theo lô.
+- Chi tiết Dự án dùng chung lượt kiểm khi các lệnh gọi cùng lúc (ticket 03, `xemDuAnKemNguoiTrong`,
+  `src/kho/khoSupabaseChiTietDuAn.test.ts`): lượt đọc Người trong dự án
+  (`nguoi_dung_id, vai_tro, ho_so!nguoi_trong_du_an_nguoi_dung_id_fkey(...)`) cũng là lượt biết người gọi có ở
+  trong Dự án; lệnh ghi nào cũng bỏ các lượt đang bay.
+- Ngăn trượt Task đọc Task theo id trong một lượt (ticket 04, `xemTaskKemDuAn`,
+  `src/kho/khoSupabaseNganTruotTask.test.ts`): `task` nhúng `lien_ket_task(repo, loai, so)` (kèm
+  `lien_ket_task.order=thu_tu.asc`, `lien_ket_task.limit=1000`) và `du_an!task_du_an_id_fkey(...,
+  nguoi_trong_du_an!nguoi_trong_du_an_du_an_id_fkey(nguoi_dung_id, vai_tro, ho_so!...))`; sai tên khoá thì PostgREST
+  báo `PGRST200`/`PGRST201`.
+- Lệnh ghi Dự án và Người trong dự án (ticket 05, `quanLyDuAn`, `src/kho/khoSupabaseLenhGhiDuAn.test.ts`): lượt kiểm
+  quản lý Dự án là MỘT lượt đọc `du_an` nhúng id Người trong dự án; Lưu trữ, mở lại không đọc trước, để hàm
+  `luu_tru_du_an`, `mo_lai_du_an` tự kiểm quyền, tồn tại, trạng thái và ném đúng mã.
+- Lệnh ghi Task (ticket 06, `quanLyTask`, `xemTaskDeGhi`, `src/kho/khoSupabaseLenhGhiTask.test.ts`): sửa Task, đổi
+  người, thêm, gỡ link đọc Task kèm Dự án và Người trong dự án trong một lượt (như ticket 04, không dùng chung khi
+  đang bay); tạo Task dùng id Người trong dự án của lượt kiểm quản lý Dự án. Đổi trạng thái gọi
+  `doi_trang_thai_task` trước, không đọc trước: hàm phải kiểm đủ bảy bước của luật thuần, đúng thứ tự (mục "Vòng
+  duyệt trên Supabase"); bị từ chối thì Kho mới đọc Task để trả đúng lời của luật thuần. Dữ liệu biểu mẫu sai thì
+  không gửi lệnh ghi nào.
 
 Phần GitHub (ticket 17) `npm test` cũng **không kiểm**: file migration `migrations/20261125000400_lat_4_github.sql`
 và bản xuống (bảng, ràng buộc, trigger, hàm, phân quyền từng dòng, nhánh cờ mới của trigger Task), các

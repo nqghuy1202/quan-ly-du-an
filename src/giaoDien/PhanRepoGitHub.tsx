@@ -10,9 +10,10 @@ import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
 import { Text } from '@astryxdesign/core/Text'
 import { TextInput } from '@astryxdesign/core/TextInput'
 import { VStack } from '@astryxdesign/core/VStack'
-import type { KetQua, LoiKho, MaLoi } from '../kho/ketQua'
+import { thanhCong, type KetQua, type LoiKho, type MaLoi } from '../kho/ketQua'
 import type { Phien, RepoDuAn } from '../kho/khoDuLieu'
 import { xepRepo } from '../luat/github'
+import { useBoGiuDuLieu, useGiuKetQua } from './boGiuDuLieu'
 import { useKho } from './khoContext'
 import { trangThaiO } from './trangThaiO'
 
@@ -37,9 +38,16 @@ const LOI_CAN_DOC_LAI: readonly MaLoi[] = ['DU_AN_DA_LUU_TRU', 'KHONG_CO_QUYEN',
 /** Phần "Repo GitHub" của màn chi tiết Dự án: xem, gắn và gỡ repo (chỉ ghi tên, không gọi GitHub). */
 export function PhanRepoGitHub({ phien, duAnId, lyDoKhongGhi, onCanDocLai, onHetPhien }: Props) {
   const kho = useKho()
+  const boGiu = useBoGiuDuLieu()
+  const khoaGiu = `repoCuaDuAn:${duAnId}`
   const [lanTai, setLanTai] = useState(0)
-  const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<RepoDuAn[]> } | null>(null)
+  // Tab chỉ được vẽ khi đang chọn: quay lại tab đã xem thì hiện ngay danh sách lần trước, rồi đọc lại ngầm.
+  const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<RepoDuAn[]> } | null>(() => {
+    const daGiu = boGiu.lay<RepoDuAn[]>(khoaGiu)
+    return daGiu ? { lan: 0, kq: thanhCong(daGiu) } : null
+  })
   const tai = daTai && daTai.lan === lanTai ? daTai.kq : null
+  useGiuKetQua(khoaGiu, tai)
   const [repo, setRepo] = useState('')
   const [dangGan, setDangGan] = useState(false)
   const [dangGoRepo, setDangGoRepo] = useState<string | null>(null)
@@ -53,7 +61,8 @@ export function PhanRepoGitHub({ phien, duAnId, lyDoKhongGhi, onCanDocLai, onHet
     kho.danhSachRepoCuaDuAn(phien, duAnId).then((kq) => {
       if (huy) return
       if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
-      else setDaTai({ lan: lanTai, kq })
+      // Đọc lại ngầm (đang hiện danh sách của lần tải này) mà lỗi thì giữ danh sách đang hiện.
+      else setDaTai((cu) => (!kq.ok && cu?.lan === lanTai && cu.kq.ok ? cu : { lan: lanTai, kq }))
     })
     return () => {
       huy = true
