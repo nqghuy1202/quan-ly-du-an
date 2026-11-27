@@ -7,9 +7,16 @@
 //   do "CHƯA KIỂM ...", để không ai đọc nhầm là đạt.
 import { describe, it } from 'vitest'
 import { chayBangCaQuyen, chayBoTestHopDong } from './hopDong'
+import { chayHopDongDuAnKemSoLieu } from './hopDongDuAnKemSoLieu'
 import { chayHopDongLienKet } from './hopDongLienKet'
+import { chayHopDongMaDuAn } from './hopDongMaDuAn'
+import { chayHopDongMucUuTienTask } from './hopDongMucUuTienTask'
+import { chayHopDongNgayDuAn } from './hopDongNgayDuAn'
 import { chayHopDongRepo } from './hopDongRepo'
 import { chayHopDongSuaTask } from './hopDongSuaTask'
+import { chayHopDongThongTinNhanSu } from './hopDongThongTinNhanSu'
+import { chayHopDongUuTienPhuTrach } from './hopDongUuTienPhuTrach'
+import { chayHopDongVaiTroTrongDuAn } from './hopDongVaiTroTrongDuAn'
 import { chayHopDongChuyenTrangThai } from './hopDongChuyenTrangThai'
 import { cauHinhTestSupabase, taoBoBanCaiSupabase } from './hopDongSupabase'
 
@@ -29,6 +36,23 @@ switch (ketQua.trangThai) {
     chayHopDongChuyenTrangThai('bản Supabase', taoBanCai, tuyChon)
     // Link issue hoặc PR trên Task (ticket 16) trên bản Supabase (ticket 17).
     chayHopDongLienKet('bản Supabase', taoBanCai, tuyChon)
+    // Mã Dự án và Khách hàng (truong-moi 01): cần migration trường mới của ticket truong-moi 09.
+    chayHopDongMaDuAn('bản Supabase', taoBanCai, tuyChon)
+    // Ngày bắt đầu, Ngày kết thúc dự kiến (truong-moi 02): cần migration trường mới của ticket truong-moi 09.
+    chayHopDongNgayDuAn('bản Supabase', taoBanCai, tuyChon)
+    // Mức ưu tiên và Người phụ trách (truong-moi 03): cần migration trường mới của ticket truong-moi 09.
+    chayHopDongUuTienPhuTrach('bản Supabase', taoBanCai, tuyChon)
+    // Mức ưu tiên của Task (truong-moi 04): cần cột muc_uu_tien và dòng lịch sử đổi mức của ticket truong-moi 10.
+    chayHopDongMucUuTienTask('bản Supabase', taoBanCai, tuyChon)
+    // Thông tin nhân sự trong hồ sơ (truong-moi 05): cần cột so_dien_thoai, chuc_danh, phong_ban và quyền xem
+    // ép ở phía cơ sở dữ liệu của ticket truong-moi 10.
+    chayHopDongThongTinNhanSu('bản Supabase', taoBanCai, tuyChon)
+    // Vai trò trong Dự án và số Task đang giữ (truong-moi 06): cần cột vai_tro của bảng nguoi_trong_du_an và quyền
+    // ghi cột đó của ticket truong-moi 10.
+    chayHopDongVaiTroTrongDuAn('bản Supabase', taoBanCai, tuyChon)
+    // Dự án kèm Tiến độ, số Trễ hạn, cờ Quá hạn dự kiến (truong-moi 07): bản Supabase ghép từ các lệnh đọc có sẵn
+    // và tính phía client (duAnKemSoLieu.ts); cần migration trường mới của ticket truong-moi 09 và 10.
+    chayHopDongDuAnKemSoLieu('bản Supabase', taoBanCai, tuyChon)
     break
   }
   case 'THIEU_CAU_HINH': {

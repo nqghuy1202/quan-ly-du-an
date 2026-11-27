@@ -11,6 +11,8 @@ import {
   type NguoiGoiDuAn,
   type TrangThaiDuAn,
 } from './duAn'
+import { dinhDangNgay, laNgayHopLe } from './ngay'
+import { MUC_UU_TIEN_MAC_DINH, mucUuTienSchema, type MucUuTien } from './mucUuTien'
 
 /** Các trạng thái của Task, theo thứ tự cột của bảng Kanban. */
 export const CAC_TRANG_THAI_TASK = ['MOI', 'DANG_LAM', 'CHO_DUYET', 'TRA_LAI', 'BI_LOI', 'HOAN_THANH', 'HUY'] as const
@@ -48,28 +50,8 @@ export const THONG_BAO_TASK = {
   daLuuTru: 'Dự án đã Lưu trữ nên không tạo được Task mới. Mở lại Dự án để tạo.',
 } as const
 
-const NGAY_ISO = /^(\d{4})-(\d{2})-(\d{2})$/
-
-/** Chuỗi `YYYY-MM-DD` có phải một ngày có thật trên lịch không (vd. 2026-02-30 thì không). */
-export function laNgayHopLe(chuoi: string): boolean {
-  const khop = NGAY_ISO.exec(chuoi)
-  if (!khop) return false
-  const nam = Number(khop[1])
-  const thang = Number(khop[2])
-  const ngay = Number(khop[3])
-  if (thang < 1 || thang > 12 || ngay < 1) return false
-  // Ngày cuối tháng: ngày 0 của tháng sau. Tính trên UTC nên không phụ thuộc múi giờ của máy.
-  const moc = new Date(0)
-  moc.setUTCFullYear(nam, thang, 0)
-  return ngay <= moc.getUTCDate()
-}
-
-/** Hạn dạng `YYYY-MM-DD` hiện ra thành `dd/MM/yyyy`. Hạn là một ngày, không có giờ. */
-export function dinhDangNgay(han: string): string {
-  const khop = NGAY_ISO.exec(han)
-  if (!khop) return han
-  return `${khop[3]}/${khop[2]}/${khop[1]}`
-}
+// Kiểm và hiện ngày `YYYY-MM-DD` dùng chung với ngày của Dự án; giữ lối xuất cũ từ đây.
+export { dinhDangNgay, laNgayHopLe }
 
 const tieuDeTask = z
   .string({ error: THONG_BAO_TASK.tieuDeTrong })
@@ -99,11 +81,15 @@ function chuoiHoacNull(giaTri: string | null | undefined): string | null {
   return daCat === '' ? null : daCat
 }
 
-/** Tạo Task: tiêu đề bắt buộc, mô tả và hạn tuỳ chọn, hai người được chọn (kiểm riêng bằng `kiemNguoiTask`). */
+/**
+ * Tạo Task: tiêu đề bắt buộc, mô tả và hạn tuỳ chọn, Mức ưu tiên tuỳ chọn (không gửi thì Trung bình),
+ * hai người được chọn (kiểm riêng bằng `kiemNguoiTask`).
+ */
 export const taoTaskSchema = z.object({
   tieuDe: tieuDeTask,
   moTa: moTaTask.optional(),
   han: hanTask,
+  mucUuTien: mucUuTienSchema.default(MUC_UU_TIEN_MAC_DINH),
   nguoiThucHienId: idNguoiDuocChon,
   nguoiKiemTraId: idNguoiDuocChon,
 })
@@ -113,6 +99,7 @@ export interface DuLieuTaoTask {
   tieuDe: string
   moTa: string
   han: string | null
+  mucUuTien: MucUuTien
   nguoiThucHienId: string | null
   nguoiKiemTraId: string | null
 }
@@ -122,13 +109,14 @@ export const kiemTraTask = {
   tao: (dauVao: unknown): KiemTra<DuLieuTaoTask> => {
     const kt = kiemTra(taoTaskSchema, dauVao)
     if (!kt.ok) return kt
-    const { tieuDe, moTa, han, nguoiThucHienId, nguoiKiemTraId } = kt.giaTri
+    const { tieuDe, moTa, han, mucUuTien, nguoiThucHienId, nguoiKiemTraId } = kt.giaTri
     return {
       ok: true,
       giaTri: {
         tieuDe,
         moTa: moTa ?? '',
         han: chuoiHoacNull(han),
+        mucUuTien,
         nguoiThucHienId: chuoiHoacNull(nguoiThucHienId),
         nguoiKiemTraId: chuoiHoacNull(nguoiKiemTraId),
       },
@@ -136,11 +124,15 @@ export const kiemTraTask = {
   },
 }
 
-/** Dữ liệu vào khi tạo Task. `han` là `YYYY-MM-DD`; trống hay null là không có hạn. */
+/**
+ * Dữ liệu vào khi tạo Task. `han` là `YYYY-MM-DD`; trống hay null là không có hạn. Không gửi Mức ưu
+ * tiên thì là Trung bình.
+ */
 export interface TaoTaskDauVao {
   tieuDe: string
   moTa?: string
   han?: string | null
+  mucUuTien?: MucUuTien
   nguoiThucHienId?: string | null
   nguoiKiemTraId?: string | null
 }
@@ -242,11 +234,15 @@ export const THONG_BAO_SUA_TASK = {
   daRoiDuAn: 'đã rời dự án',
 } as const
 
-/** Sửa Task: mỗi ô tuỳ chọn, ô không gửi thì giữ nguyên; hạn trống hay null là xoá hạn. */
+/**
+ * Sửa Task: mỗi ô tuỳ chọn, ô không gửi thì giữ nguyên; hạn trống hay null là xoá hạn. Đổi Mức ưu tiên
+ * cũng đi qua đây, theo đúng quyền sửa Task.
+ */
 export const suaTaskSchema = z.object({
   tieuDe: tieuDeTask.optional(),
   moTa: moTaTask.optional(),
   han: hanTask,
+  mucUuTien: mucUuTienSchema.optional(),
 })
 
 /** Đổi người: ô không gửi thì giữ nguyên; ô gửi trống hay null là bỏ người (Kho trả `THIEU_NGUOI`). */
@@ -260,6 +256,7 @@ export interface DuLieuSuaTask {
   tieuDe?: string
   moTa?: string
   han?: string | null
+  mucUuTien?: MucUuTien
 }
 
 /** Dữ liệu đổi người đã kiểm: chỉ các ô được gửi; `null` là ô trống (chưa chọn). */
@@ -273,11 +270,12 @@ export const kiemTraSuaTask = {
   sua: (dauVao: unknown): KiemTra<DuLieuSuaTask> => {
     const kt = kiemTra(suaTaskSchema, dauVao)
     if (!kt.ok) return kt
-    const { tieuDe, moTa, han } = kt.giaTri
+    const { tieuDe, moTa, han, mucUuTien } = kt.giaTri
     const giaTri: DuLieuSuaTask = {}
     if (tieuDe !== undefined) giaTri.tieuDe = tieuDe
     if (moTa !== undefined) giaTri.moTa = moTa
     if (han !== undefined) giaTri.han = chuoiHoacNull(han)
+    if (mucUuTien !== undefined) giaTri.mucUuTien = mucUuTien
     return { ok: true, giaTri }
   },
   doiNguoi: (dauVao: unknown): KiemTra<DuLieuDoiNguoiTask> => {
@@ -291,11 +289,15 @@ export const kiemTraSuaTask = {
   },
 }
 
-/** Dữ liệu vào khi sửa Task. Ô không gửi thì giữ nguyên; `han` trống hay null là xoá hạn. */
+/**
+ * Dữ liệu vào khi sửa Task. Ô không gửi thì giữ nguyên; `han` trống hay null là xoá hạn. Đổi Mức ưu
+ * tiên sang mức khác thì Kho ghi một dòng lịch sử; gửi đúng mức đang có thì không ghi.
+ */
 export interface SuaTaskDauVao {
   tieuDe?: string
   moTa?: string
   han?: string | null
+  mucUuTien?: MucUuTien
 }
 
 /** Dữ liệu vào khi đổi người của Task. Ô không gửi thì giữ nguyên. */
@@ -304,7 +306,10 @@ export interface DoiNguoiTaskDauVao {
   nguoiKiemTraId?: string | null
 }
 
-/** Quyền sửa Task và đổi người: như quyền tạo Task (PM ở mọi Dự án, Support của Dự án). */
+/**
+ * Quyền sửa Task, đổi người và đổi Mức ưu tiên: như quyền tạo Task (PM ở mọi Dự án, Support của Dự án).
+ * Người thực hiện, Người kiểm tra có vai Thành viên không sửa được.
+ */
 export function duocSuaTask(nguoiGoi: NguoiGoiDuAn): boolean {
   return duocQuanLyDuAn(nguoiGoi)
 }
@@ -383,6 +388,22 @@ export function taskChuaChotNguoiDangGiu<
       !laTaskDaChot(task.trangThai) &&
       (task.nguoiThucHien.id === nguoiDungId || task.nguoiKiemTra.id === nguoiDungId),
   )
+}
+
+/**
+ * Số Task đang giữ của `nguoiDungId` (cột của bảng Người trong dự án): Task chưa Hoàn thành, chưa Huỷ mà
+ * người đó là Người thực hiện. Task người đó chỉ là Người kiểm tra không tính. Khác với
+ * `taskChuaChotNguoiDangGiu` (danh sách giao lại trước khi gỡ người), vốn tính cả vai Người kiểm tra.
+ */
+export function soTaskDangGiu(
+  danhSach: Iterable<{ trangThai: TrangThaiTask; nguoiThucHienId: string }>,
+  nguoiDungId: string,
+): number {
+  let dem = 0
+  for (const task of danhSach) {
+    if (task.nguoiThucHienId === nguoiDungId && !laTaskDaChot(task.trangThai)) dem += 1
+  }
+  return dem
 }
 
 /** Người đó giữ Task ở vai nào: dùng để hiện "Người thực hiện" hay "Người kiểm tra" (cả hai không thể trùng). */

@@ -16,6 +16,8 @@ import type {
   LienKetTask,
   NguoiDauVet,
   NguoiDungTomTat,
+  NguoiTrongDuAn,
+  PhamViDanhSachDuAn,
   Phien,
   RepoDuAn,
   Task,
@@ -36,12 +38,13 @@ import {
   type ThemLienKetDauVao,
 } from '../luat/github'
 import {
+  dongDoiMucUuTienMoi,
   dongLichSuMoi,
   kiemChuyenTrangThai,
   soLanTraLaiSau,
   xepLichSuTask,
   type DoiTrangThaiTaskDauVao,
-  type DongLichSu,
+  type DongLichSuBatKy,
 } from '../luat/chuyenTrangThai'
 import { laChoToiDuyet, laViecCuaToi } from '../luat/kanban'
 import {
@@ -53,12 +56,14 @@ import {
   kiemTaoTask,
   kiemTraSuaTask,
   kiemTraTask,
+  soTaskDangGiu,
   taskChuaChotNguoiDangGiu,
   type DoiNguoiTaskDauVao,
   type SuaTaskDauVao,
   type TaoTaskDauVao,
   type TrangThaiTask,
 } from '../luat/task'
+import type { MucUuTien } from '../luat/mucUuTien'
 import {
   dauVetMoi,
   dauVetSauSua,
@@ -67,11 +72,18 @@ import {
   duocXemDuAn,
   kiemGhiDuAn,
   kiemMoLaiDuAn,
+  kiemNguoiPhuTrach,
+  kiemSuaVaiTroTrongDuAn,
   kiemTraDuAn,
+  laPhamViDanhSachDuAn,
+  maDuAnBiTrung,
+  ngayDuAnSauSua,
+  THONG_BAO_DU_AN,
   type DauVet,
   type LocDuAnDauVao,
   type NguoiGoiDuAn,
   type SuaDuAnDauVao,
+  type SuaVaiTroTrongDuAnDauVao,
   type TaoDuAnDauVao,
   type ThemNguoiDauVao,
   type TrangThaiDuAn,
@@ -101,6 +113,8 @@ import {
   type SuaHoSoDauVao,
   type VaiHeThong,
 } from '../luat/taiKhoan'
+import { tinhSoLieuDuAn } from '../luat/tienDo'
+import { THONG_TIN_NHAN_SU_TRONG, apQuyenXemNhanSu, duocXemThongTinNhanSu } from '../luat/thongTinNhanSu'
 
 /** Một thư bản bộ nhớ "đã gửi" (thay cho thư thật). */
 export type ThuMoPhong =
@@ -182,8 +196,16 @@ interface TaiKhoan {
 /** Dự án như kho lưu: dấu vết ghi id người, tên hiển thị tra lúc đọc. */
 interface BanGhiDuAn {
   id: string
+  /** Lưu dạng in hoa. */
+  ma: string
   ten: string
   moTa: string
+  khachHang: string
+  ngayBatDau: string | null
+  ngayKetThucDuKien: string | null
+  mucUuTien: MucUuTien
+  /** Id tài khoản của Người phụ trách (luôn là Người trong dự án); null khi chưa có. */
+  nguoiPhuTrachId: string | null
   trangThai: TrangThaiDuAn
   dauVet: DauVet<string>
 }
@@ -195,6 +217,7 @@ interface BanGhiTask {
   tieuDe: string
   moTa: string
   han: string | null
+  mucUuTien: MucUuTien
   nguoiThucHienId: string
   nguoiKiemTraId: string
   trangThai: TrangThaiTask
@@ -211,9 +234,11 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   const duAnTheoId = new Map<string, BanGhiDuAn>()
   /** Người trong dự án: duAnId -> tập id tài khoản. */
   const nguoiTheoDuAn = new Map<string, Set<string>>()
+  /** Vai trò trong Dự án: duAnId -> (id tài khoản -> vai trò); không có mục là chưa có vai trò. */
+  const vaiTroTheoDuAn = new Map<string, Map<string, string>>()
   const taskTheoId = new Map<string, BanGhiTask>()
-  /** Lịch sử trạng thái: taskId -> các dòng theo thứ tự ghi; người ghi bằng id. */
-  const lichSuTheoTask = new Map<string, DongLichSu<string>[]>()
+  /** Lịch sử Task (đổi trạng thái, đổi Mức ưu tiên): taskId -> các dòng theo thứ tự ghi; người ghi bằng id. */
+  const lichSuTheoTask = new Map<string, DongLichSuBatKy<string>[]>()
   /** Repo GitHub của Dự án: duAnId -> tên repo, theo thứ tự gắn. */
   const repoTheoDuAn = new Map<string, string[]>()
   let demNguoiDung = 0
@@ -225,7 +250,37 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   let demTask = 0
 
   const banSao = (hoSo: HoSo): HoSo => ({ ...hoSo })
-  const tomTat = ({ id, email, tenHienThi, vai }: HoSo): NguoiDungTomTat => ({ id, email, tenHienThi, vai })
+
+  /** Id các Dự án tài khoản `id` đang ở trong, mọi trạng thái (kể cả đã Lưu trữ). */
+  function duAnCua(id: string): string[] {
+    const ketQua: string[] = []
+    for (const [duAnId, tap] of nguoiTheoDuAn) if (tap.has(id)) ketQua.push(duAnId)
+    return ketQua
+  }
+
+  /** Tóm tắt tài khoản `hoSo` như người gọi `nguoiGoi` thấy: Thông tin nhân sự đã áp quyền xem. */
+  function tomTat(nguoiGoi: HoSo, hoSo: HoSo): NguoiDungTomTat {
+    const { id, email, tenHienThi, vai, soDienThoai, chucDanh, phongBan } = hoSo
+    const duocXem = duocXemThongTinNhanSu({
+      nguoiGoiId: nguoiGoi.id,
+      vaiNguoiGoi: nguoiGoi.vai,
+      chuHoSoId: id,
+      duAnCuaNguoiGoi: duAnCua(nguoiGoi.id),
+      duAnCuaChuHoSo: duAnCua(id),
+    })
+    return apQuyenXemNhanSu({ id, email, tenHienThi, vai, soDienThoai, chucDanh, phongBan }, duocXem)
+  }
+
+  /** Một Người trong dự án như người gọi `nguoiGoi` thấy: tóm tắt tài khoản, Vai trò trong Dự án, số Task đang giữ. */
+  function nguoiTrongDuAn(nguoiGoi: HoSo, hoSo: HoSo, duAnId: string): NguoiTrongDuAn {
+    const cuaDuAn: { trangThai: TrangThaiTask; nguoiThucHienId: string }[] = []
+    for (const task of taskTheoId.values()) if (task.duAnId === duAnId) cuaDuAn.push(task)
+    return {
+      ...tomTat(nguoiGoi, hoSo),
+      vaiTroTrongDuAn: vaiTroTheoDuAn.get(duAnId)?.get(hoSo.id) ?? null,
+      soTaskDangGiu: soTaskDangGiu(cuaDuAn, hoSo.id),
+    }
+  }
 
   function nguoiDauVet(id: string): NguoiDauVet {
     return { id, tenHienThi: taiKhoanTheoId.get(id)?.hoSo.tenHienThi ?? '' }
@@ -236,8 +291,14 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
     const { taoBoi, taoLuc, suaBoi, suaLuc } = banGhi.dauVet
     return {
       id: banGhi.id,
+      ma: banGhi.ma,
       ten: banGhi.ten,
       moTa: banGhi.moTa,
+      khachHang: banGhi.khachHang,
+      ngayBatDau: banGhi.ngayBatDau,
+      ngayKetThucDuKien: banGhi.ngayKetThucDuKien,
+      mucUuTien: banGhi.mucUuTien,
+      nguoiPhuTrach: banGhi.nguoiPhuTrachId === null ? null : nguoiDauVet(banGhi.nguoiPhuTrachId),
       trangThai: banGhi.trangThai,
       dauVet: {
         taoBoi: nguoiDauVet(taoBoi),
@@ -263,6 +324,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       tieuDe: banGhi.tieuDe,
       moTa: banGhi.moTa,
       han: banGhi.han,
+      mucUuTien: banGhi.mucUuTien,
       nguoiThucHien: nguoiCuaTask(banGhi.nguoiThucHienId, banGhi.duAnId),
       nguoiKiemTra: nguoiCuaTask(banGhi.nguoiKiemTraId, banGhi.duAnId),
       trangThai: banGhi.trangThai,
@@ -283,6 +345,17 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       nguoiTheoDuAn.set(duAnId, tap)
     }
     return tap
+  }
+
+  /** Ghi Vai trò trong Dự án của `nguoiDungId`; null là xoá. */
+  function datVaiTro(duAnId: string, nguoiDungId: string, vaiTro: string | null) {
+    let cuaDuAn = vaiTroTheoDuAn.get(duAnId)
+    if (!cuaDuAn) {
+      cuaDuAn = new Map()
+      vaiTroTheoDuAn.set(duAnId, cuaDuAn)
+    }
+    if (vaiTro === null) cuaDuAn.delete(nguoiDungId)
+    else cuaDuAn.set(nguoiDungId, vaiTro)
   }
 
   function nhinTuDuAn(taiKhoan: TaiKhoan, duAnId: string): NguoiGoiDuAn {
@@ -344,7 +417,14 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
   /** Tạo tài khoản mới với dữ liệu đã kiểm; trả hồ sơ gốc (không phải bản sao). */
   function taoTaiKhoan(email: string, matKhau: string, tenHienThi: string, vai: VaiHeThong, daXacNhan: boolean): HoSo {
     demNguoiDung += 1
-    const hoSo: HoSo = { id: `nguoi-dung-${demNguoiDung}`, email, tenHienThi, githubUsername: null, vai }
+    const hoSo: HoSo = {
+      id: `nguoi-dung-${demNguoiDung}`,
+      email,
+      tenHienThi,
+      githubUsername: null,
+      vai,
+      ...THONG_TIN_NHAN_SU_TRONG,
+    }
     taiKhoanTheoId.set(hoSo.id, { hoSo, matKhau, daXacNhan, maDatLai: null })
     idTheoEmail.set(email, hoSo.id)
     return hoSo
@@ -405,6 +485,11 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
     },
   }
 
+  /** Mã Dự án trùng: lỗi có mã riêng, kèm lỗi ở ô `ma` để biểu mẫu hiện cạnh ô. */
+  function loiMaTrung<T>(): KetQua<T> {
+    return thatBai('MA_DU_AN_DA_DUNG', undefined, { ma: THONG_BAO_DU_AN.maTrung })
+  }
+
   /** Task của các Dự án người gọi đang ở trong, thoả `thoa`, kèm tên Dự án. */
   function taskCaNhan(taiKhoan: TaiKhoan, thoa: (task: Task) => boolean): TaskKemDuAn[] {
     const ketQua: TaskKemDuAn[] = []
@@ -412,7 +497,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (!nhinTuDuAn(taiKhoan, banGhi.duAnId).laNguoiTrongDuAn) continue
       const duAn = duAnTheoId.get(banGhi.duAnId)
       const task = docTask(banGhi)
-      if (duAn && thoa(task)) ketQua.push({ ...task, tenDuAn: duAn.ten })
+      if (duAn && thoa(task)) ketQua.push({ ...task, tenDuAn: duAn.ten, maDuAn: duAn.ma })
     }
     return ketQua
   }
@@ -513,6 +598,9 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       const hoSo = xt.giaTri.hoSo
       if (kt.giaTri.tenHienThi !== undefined) hoSo.tenHienThi = kt.giaTri.tenHienThi
       if (kt.giaTri.githubUsername !== undefined) hoSo.githubUsername = kt.giaTri.githubUsername
+      if (kt.giaTri.soDienThoai !== undefined) hoSo.soDienThoai = kt.giaTri.soDienThoai
+      if (kt.giaTri.chucDanh !== undefined) hoSo.chucDanh = kt.giaTri.chucDanh
+      if (kt.giaTri.phongBan !== undefined) hoSo.phongBan = kt.giaTri.phongBan
       return thanhCong(banSao(hoSo))
     },
 
@@ -522,7 +610,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       const id = xt.giaTri.hoSo.id
       const duAn: DuAnTomTat[] = [...duAnTheoId.values()]
         .filter((banGhi) => nguoiTheoDuAn.get(banGhi.id)?.has(id) ?? false)
-        .map(({ id: duAnId, ten, trangThai }) => ({ id: duAnId, ten, trangThai }))
+        .map(({ id: duAnId, ma, ten, trangThai }) => ({ id: duAnId, ma, ten, trangThai }))
       return thanhCong(duAn)
     },
 
@@ -530,7 +618,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       const xt = xacThuc(phien)
       if (!xt.ok) return xt
       if (!duocQuanLyNguoiDung(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
-      return thanhCong([...taiKhoanTheoId.values()].map((taiKhoan) => tomTat(taiKhoan.hoSo)))
+      return thanhCong([...taiKhoanTheoId.values()].map((taiKhoan) => tomTat(xt.giaTri.hoSo, taiKhoan.hoSo)))
     },
 
     async doiVai(phien: Phien | null, nguoiDungId: string, dauVao: DoiVaiDauVao) {
@@ -550,7 +638,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       })
       if (lyDo) return thatBai(lyDo)
       dich.hoSo.vai = kt.giaTri.vai
-      return thanhCong(tomTat(dich.hoSo))
+      return thanhCong(tomTat(xt.giaTri.hoSo, dich.hoSo))
     },
 
     async taoDuAn(phien: Phien | null, dauVao: TaoDuAnDauVao, bayGio: Date) {
@@ -559,11 +647,18 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (!duocTaoDuAn(xt.giaTri.hoSo.vai)) return thatBai('KHONG_CO_QUYEN')
       const kt = kiemTraDuAn.tao(dauVao)
       if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      if (maDuAnBiTrung(kt.giaTri.ma, duAnTheoId.values())) return loiMaTrung()
       demDuAn += 1
       const banGhi: BanGhiDuAn = {
         id: `du-an-${demDuAn}`,
+        ma: kt.giaTri.ma,
         ten: kt.giaTri.ten,
         moTa: kt.giaTri.moTa,
+        khachHang: kt.giaTri.khachHang,
+        ngayBatDau: kt.giaTri.ngayBatDau,
+        ngayKetThucDuKien: kt.giaTri.ngayKetThucDuKien,
+        mucUuTien: kt.giaTri.mucUuTien,
+        nguoiPhuTrachId: null,
         trangThai: 'HOAT_DONG',
         dauVet: dauVetMoi(xt.giaTri.hoSo.id, bayGio),
       }
@@ -586,6 +681,28 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       )
     },
 
+    async danhSachDuAnKemSoLieu(phien: Phien | null, phamVi: PhamViDanhSachDuAn, bayGio: Date) {
+      const xt = xacThuc(phien)
+      if (!xt.ok) return xt
+      if (!laPhamViDanhSachDuAn(phamVi)) return thatBai('KHONG_HOP_LE')
+      const taiKhoan = xt.giaTri
+      const thuocPhamVi = (duAnId: string) =>
+        phamVi === 'CUA_TOI'
+          ? (nguoiTheoDuAn.get(duAnId)?.has(taiKhoan.hoSo.id) ?? false)
+          : duocXemDuAn(nhinTuDuAn(taiKhoan, duAnId))
+      const taskTheoDuAn = new Map<string, BanGhiTask[]>()
+      for (const task of taskTheoId.values()) {
+        const cuaDuAn = taskTheoDuAn.get(task.duAnId) ?? []
+        cuaDuAn.push(task)
+        taskTheoDuAn.set(task.duAnId, cuaDuAn)
+      }
+      return thanhCong(
+        [...duAnTheoId.values()]
+          .filter((duAn) => thuocPhamVi(duAn.id))
+          .map((duAn) => ({ ...docDuAn(duAn), ...tinhSoLieuDuAn(duAn, taskTheoDuAn.get(duAn.id) ?? [], bayGio) })),
+      )
+    },
+
     async layDuAn(phien: Phien | null, duAnId: string) {
       const xt = xemDuAn(phien, duAnId)
       if (!xt.ok) return xt
@@ -600,8 +717,22 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (lyDo) return thatBai(lyDo)
       const kt = kiemTraDuAn.sua(dauVao)
       if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const ngay = ngayDuAnSauSua(duAn, kt.giaTri)
+      if (!ngay.ok) return thatBai('KHONG_HOP_LE', undefined, ngay.loiTheoO)
+      if (kt.giaTri.nguoiPhuTrachId !== undefined) {
+        const tap = nguoiTrong(duAn.id)
+        const loiNguoi = kiemNguoiPhuTrach(kt.giaTri.nguoiPhuTrachId, (id) => tap.has(id))
+        if (loiNguoi) return thatBai('NGUOI_NGOAI_DU_AN', THONG_BAO_DU_AN.nguoiPhuTrachNgoaiDuAn, loiNguoi)
+      }
+      if (kt.giaTri.ma !== undefined && maDuAnBiTrung(kt.giaTri.ma, duAnTheoId.values(), duAn.id)) return loiMaTrung()
+      if (kt.giaTri.ma !== undefined) duAn.ma = kt.giaTri.ma
       if (kt.giaTri.ten !== undefined) duAn.ten = kt.giaTri.ten
       if (kt.giaTri.moTa !== undefined) duAn.moTa = kt.giaTri.moTa
+      if (kt.giaTri.khachHang !== undefined) duAn.khachHang = kt.giaTri.khachHang
+      if (kt.giaTri.mucUuTien !== undefined) duAn.mucUuTien = kt.giaTri.mucUuTien
+      if (kt.giaTri.nguoiPhuTrachId !== undefined) duAn.nguoiPhuTrachId = kt.giaTri.nguoiPhuTrachId
+      duAn.ngayBatDau = ngay.ngay.ngayBatDau
+      duAn.ngayKetThucDuKien = ngay.ngay.ngayKetThucDuKien
       duAn.dauVet = dauVetSauSua(duAn.dauVet, taiKhoan.hoSo.id, bayGio)
       return thanhCong(docDuAn(duAn))
     },
@@ -631,10 +762,10 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
     async danhSachNguoiTrongDuAn(phien: Phien | null, duAnId: string) {
       const xt = xemDuAn(phien, duAnId)
       if (!xt.ok) return xt
-      const danhSach: NguoiDungTomTat[] = []
+      const danhSach: NguoiTrongDuAn[] = []
       for (const id of nguoiTrong(duAnId)) {
         const taiKhoan = taiKhoanTheoId.get(id)
-        if (taiKhoan) danhSach.push(tomTat(taiKhoan.hoSo))
+        if (taiKhoan) danhSach.push(nguoiTrongDuAn(xt.giaTri.taiKhoan.hoSo, taiKhoan.hoSo, duAnId))
       }
       return thanhCong(danhSach)
     },
@@ -655,7 +786,29 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
         return thatBai('DA_TRONG_DU_AN', undefined, { email: THONG_BAO_MAC_DINH.DA_TRONG_DU_AN })
       }
       tap.add(dich.hoSo.id)
-      return thanhCong(tomTat(dich.hoSo))
+      if (kt.giaTri.vaiTroTrongDuAn !== null) datVaiTro(duAnId, dich.hoSo.id, kt.giaTri.vaiTroTrongDuAn)
+      return thanhCong(nguoiTrongDuAn(xt.giaTri.taiKhoan.hoSo, dich.hoSo, duAnId))
+    },
+
+    async suaVaiTroTrongDuAn(
+      phien: Phien | null,
+      duAnId: string,
+      nguoiDungId: string,
+      dauVao: SuaVaiTroTrongDuAnDauVao,
+    ) {
+      const xt = quanLyDuAn(phien, duAnId)
+      if (!xt.ok) return xt
+      const { taiKhoan, duAn, nguoiGoi } = xt.giaTri
+      const lyDo = kiemSuaVaiTroTrongDuAn({ ...nguoiGoi, trangThai: duAn.trangThai })
+      if (lyDo) return thatBai(lyDo)
+      const kt = kiemTraDuAn.suaVaiTro(dauVao)
+      if (!kt.ok) return thatBai('KHONG_HOP_LE', undefined, kt.loiTheoO)
+      const dich = taiKhoanTheoId.get(nguoiDungId)
+      if (!dich || !nguoiTrong(duAnId).has(nguoiDungId)) {
+        return thatBai('KHONG_TIM_THAY', THONG_BAO_DU_AN.khongTrongDuAn)
+      }
+      datVaiTro(duAnId, nguoiDungId, kt.giaTri.vaiTroTrongDuAn)
+      return thanhCong(nguoiTrongDuAn(taiKhoan.hoSo, dich.hoSo, duAnId))
     },
 
     async goNguoiKhoiDuAn(phien: Phien | null, duAnId: string, nguoiDungId: string) {
@@ -666,8 +819,12 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (lyDo) return thatBai(lyDo)
       const tap = nguoiTrong(duAnId)
       if (!tap.has(nguoiDungId)) return thatBai('KHONG_TIM_THAY')
-      // Chỉ bỏ cặp (Dự án, tài khoản); tài khoản và hồ sơ giữ nguyên.
+      // Chỉ bỏ cặp (Dự án, tài khoản); tài khoản và hồ sơ giữ nguyên. Người phụ trách phải là Người trong
+      // dự án nên về trống ngay trong lệnh này.
       tap.delete(nguoiDungId)
+      // Vai trò trong Dự án gắn với cặp (Dự án, tài khoản): mất theo; thêm lại là bắt đầu từ trống.
+      datVaiTro(duAnId, nguoiDungId, null)
+      if (duAn.nguoiPhuTrachId === nguoiDungId) duAn.nguoiPhuTrachId = null
       return thanhCong(null)
     },
 
@@ -692,6 +849,7 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
         tieuDe: kt.giaTri.tieuDe,
         moTa: kt.giaTri.moTa,
         han: kt.giaTri.han,
+        mucUuTien: kt.giaTri.mucUuTien,
         nguoiThucHienId,
         nguoiKiemTraId,
         trangThai: TRANG_THAI_TASK_BAN_DAU,
@@ -713,6 +871,12 @@ export function taoKhoBoNho(tuyChon: TuyChonKhoBoNho = {}): KhoBoNho {
       if (kt.giaTri.tieuDe !== undefined) task.tieuDe = kt.giaTri.tieuDe
       if (kt.giaTri.moTa !== undefined) task.moTa = kt.giaTri.moTa
       if (kt.giaTri.han !== undefined) task.han = kt.giaTri.han
+      if (kt.giaTri.mucUuTien !== undefined) {
+        // Đổi sang mức khác thì ghi một dòng lịch sử; đúng mức đang có thì không ghi.
+        const dong = dongDoiMucUuTienMoi(taiKhoan.hoSo.id, bayGio, task.mucUuTien, kt.giaTri.mucUuTien)
+        if (dong) lichSuTheoTask.set(taskId, [...(lichSuTheoTask.get(taskId) ?? []), dong])
+        task.mucUuTien = kt.giaTri.mucUuTien
+      }
       task.dauVet = dauVetSauSua(task.dauVet, taiKhoan.hoSo.id, bayGio)
       return thanhCong(docTask(task))
     },

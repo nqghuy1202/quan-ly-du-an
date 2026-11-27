@@ -7,7 +7,8 @@ lưu lại ai, lúc nào, vì sao. Mỗi Dự án gắn được repo GitHub, m�
 trạng thái hiện tại; phần GitHub **chỉ đọc**, hệ thống không bao giờ ghi lên GitHub.
 
 Từ vựng dùng xuyên suốt nằm ở [`GLOSSARY.md`](GLOSSARY.md) (bảng rút gọn ở cuối tài liệu này). Hành vi
-chuẩn nằm ở `.scratch/quan-ly-du-an/spec.md`; spec là nguồn sự thật khi tài liệu và mã lệch nhau.
+chuẩn nằm ở `.scratch/quan-ly-du-an/spec.md`, cùng phần mở rộng về bố cục và trường mới ở
+`.scratch/bo-cuc-va-truong-moi/spec.md`; spec là nguồn sự thật khi tài liệu và mã lệch nhau.
 
 ## Ba vai
 
@@ -16,29 +17,28 @@ Mỗi tài khoản có đúng một vai hệ thống. Người mới tự đăng
 | Vai | Làm được |
 |---|---|
 | **PM** | Tạo Dự án; thấy mọi Dự án; nâng một tài khoản lên Support hoặc PM, hoặc hạ về Thành viên (hệ thống luôn giữ ít nhất một PM); làm mọi bước hợp lệ ở mọi Dự án |
-| **Support** | Quản lý các Dự án mình được thêm vào: sửa Dự án, thêm và gỡ người, tạo và sửa Task, đổi Người thực hiện hoặc Người kiểm tra, gắn repo GitHub, Lưu trữ; làm mọi bước chuyển trạng thái hợp lệ thay người khác. Không đổi vai hệ thống của ai |
-| **Thành viên** | Chỉ thấy các Dự án mình được thêm vào và mọi Task của các Dự án đó. Làm theo vai trên từng Task: Người thực hiện chuyển Task sang Đang làm và Chờ duyệt; Người kiểm tra quyết định Hoàn thành, Trả lại hoặc Bị lỗi |
+| **Support** | Quản lý các Dự án mình được thêm vào: sửa Dự án (kể cả Mã Dự án, Người phụ trách, Mức ưu tiên), thêm và gỡ người, sửa Vai trò trong Dự án, tạo và sửa Task (kể cả Mức ưu tiên), đổi Người thực hiện hoặc Người kiểm tra, gắn repo GitHub, Lưu trữ; làm mọi bước chuyển trạng thái hợp lệ thay người khác. Không đổi vai hệ thống của ai, không sửa hộ Thông tin nhân sự |
+| **Thành viên** | Chỉ thấy các Dự án mình được thêm vào và mọi Task của các Dự án đó. Làm theo vai trên từng Task: Người thực hiện chuyển Task sang Đang làm và Chờ duyệt; Người kiểm tra quyết định Hoàn thành, Trả lại hoặc Bị lỗi. Không đổi Mức ưu tiên hay Vai trò trong Dự án; được ghi là Người phụ trách cũng không có thêm quyền |
 
 Người vừa đăng ký chưa ở trong Dự án nào thấy một màn trống nói rõ việc cần làm tiếp: nhờ PM hoặc
 Support thêm mình vào.
 
 ## Các màn chính
 
+Điều hướng chính là **Thanh bên** bên trái (màn hẹp thu thành nút mở trình đơn), chia nhóm Tổng quan, Công việc, Dự án, Quản trị; tên, vai, Hồ sơ và Đăng xuất gom ở chân Thanh bên. Đăng nhập xong vào thẳng Tổng quan. Xem Task, tạo Task, tạo và sửa Dự án đều mở trong **Ngăn trượt** bên phải; đóng ngăn (nút đóng hoặc Esc) là về đúng trang, đúng tab, đúng bộ lọc cũ.
+
 | Màn | Ai thấy | Nội dung |
 |---|---|---|
 | Đăng ký, Đăng nhập, Quên mật khẩu | Mọi người | Đăng ký bằng email, mật khẩu và tên hiển thị; xác nhận email; đặt lại mật khẩu bằng mã gửi qua email |
-| Dự án của tôi | Mọi người đã đăng nhập | Các Dự án mình ở trong; màn trống khi chưa ở Dự án nào |
-| Chi tiết Dự án | Người trong dự án | Dấu vết, sửa tên và mô tả, Lưu trữ và mở lại, Người trong dự án, repo GitHub, Task trên bảng Kanban có bộ lọc theo Người thực hiện, Người kiểm tra và trạng thái; kéo thẻ sang cột khác để đổi trạng thái (bị từ chối rõ ràng nếu bước không được phép) |
-| Chi tiết Task | Người trong dự án | Thông tin, Dấu vết, chuyển trạng thái (lý do bắt buộc ở Trả lại, Bị lỗi, Huỷ), lịch sử trạng thái, số lần bị Trả lại, link issue hoặc PR và trạng thái đọc từ GitHub |
-| Việc của tôi | Mọi người đã đăng nhập | Task chưa chốt mà mình là Người thực hiện, ở mọi Dự án |
-| Chờ tôi duyệt | Mọi người đã đăng nhập | Task đang Chờ duyệt giao cho mình làm Người kiểm tra |
-| Tất cả Dự án | PM | Mọi Dự án, kể cả Dự án đã Lưu trữ |
-| Hồ sơ | Mọi người đã đăng nhập | Sửa tên hiển thị và GitHub username; tên và vai luôn hiện ở đầu trang |
-| Người dùng | PM | Danh sách tài khoản và đổi vai hệ thống |
-| Trang tổng quan | Mọi người đã đăng nhập (ticket 13) | Mỗi Dự án một dòng: tên, **Tiến độ**, số Task theo từng trạng thái và cờ **Trễ hạn**. PM thấy mọi Dự án; Support và Thành viên chỉ thấy Dự án mình ở trong, kèm số Task chưa chốt của riêng mình; Dự án Lưu trữ ở nhóm riêng. Dự án chưa có Task nào đáng tính hiện "chưa có task" thay vì 0%. Trang Dự án liệt kê các Task Trễ hạn |
-
-Trang tổng quan thuộc ticket 13 và được gộp riêng; nếu bản bạn đang chạy chưa có màn này thì ticket
-13 chưa được gộp vào nhánh.
+| Tổng quan | Mọi người đã đăng nhập | Trang tổng quan mở đầu: ô số (Dự án đang hoạt động, Dự án Quá hạn dự kiến, Task đang mở, Task Trễ hạn, Chờ tôi duyệt, Việc của tôi), bảng Dự án đang hoạt động kèm **Tiến độ** và số Task **Trễ hạn**, danh sách Task Trễ hạn và Task tới hạn trong 7 ngày, phân bố Task theo trạng thái. Chỉ tính Dự án mình được xem; Dự án Lưu trữ không tính. Dự án chưa có Task nào đáng tính hiện "chưa có task" thay vì 0% |
+| Dự án của tôi | Mọi người đã đăng nhập | Các Dự án mình ở trong, cột Mã, Tên, Khách hàng, Người phụ trách, Mức ưu tiên, Ngày kết thúc dự kiến, Tiến độ, Trễ hạn; tìm theo tên hoặc Mã Dự án, lọc theo Mức ưu tiên, Người phụ trách, tình trạng; màn trống khi chưa ở Dự án nào |
+| Tất cả Dự án | PM | Như Dự án của tôi nhưng gồm mọi Dự án, kể cả Dự án đã Lưu trữ |
+| Chi tiết Dự án | Người trong dự án | Dải tóm tắt (Mã Dự án, tên, trạng thái, Khách hàng, Người phụ trách, Mức ưu tiên, hai ngày, Tiến độ, Trễ hạn, nhãn Quá hạn dự kiến) và bốn tab: **Task** (bảng Kanban lọc theo Người thực hiện, Người kiểm tra, trạng thái, Mức ưu tiên; kéo thẻ sang cột khác để đổi trạng thái, bị từ chối rõ ràng nếu bước không được phép), **Người trong dự án** (Vai trò trong Dự án, Chức danh, Số điện thoại, số Task đang giữ; thêm, gỡ người), **Thông tin** (mô tả, Dấu vết, sửa Dự án, Lưu trữ và mở lại), **GitHub** (repo đã gắn) |
+| Chi tiết Task | Người trong dự án | Mở trong Ngăn trượt từ Kanban, Tổng quan, Việc của tôi, Chờ tôi duyệt: thông tin, Mức ưu tiên, Dấu vết, chuyển trạng thái (lý do bắt buộc ở Trả lại, Bị lỗi, Huỷ), số lần bị Trả lại; tab Lịch sử (trạng thái và đổi Mức ưu tiên), Link GitHub (trạng thái đọc từ GitHub), Sửa (chỉ người được sửa thấy) |
+| Việc của tôi | Mọi người đã đăng nhập | Task chưa chốt mà mình là Người thực hiện, ở mọi Dự án, có cột Mức ưu tiên |
+| Chờ tôi duyệt | Mọi người đã đăng nhập | Task đang Chờ duyệt giao cho mình làm Người kiểm tra, có cột Mức ưu tiên |
+| Hồ sơ | Mọi người đã đăng nhập | Sửa tên hiển thị, GitHub username và Thông tin nhân sự của mình (Số điện thoại, Chức danh, Phòng ban) |
+| Người dùng | PM | Danh sách tài khoản kèm Chức danh, Phòng ban; đổi vai hệ thống |
 
 ## Chạy thử trên máy (bản bộ nhớ)
 
@@ -130,7 +130,9 @@ secret, triển khai Edge Function `doc-github`; mỗi bước nói rõ ai làm 
 Đăng ký đang mở cho mọi người nên **phân quyền từng dòng là hàng rào duy nhất** giữa người lạ và dữ liệu
 của PM. Cổng test (`npm test`) không có mạng và không có cơ sở dữ liệu, nên **không kiểm được**: bản
 Supabase, file migration, phân quyền từng dòng, hàm cơ sở dữ liệu, Edge Function với GitHub thật, luồng
-email. Phần đó chỉ kiểm tay, theo **danh sách kiểm tay bảy mục** trong `supabase/README.md`.
+email. Phần đó chỉ kiểm tay, theo **danh sách kiểm tay bảy mục** trong `supabase/README.md`. Trường mới
+(Mã Dự án, Mức ưu tiên, Thông tin nhân sự, Vai trò trong Dự án) có thêm hai migration, bốn mục kiểm tay và
+bước sửa mã tạm `DA-…` thành mã thật: mục "Nâng cấp lên trường mới" của hướng dẫn đó.
 
 > **Chưa kiểm xong danh sách kiểm tay thì chưa đưa lên mạng.** Đưa ứng dụng lên mạng là việc riêng của chủ
 > dự án, nằm ngoài các ticket.
@@ -158,6 +160,9 @@ thuật) ở [`GLOSSARY.md`](GLOSSARY.md).
 | **Tiến độ** | Phần trăm Task Hoàn thành của một Dự án (Huỷ không tính vào mẫu số) |
 | **Trễ hạn** | Task có hạn đã qua mà chưa Hoàn thành và chưa Huỷ |
 
+Các từ của bố cục và trường mới (Mã Dự án, Khách hàng, Người phụ trách, Mức ưu tiên, Quá hạn dự kiến, Vai trò
+trong Dự án, Thông tin nhân sự, Tổng quan, Thanh bên, Ngăn trượt) có nghĩa đầy đủ trong `GLOSSARY.md`.
+
 ## Bản đồ tài liệu
 
 | Tài liệu | Dùng để |
@@ -166,5 +171,6 @@ thuật) ở [`GLOSSARY.md`](GLOSSARY.md).
 | [`AGENTS.md`](AGENTS.md) | Luật cứng và cấu trúc mã cho AI và người làm |
 | [`supabase/README.md`](supabase/README.md) | Dựng Supabase theo thứ tự, danh sách kiểm tay RLS, phần cổng không kiểm |
 | `.scratch/quan-ly-du-an/spec.md` | Spec: hành vi chuẩn |
+| `.scratch/bo-cuc-va-truong-moi/spec.md` | Spec mở rộng: Thanh bên, Tổng quan, tab Dự án, Ngăn trượt, trường mới |
 | `.scratch/quan-ly-du-an/issues/` | Các ticket theo từng lát |
 | `.env.example` | Mẫu cấu hình `.env.local` |

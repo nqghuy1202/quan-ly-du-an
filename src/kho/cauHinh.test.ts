@@ -15,6 +15,7 @@ import {
 import { PM_CHAY_THU } from './khoBoNho'
 import type { Phien } from './khoDuLieu'
 import { THONG_BAO } from '../luat/taiKhoan'
+import { maDuAnMoi } from '../test/maDuAn'
 
 /** JWT giả (chữ ký không hợp lệ): chỉ phần thân được đọc để biết vai của khoá. */
 function jwtGia(than: Record<string, unknown>): string {
@@ -100,7 +101,7 @@ describe('chọn bản cài Kho theo cấu hình môi trường', () => {
       for (const kq of [
         await kho.danhSachDuAn(phien),
         await kho.danhSachNguoiDung(phien),
-        await kho.taoDuAn(phien, { ten: 'X' }, LUC),
+        await kho.taoDuAn(phien, { ma: maDuAnMoi(), ten: 'X' }, LUC),
         await kho.themNguoiVaoDuAn(phien, 'du-an', { email: 'ai@vi-du.vn' }),
         await kho.taoTask(phien, 'du-an', { tieuDe: 'X', nguoiThucHienId: 'a', nguoiKiemTraId: 'b' }, LUC),
         await kho.danhSachTask(phien, 'du-an'),

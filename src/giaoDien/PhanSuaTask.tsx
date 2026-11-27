@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
 import { DateInput, type DateInputProps } from '@astryxdesign/core/DateInput'
@@ -6,15 +6,16 @@ import { FormLayout } from '@astryxdesign/core/FormLayout'
 import { Heading } from '@astryxdesign/core/Heading'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Selector } from '@astryxdesign/core/Selector'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { TextArea } from '@astryxdesign/core/TextArea'
 import { TextInput } from '@astryxdesign/core/TextInput'
 import { VStack } from '@astryxdesign/core/VStack'
-import { THONG_BAO_MAC_DINH, type KetQua, type LoiKho, type MaLoi } from '../kho/ketQua'
-import type { DuAn, NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
-import { DO_DAI_TIEU_DE_TASK_TOI_DA, THONG_BAO_SUA_TASK, THONG_BAO_TASK, lyDoKhongSuaTask } from '../luat/task'
-import { xepTheoTen, type VaiHeThong } from '../luat/taiKhoan'
+import { THONG_BAO_MAC_DINH, type LoiKho, type MaLoi } from '../kho/ketQua'
+import type { NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
+import { DO_DAI_TIEU_DE_TASK_TOI_DA, THONG_BAO_SUA_TASK, THONG_BAO_TASK } from '../luat/task'
+import { xepTheoTen } from '../luat/taiKhoan'
+import { laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 import { useKho } from './khoContext'
+import { LUA_CHON_MUC_UU_TIEN } from './mauMucUuTien'
 import { trangThaiO } from './trangThaiO'
 
 /** Ngày `YYYY-MM-DD` như DateInput của Astryx nhận và trả. */
@@ -22,9 +23,9 @@ type NgayISO = NonNullable<DateInputProps['value']>
 
 interface Props {
   phien: Phien
-  vai: VaiHeThong
   task: Task
-  trangThaiDuAn: DuAn['trangThai']
+  /** Người đang ở trong Dự án chứa Task (ngăn Task đã đọc để kiểm quyền), để chọn người mới. */
+  nguoiTrong: NguoiTrongDuAn[]
   dongHo: () => Date
   /** Task vừa được lưu (sửa hay đổi người) thành công. */
   onDaCapNhat: (task: Task, thongBao: string) => void
@@ -44,68 +45,24 @@ const TIEU_DE_LOI: Record<Viec, string> = {
 }
 
 /**
- * Phần "Sửa Task" của màn chi tiết Task: sửa tiêu đề, mô tả, hạn và đổi Người thực hiện, Người kiểm
- * tra. Chỉ PM hoặc Support của Dự án, và chỉ khi Task chưa ở trạng thái cuối; người khác (hay Task đã
- * chốt) thấy lý do thay cho biểu mẫu.
+ * Tab "Sửa" của ngăn Task: sửa tiêu đề, mô tả, hạn, Mức ưu tiên (đổi mức thì Kho ghi một dòng lịch sử)
+ * và đổi Người thực hiện, Người kiểm tra. Ngăn chỉ
+ * hiện tab này khi luật cho phép sửa (PM hoặc Support của Dự án, Task chưa ở trạng thái cuối, Dự án
+ * chưa Lưu trữ); Kho vẫn kiểm lại và từ chối kèm lý do nếu quyền vừa đổi ở nơi khác.
  */
-export function PhanSuaTask({ phien, vai, task, trangThaiDuAn, dongHo, onDaCapNhat, onCanDocLai, onHetPhien }: Props) {
+export function PhanSuaTask({ phien, task, nguoiTrong, dongHo, onDaCapNhat, onCanDocLai, onHetPhien }: Props) {
   const kho = useKho()
-  const [lanTai, setLanTai] = useState(0)
-  const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<NguoiTrongDuAn[]> } | null>(null)
-  const tai = daTai && daTai.lan === lanTai ? daTai.kq : null
   const [tieuDe, setTieuDe] = useState(task.tieuDe)
   const [moTa, setMoTa] = useState(task.moTa)
   const [han, setHan] = useState<NgayISO | undefined>((task.han ?? undefined) as NgayISO | undefined)
   const [loiNhapHan, setLoiNhapHan] = useState(false)
+  const [mucUuTien, setMucUuTien] = useState<MucUuTien>(task.mucUuTien)
   const [nguoiThucHienId, setNguoiThucHienId] = useState<string | undefined>(task.nguoiThucHien.id)
   const [nguoiKiemTraId, setNguoiKiemTraId] = useState<string | undefined>(task.nguoiKiemTra.id)
   const [loi, setLoi] = useState<{ viec: Viec; loi: LoiKho } | null>(null)
   const [dangLam, setDangLam] = useState<Viec | null>(null)
   // Chặn lệnh trùng (bấm hai lần trước khi kịp vẽ lại) bằng ref chứ không bằng state.
   const dangGuiRef = useRef(false)
-
-  useEffect(() => {
-    let huy = false
-    kho.danhSachNguoiTrongDuAn(phien, task.duAnId).then((kq) => {
-      if (huy) return
-      if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
-      else setDaTai({ lan: lanTai, kq })
-    })
-    return () => {
-      huy = true
-    }
-  }, [kho, phien, task.duAnId, lanTai, onHetPhien])
-
-  const khung = (noiDung: ReactNode) => (
-    <VStack gap={3} role="group" aria-label="Sửa Task">
-      <Heading level={3}>Sửa Task</Heading>
-      {noiDung}
-    </VStack>
-  )
-
-  if (tai === null) return khung(<Spinner label="Đang kiểm quyền sửa Task…" />)
-
-  if (!tai.ok) {
-    return khung(
-      <Banner
-        status="error"
-        title="Không tải được người trong dự án để kiểm quyền và chọn người."
-        description={tai.loi.thongBao}
-        role="alert"
-        endContent={<Button label="Thử lại" variant="secondary" onClick={() => setLanTai((n) => n + 1)} />}
-      />,
-    )
-  }
-
-  const nguoiTrong = tai.giaTri
-  // Cùng luật với Kho: không có quyền, Dự án đã Lưu trữ hay Task đã chốt thì không có biểu mẫu, chỉ có lý do.
-  const lyDo = lyDoKhongSuaTask({
-    vaiNguoiGoi: vai,
-    laNguoiTrongDuAn: nguoiTrong.some((nguoi) => nguoi.id === phien.nguoiDungId),
-    trangThai: trangThaiDuAn,
-    trangThaiTask: task.trangThai,
-  })
-  if (lyDo !== null) return khung(<Banner status="info" title={lyDo} role="status" />)
 
   const luaChon = xepTheoTen(nguoiTrong).map((nguoi) => ({
     value: nguoi.id,
@@ -131,6 +88,7 @@ export function PhanSuaTask({ phien, vai, task, trangThaiDuAn, dongHo, onDaCapNh
     setTieuDe(moi.tieuDe)
     setMoTa(moi.moTa)
     setHan((moi.han ?? undefined) as NgayISO | undefined)
+    setMucUuTien(moi.mucUuTien)
     setNguoiThucHienId(moi.nguoiThucHien.id)
     setNguoiKiemTraId(moi.nguoiKiemTra.id)
   }
@@ -150,7 +108,7 @@ export function PhanSuaTask({ phien, vai, task, trangThaiDuAn, dongHo, onDaCapNh
     const bayGio = dongHo()
     const kq =
       viec === 'sua'
-        ? await kho.suaTask(phien, task.id, { tieuDe, moTa, han: han ?? null }, bayGio)
+        ? await kho.suaTask(phien, task.id, { tieuDe, moTa, han: han ?? null, mucUuTien }, bayGio)
         : await kho.doiNguoiTask(
             phien,
             task.id,
@@ -170,8 +128,9 @@ export function PhanSuaTask({ phien, vai, task, trangThaiDuAn, dongHo, onDaCapNh
   const loiSua = loi?.viec === 'sua' ? loi.loi : null
   const loiNguoi = loi?.viec === 'doiNguoi' ? loi.loi : null
 
-  return khung(
-    <>
+  return (
+    <VStack gap={3} role="group" aria-label="Sửa Task">
+      <Heading level={3}>Sửa Task</Heading>
       {loi && <Banner status="error" title={TIEU_DE_LOI[loi.viec]} description={loi.loi.thongBao} role="alert" />}
       <FormLayout>
         <TextInput
@@ -199,6 +158,16 @@ export function PhanSuaTask({ phien, vai, task, trangThaiDuAn, dongHo, onDaCapNh
           onChange={setHan}
           onEntryErrorChange={(loiNhap) => setLoiNhapHan(loiNhap !== null)}
           status={loiNhapHan ? { type: 'error', message: THONG_BAO_TASK.hanSai } : trangThaiO(loiSua, 'han')}
+        />
+        <Selector
+          label="Mức ưu tiên"
+          description="Thấp, Trung bình hoặc Cao. Đổi mức thì lịch sử Task ghi lại."
+          options={LUA_CHON_MUC_UU_TIEN}
+          value={mucUuTien}
+          onChange={(muc) => {
+            if (laMucUuTien(muc)) setMucUuTien(muc)
+          }}
+          status={trangThaiO(loiSua, 'mucUuTien')}
         />
       </FormLayout>
       <HStack gap={2}>
@@ -233,6 +202,6 @@ export function PhanSuaTask({ phien, vai, task, trangThaiDuAn, dongHo, onDaCapNh
           <Button label="Đổi người" variant="secondary" isLoading={dangLam === 'doiNguoi'} onClick={() => lam('doiNguoi')} />
         </HStack>
       </VStack>
-    </>,
+    </VStack>
   )
 }

@@ -1,11 +1,12 @@
-// Bộ test hợp đồng của ticket 13: trang tổng quan (Tiến độ, số Task theo trạng thái, cờ Trễ hạn,
-// quyền xem theo vai). Chạy lại cho mọi bản cài của Kho dữ liệu qua `chayHopDongTongQuan`.
+// Bộ test hợp đồng của trang Tổng quan (ticket 13, mở rộng ở bố cục 02): Tiến độ, số Task theo trạng
+// thái, cờ Trễ hạn, ô số, Task Trễ hạn và tới hạn, phân bố, quyền xem theo vai. Chạy lại cho mọi bản
+// cài của Kho dữ liệu qua `chayHopDongTongQuan`.
 // Chỉ đi qua giao diện `KhoDuLieu`; "bây giờ" truyền vào. Task ở trạng thái Hoàn thành, Huỷ... được
 // dựng sẵn bằng `BanCaiHopDong.datTrangThaiTask`.
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { KetQua } from './ketQua'
 import type { KhoDuLieu, Phien, Task } from './khoDuLieu'
-import type { BanCaiHopDong, TuyChonHopDong } from './hopDong'
+import { taoBoDemMaDuAn, type BanCaiHopDong, type TuyChonHopDong } from './hopDong'
 import { docTongQuan, type DongTongQuan } from './tongQuan'
 import type { TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
@@ -27,6 +28,7 @@ export function chayHopDongTongQuan(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const maDuAnMoi = tuyChon.maDuAnMoi ?? taoBoDemMaDuAn()
   const coTask = tuyChon.coTask ?? true
   const coDatTrangThai = tuyChon.coDatTrangThaiTask ?? true
 
@@ -66,7 +68,7 @@ export function chayHopDongTongQuan(
     }
 
     async function taoDuAn(pm: Phien, ten: string): Promise<string> {
-      return giaTri(await kho.taoDuAn(pm, { ten }, LUC_TAO)).id
+      return giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten }, LUC_TAO)).id
     }
 
     /** Task giao `thucHien` làm và `kiemTra` duyệt, rồi đặt thẳng trạng thái. */
@@ -172,32 +174,99 @@ export function chayHopDongTongQuan(
       expect(dong.taskTreHan.map((t) => t.id)).toEqual([choDuyet.id])
     })
 
-    it('PM thấy mọi Dự án (kể cả Dự án mình không ở trong); Dự án Lưu trữ ở nhóm riêng', async () => {
-      const { pm, duAnId } = await dungBoiCanh()
-      await taoDuAn(pm, 'Kho hàng')
+    it('PM thấy mọi Dự án đang hoạt động (kể cả Dự án mình không ở trong); Dự án Lưu trữ và Task của nó không có trong Tổng quan', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      const khoHang = await taoDuAn(pm, 'Kho hàng')
       const luuTru = await taoDuAn(pm, 'Cũ')
+      await them(pm, luuTru, an)
+      await them(pm, luuTru, binh)
+      await taoTask(pm, duAnId, an, binh, 'Cửa hàng trễ', 'DANG_LAM', '2026-11-20')
+      await taoTask(pm, luuTru, an, binh, 'Cũ trễ', 'DANG_LAM', '2026-11-01')
+      await taoTask(pm, luuTru, an, binh, 'Cũ tới hạn', 'MOI', '2026-11-27')
+      await taoTask(pm, luuTru, binh, an, 'Cũ chờ An duyệt', 'CHO_DUYET')
       giaTri(await kho.luuTruDuAn(pm, luuTru, LUC_TAO))
-      expect(duAnId).not.toBe(luuTru)
-      const tq = await doc(pm)
+      expect(khoHang).not.toBe(luuTru)
+      const tq = await doc(pm, DAU_NGAY_SAU_HAN)
       expect(tq.hoatDong.map((d) => d.duAn.ten)).toEqual(['Cửa hàng', 'Kho hàng'])
-      expect(tq.luuTru.map((d) => d.duAn.ten)).toEqual(['Cũ'])
+      expect(tq.oSo).toEqual({
+        duAnDangHoatDong: 2,
+        duAnQuaHanDuKien: 0,
+        taskDangMo: 1,
+        taskTreHan: 1,
+        choToiDuyet: 0,
+        viecCuaToi: 0,
+      })
+      expect(tq.taskTreHan.map((t) => [t.tieuDe, t.tenDuAn])).toEqual([['Cửa hàng trễ', 'Cửa hàng']])
+      expect(tq.taskToiHan).toEqual([])
+      expect(tq.phanBo.MOI + tq.phanBo.CHO_DUYET).toBe(0)
+      // An vẫn ở trong Dự án Lưu trữ nhưng Task ở đó cũng không vào ô số của An.
+      expect((await doc(an, DAU_NGAY_SAU_HAN)).oSo).toEqual({
+        duAnDangHoatDong: 1,
+        duAnQuaHanDuKien: 0,
+        taskDangMo: 1,
+        taskTreHan: 1,
+        choToiDuyet: 0,
+        viecCuaToi: 1,
+      })
     })
 
-    it('Support và Thành viên chỉ thấy Dự án mình ở trong; người chưa ở Dự án nào nhận hai nhóm rỗng', async () => {
-      const { pm, an, duAnId } = await dungBoiCanh()
-      await taoDuAn(pm, 'Dự án khác')
+    it('Support và Thành viên chỉ thấy Dự án mình ở trong (ô số, danh sách, phân bố); người chưa ở Dự án nào nhận mọi số 0', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      const khac = await taoDuAn(pm, 'Dự án khác')
+      const cuong = await dangKyVaDangNhap('cuong-tq', 'Cường')
+      await them(pm, khac, binh)
+      await them(pm, khac, cuong)
       const support = await taoNguoiCoVai(pm, 'support-tq', 'SUPPORT')
       await them(pm, duAnId, support)
+      await taoTask(pm, duAnId, an, binh, 'Cửa hàng mới', 'MOI', '2026-11-28')
+      await taoTask(pm, khac, binh, cuong, 'Khác trễ', 'DANG_LAM', '2026-11-01')
+      await taoTask(pm, khac, binh, cuong, 'Khác tới hạn', 'MOI', '2026-11-27')
       const khach = await dangKyVaDangNhap('khach-tq', 'Khách')
       for (const phien of [an, support]) {
-        const tq = await doc(phien)
+        const tq = await doc(phien, DAU_NGAY_SAU_HAN)
         expect(tq.hoatDong.map((d) => d.duAn.ten)).toEqual(['Cửa hàng'])
-        expect(tq.luuTru).toEqual([])
+        expect(tq.oSo.duAnDangHoatDong).toBe(1)
+        expect(tq.oSo.taskDangMo).toBe(1)
+        expect(tq.oSo.taskTreHan).toBe(0)
+        expect(tq.taskTreHan).toEqual([])
+        expect(tq.taskToiHan.map((t) => t.tieuDe)).toEqual(['Cửa hàng mới'])
+        expect(tq.phanBo).toEqual({ MOI: 1, DANG_LAM: 0, CHO_DUYET: 0, TRA_LAI: 0, BI_LOI: 0, HOAN_THANH: 0, HUY: 0 })
       }
-      expect(await doc(khach)).toEqual({ hoatDong: [], luuTru: [] })
+      // PM thấy cả hai Dự án.
+      const cuaPM = await doc(pm, DAU_NGAY_SAU_HAN)
+      expect(cuaPM.oSo.taskDangMo).toBe(3)
+      expect(cuaPM.taskTreHan.map((t) => t.tieuDe)).toEqual(['Khác trễ'])
+      expect(cuaPM.taskToiHan.map((t) => t.tieuDe)).toEqual(['Khác tới hạn', 'Cửa hàng mới'])
+      const rong = {
+        oSo: {
+          duAnDangHoatDong: 0,
+          duAnQuaHanDuKien: 0,
+          taskDangMo: 0,
+          taskTreHan: 0,
+          choToiDuyet: 0,
+          viecCuaToi: 0,
+        },
+        hoatDong: [],
+        taskTreHan: [],
+        taskToiHan: [],
+        phanBo: { MOI: 0, DANG_LAM: 0, CHO_DUYET: 0, TRA_LAI: 0, BI_LOI: 0, HOAN_THANH: 0, HUY: 0 },
+      }
+      expect(await doc(khach)).toEqual(rong)
       // Support không ở Dự án nào cũng chỉ thấy rỗng (không phải PM).
       const supportNgoai = await taoNguoiCoVai(pm, 'support-ngoai-tq', 'SUPPORT')
-      expect(await doc(supportNgoai)).toEqual({ hoatDong: [], luuTru: [] })
+      expect(await doc(supportNgoai)).toEqual(rong)
+    })
+
+    it('ô Chờ tôi duyệt và Việc của tôi tính theo người gọi', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      await taoTask(pm, duAnId, an, binh, 'An làm', 'DANG_LAM')
+      await taoTask(pm, duAnId, an, binh, 'An làm, Bình duyệt', 'CHO_DUYET')
+      await taoTask(pm, duAnId, binh, an, 'Bình làm, An duyệt', 'CHO_DUYET')
+      await taoTask(pm, duAnId, binh, an, 'Bình làm, An kiểm tra', 'DANG_LAM')
+      await taoTask(pm, duAnId, an, binh, 'An xong', 'HOAN_THANH')
+      expect((await doc(an)).oSo).toMatchObject({ choToiDuyet: 1, viecCuaToi: 2 })
+      expect((await doc(binh)).oSo).toMatchObject({ choToiDuyet: 1, viecCuaToi: 2 })
+      expect((await doc(pm)).oSo).toMatchObject({ choToiDuyet: 0, viecCuaToi: 0, taskDangMo: 4 })
     })
 
     it('mỗi người thấy số Task chưa chốt của riêng mình (làm hoặc duyệt), không tính Hoàn thành và Huỷ', async () => {
@@ -210,6 +279,54 @@ export function chayHopDongTongQuan(
       expect(dongCua((await doc(an)).hoatDong, 'Cửa hàng').tomTat.soTaskChuaChotCuaToi).toBe(3)
       expect(dongCua((await doc(binh)).hoatDong, 'Cửa hàng').tomTat.soTaskChuaChotCuaToi).toBe(3)
       expect(dongCua((await doc(pm)).hoatDong, 'Cửa hàng').tomTat.soTaskChuaChotCuaToi).toBe(0)
+    })
+
+    it('Dự án Quá hạn dự kiến: ô số và cờ trên dòng chỉ tính Dự án đang hoạt động; Dự án Lưu trữ không được đếm', async () => {
+      const { pm, an, binh } = await dungBoiCanh()
+      const taoCoNgay = async (ten: string, ngayKetThucDuKien: string) =>
+        giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten, ngayKetThucDuKien }, LUC_TAO)).id
+      // Kết thúc 25/11, Tiến độ 0%: Quá hạn dự kiến lúc 00:00 ngày 26/11 giờ Việt Nam, chưa lúc 23:59 ngày 25/11.
+      const quaHan = await taoCoNgay('Quá hạn', '2026-11-25')
+      await them(pm, quaHan, an)
+      await them(pm, quaHan, binh)
+      await taoTask(pm, quaHan, an, binh, 'Chưa xong')
+      // Đã xong hết: không Quá hạn dự kiến.
+      const xong = await taoCoNgay('Xong hết', '2026-11-01')
+      await them(pm, xong, an)
+      await them(pm, xong, binh)
+      await taoTask(pm, xong, an, binh, 'Xong', 'HOAN_THANH')
+      // Lưu trữ: không đếm.
+      const luuTru = await taoCoNgay('Lưu trữ quá hạn', '2026-11-01')
+      giaTri(await kho.luuTruDuAn(pm, luuTru, LUC_TAO))
+
+      expect((await doc(pm, CUOI_NGAY_HAN)).oSo.duAnQuaHanDuKien).toBe(0)
+      const tq = await doc(pm, DAU_NGAY_SAU_HAN)
+      expect(tq.oSo.duAnQuaHanDuKien).toBe(1)
+      expect(tq.hoatDong.map((d) => [d.duAn.ten, d.quaHanDuKien])).toEqual([
+        ['Cửa hàng', false],
+        ['Quá hạn', true],
+        ['Xong hết', false],
+      ])
+      // Thành viên chỉ đếm Dự án mình được xem.
+      expect((await doc(an, DAU_NGAY_SAU_HAN)).oSo.duAnQuaHanDuKien).toBe(1)
+    })
+
+    it('dấu "chưa có Người phụ trách": PM và Support thấy trên Dự án chưa có Người phụ trách; Thành viên không thấy', async () => {
+      const { pm, an, binh, duAnId } = await dungBoiCanh()
+      const support = await taoNguoiCoVai(pm, 'support-pt-tq', 'SUPPORT')
+      const coPhuTrach = await taoDuAn(pm, 'Có phụ trách')
+      await them(pm, duAnId, support)
+      for (const phien of [an, binh, support]) await them(pm, coPhuTrach, phien)
+      giaTri(await kho.suaDuAn(pm, coPhuTrach, { nguoiPhuTrachId: binh.nguoiDungId }, LUC_TAO))
+      for (const phien of [pm, support]) {
+        expect((await doc(phien)).hoatDong.map((d) => [d.duAn.ten, d.chuaCoNguoiPhuTrach])).toEqual([
+          ['Có phụ trách', false],
+          ['Cửa hàng', true],
+        ])
+      }
+      for (const phien of [an, binh]) {
+        expect((await doc(phien)).hoatDong.map((d) => d.chuaCoNguoiPhuTrach)).toEqual([false, false])
+      }
     })
 
     it('chưa đăng nhập thì trả CHUA_DANG_NHAP', async () => {

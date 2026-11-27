@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { KetQua, MaLoi } from './ketQua'
 import type { KhoDuLieu, Phien, Task } from './khoDuLieu'
-import type { BanCaiHopDong, TuyChonHopDong } from './hopDong'
+import { taoBoDemMaDuAn, type BanCaiHopDong, type TuyChonHopDong } from './hopDong'
 import { THONG_BAO_DU_AN } from '../luat/duAn'
 import {
   CAC_TRANG_THAI_TASK,
@@ -39,6 +39,7 @@ export function chayHopDongSuaTask(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const maDuAnMoi = tuyChon.maDuAnMoi ?? taoBoDemMaDuAn()
   const dongHoCuaKho = tuyChon.dongHoCuaKho ?? false
   const coTask = tuyChon.coTask ?? true
   /** Ngày mong đợi trong dấu vết: đúng giờ truyền vào, hoặc chỉ là một ngày nếu kho tự lấy giờ. */
@@ -97,7 +98,7 @@ export function chayHopDongSuaTask(
     /** Một PM, một Dự án đang hoạt động với An, Bình và Chi trong đó, và một Task giao An (làm) và Bình (duyệt). */
     async function dungBoiCanh(ten = 'st'): Promise<BoiCanh> {
       const pm = await taoPM(`pm-${ten}`, 'An PM')
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC_TAO_DU_AN))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC_TAO_DU_AN))
       const an = await dangKyVaDangNhap(`an-${ten}`, 'An')
       const binh = await dangKyVaDangNhap(`binh-${ten}`, 'Bình')
       const chi = await dangKyVaDangNhap(`chi-${ten}`, 'Chi')

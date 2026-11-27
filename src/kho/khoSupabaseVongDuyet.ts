@@ -2,7 +2,9 @@
 // (ticket 11).
 //
 // - Dữ liệu: hàm public.doi_trang_thai_task, public.lich_su_task và bảng
-//   public.lich_su_trang_thai_task trong supabase/migrations/20261125000300_lat_3_vong_duyet.sql.
+//   public.lich_su_trang_thai_task trong supabase/migrations/20261125000300_lat_3_vong_duyet.sql. Hàm
+//   lich_su_task được thay ở supabase/migrations/20261126000600_truong_task_ho_so_nguoi.sql để trả thêm dòng
+//   đổi Mức ưu tiên (bảng public.lich_su_muc_uu_tien_task) trên cùng dòng thời gian.
 // - Như phần Dự án và Task: quyền được kiểm hai lần. Ở đây bằng chính luật thuần
 //   (`kiemChuyenTrangThai` trong src/luat/chuyenTrangThai.ts, không viết lại luật) để trả đúng mã
 //   lỗi, đúng thông báo và đúng thứ tự như bản bộ nhớ; ở cơ sở dữ liệu bằng hàm security definer,
@@ -23,6 +25,7 @@ import type { DongLichSuTask, HoSo, KhoDuLieu, Phien } from './khoDuLieu'
 import { THONG_BAO_CHUYEN_TRANG_THAI, kiemChuyenTrangThai, xepLichSuTask } from '../luat/chuyenTrangThai'
 import { CAC_TRANG_THAI_TASK, type TrangThaiTask } from '../luat/task'
 import type { NguoiGoiDuAn, TrangThaiDuAn } from '../luat/duAn'
+import { MUC_UU_TIEN_MAC_DINH, laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 
 /** Lỗi trả về từ PostgREST (bảng, RPC). */
 interface LoiCsdl {
@@ -65,15 +68,26 @@ interface DongTaskChuyen {
   trang_thai: string
 }
 
-/** Một dòng do hàm `lich_su_task` trả về. */
+/**
+ * Một dòng do hàm `lich_su_task` trả về. `loai` (ticket truong-moi 04; hàm mới trong
+ * supabase/migrations/20261126000600_truong_task_ho_so_nguoi.sql): `'MUC_UU_TIEN'` là dòng đổi Mức ưu tiên (`tu`,
+ * `sang` là mức); `'TRANG_THAI'`, thiếu (trước migration) hay giá trị khác là dòng trạng thái. `stt` là thứ tự
+ * trên dòng thời gian chung của hai loại.
+ */
 interface DongLichSuCsdl {
   stt: number
+  loai?: string | null
   nguoi_doi_id: string
   ten_hien_thi: string
   luc: string
   tu: string
   sang: string
   ly_do: string | null
+}
+
+/** Mức ưu tiên đọc từ cơ sở dữ liệu; giá trị lạ (không thể có nhờ ràng buộc) coi như mức mặc định. */
+function mucUuTienTuDong(giaTri: string): MucUuTien {
+  return laMucUuTien(giaTri) ? giaTri : MUC_UU_TIEN_MAC_DINH
 }
 
 /** Các mã lỗi của vòng duyệt mà hàm cơ sở dữ liệu ném thêm so với `MA_TU_CSDL` của khoSupabase.ts. */
@@ -163,15 +177,20 @@ export function taoLenhVongDuyetSupabase(phuThuoc: PhuThuocLenhVongDuyet): LenhV
       const { data, error } = await xt.giaTri.db.rpc('lich_su_task', { p_task_id: taskId })
       if (error) return loiVongDuyet(error)
       const dong = [...((data ?? []) as unknown as DongLichSuCsdl[])].sort((a, b) => a.stt - b.stt)
-      const lichSu = dong.map(
-        (d): DongLichSuTask => ({
-          nguoiDoi: { id: d.nguoi_doi_id, tenHienThi: d.ten_hien_thi },
+      const lichSu = dong.map((d): DongLichSuTask => {
+        const nguoiDoi = { id: d.nguoi_doi_id, tenHienThi: d.ten_hien_thi }
+        if (d.loai === 'MUC_UU_TIEN') {
+          return { loai: 'MUC_UU_TIEN', nguoiDoi, luc: new Date(d.luc), tu: mucUuTienTuDong(d.tu), sang: mucUuTienTuDong(d.sang) }
+        }
+        return {
+          loai: 'TRANG_THAI',
+          nguoiDoi,
           luc: new Date(d.luc),
           tu: trangThaiTaskTuDong(d.tu),
           sang: trangThaiTaskTuDong(d.sang),
           lyDo: d.ly_do,
-        }),
-      )
+        }
+      })
       // Luật thuần xếp theo thời điểm; sắp xếp ổn định nên cùng lúc thì giữ thứ tự ghi (đã xếp theo stt).
       return thanhCong(xepLichSuTask(lichSu))
     },

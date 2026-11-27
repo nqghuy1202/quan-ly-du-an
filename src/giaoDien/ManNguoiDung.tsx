@@ -25,6 +25,9 @@ type Dong = {
   id: string
   tenHienThi: string
   email: string
+  /** Chuỗi rỗng khi người đó chưa nhập. */
+  chucDanh: string
+  phongBan: string
   vai: VaiHeThong
 }
 
@@ -36,7 +39,12 @@ function laVai(giaTri: string): giaTri is VaiHeThong {
   return (CAC_VAI as readonly string[]).includes(giaTri)
 }
 
-/** Màn Người dùng của PM: mọi tài khoản (tên, email, vai) và đổi vai hệ thống. */
+/** Ô chữ tuỳ chọn: chưa nhập thì hiện "Chưa có" màu phụ. */
+function oTuyChon(giaTri: string) {
+  return giaTri === '' ? <Text color="secondary">Chưa có</Text> : <Text>{giaTri}</Text>
+}
+
+/** Màn Người dùng của PM: mọi tài khoản (tên, email, Chức danh, Phòng ban, vai) và đổi vai hệ thống. */
 export function ManNguoiDung({ phien, onHetPhien, onVaiCuaToiDoi }: Props) {
   const kho = useKho()
   const [tai, setTai] = useState<KetQua<NguoiDungTomTat[]> | null>(null)
@@ -107,6 +115,18 @@ export function ManNguoiDung({ phien, onHetPhien, onVaiCuaToiDoi }: Props) {
       renderCell: (nd) => <Text>{nd.email}</Text>,
     },
     {
+      key: 'chucDanh',
+      header: 'Chức danh',
+      width: proportional(1),
+      renderCell: (nd) => oTuyChon(nd.chucDanh),
+    },
+    {
+      key: 'phongBan',
+      header: 'Phòng ban',
+      width: proportional(1),
+      renderCell: (nd) => oTuyChon(nd.phongBan),
+    },
+    {
       key: 'vai',
       header: 'Vai',
       width: proportional(2),
@@ -148,10 +168,12 @@ export function ManNguoiDung({ phien, onHetPhien, onVaiCuaToiDoi }: Props) {
       />
     )
   } else {
-    const dong: Dong[] = xepTheoTen(tai.giaTri).map(({ id, tenHienThi, email, vai }) => ({
+    const dong: Dong[] = xepTheoTen(tai.giaTri).map(({ id, tenHienThi, email, chucDanh, phongBan, vai }) => ({
       id,
       tenHienThi,
       email,
+      chucDanh: chucDanh ?? '',
+      phongBan: phongBan ?? '',
       vai,
     }))
     noiDung = <Table aria-label="Danh sách người dùng" data={dong} columns={cot} idKey="id" />

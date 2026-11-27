@@ -8,9 +8,8 @@ import { Text } from '@astryxdesign/core/Text'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua } from '../kho/ketQua'
 import type { DongLichSuTask, Phien } from '../kho/khoDuLieu'
-import { xepLichSuTask } from '../luat/chuyenTrangThai'
+import { tomTatDongLichSu, xepLichSuTask } from '../luat/chuyenTrangThai'
 import { dinhDangNgayGio } from '../luat/duAn'
-import { TEN_TRANG_THAI_TASK } from '../luat/task'
 import { useKho } from './khoContext'
 
 interface Props {
@@ -21,7 +20,10 @@ interface Props {
   onHetPhien: () => void
 }
 
-/** Lịch sử trạng thái của Task theo thứ tự thời gian tăng dần: ai đổi, lúc nào, từ đâu sang đâu, lý do. */
+/**
+ * Lịch sử của Task theo thứ tự thời gian tăng dần, gồm các lần đổi trạng thái (kèm lý do nếu có) và đổi
+ * Mức ưu tiên trên cùng một dòng thời gian: ai đổi, lúc nào, từ đâu sang đâu.
+ */
 export function PhanLichSuTask({ phien, taskId, lanDoc, onHetPhien }: Props) {
   const kho = useKho()
   const [lanThuLai, setLanThuLai] = useState(0)
@@ -48,25 +50,27 @@ export function PhanLichSuTask({ phien, taskId, lanDoc, onHetPhien }: Props) {
     noiDung = (
       <Banner
         status="error"
-        title="Không tải được lịch sử trạng thái."
+        title="Không tải được lịch sử Task."
         description={tai.loi.thongBao}
         role="alert"
         endContent={<Button label="Thử lại" variant="secondary" onClick={() => setLanThuLai((n) => n + 1)} />}
       />
     )
   } else if (tai.giaTri.length === 0) {
-    noiDung = <Text>Chưa có lần đổi trạng thái nào.</Text>
+    noiDung = <Text>Chưa có lần đổi trạng thái hay Mức ưu tiên nào.</Text>
   } else {
     noiDung = (
       <List hasDividers>
         {xepLichSuTask(tai.giaTri).map((dong, i) => (
           <ListItem
             key={`${dong.luc.getTime()}-${i}`}
-            label={`${TEN_TRANG_THAI_TASK[dong.tu]} sang ${TEN_TRANG_THAI_TASK[dong.sang]}`}
+            label={tomTatDongLichSu(dong)}
             description={
               <VStack gap={0.5}>
                 <Text type="supporting">{`${dong.nguoiDoi.tenHienThi}, ${dinhDangNgayGio(dong.luc)}`}</Text>
-                {dong.lyDo !== null && <Text type="supporting">{`Lý do: ${dong.lyDo}`}</Text>}
+                {dong.loai === 'TRANG_THAI' && dong.lyDo !== null && (
+                  <Text type="supporting">{`Lý do: ${dong.lyDo}`}</Text>
+                )}
               </VStack>
             }
           />
@@ -76,8 +80,8 @@ export function PhanLichSuTask({ phien, taskId, lanDoc, onHetPhien }: Props) {
   }
 
   return (
-    <VStack gap={2} role="group" aria-label="Lịch sử trạng thái">
-      <Heading level={3}>Lịch sử trạng thái</Heading>
+    <VStack gap={2} role="group" aria-label="Lịch sử Task">
+      <Heading level={3}>Lịch sử Task</Heading>
       {noiDung}
     </VStack>
   )

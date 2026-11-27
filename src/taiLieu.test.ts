@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { mucDieuHuong } from './luat/dieuHuong'
 import { TEN_TRANG_THAI_DU_AN } from './luat/duAn'
 import { TEN_TRANG_THAI_TASK } from './luat/task'
 import { TEN_VAI } from './luat/taiKhoan'
@@ -35,6 +36,7 @@ const README = doc('README.md')
 const HUONG_DAN = doc('supabase/README.md')
 const GLOSSARY = doc('GLOSSARY.md')
 const SPEC = doc('.scratch/quan-ly-du-an/spec.md')
+const SPEC_BO_CUC = doc('.scratch/bo-cuc-va-truong-moi/spec.md')
 const AGENTS = doc('AGENTS.md')
 const SCRIPTS = (JSON.parse(doc('package.json')) as { scripts: Record<string, string> }).scripts
 
@@ -120,9 +122,10 @@ describe('README gốc: nội dung bắt buộc', () => {
 
   it('các màn chính trùng với thanh điều hướng của ứng dụng và có trang tổng quan', () => {
     const muc = mucTheoTieuDe(README, /^## Các màn chính/)
-    const khung = doc('src/giaoDien/KhungUngDung.tsx')
+    // Mục điều hướng nằm ở luật thuần (`luat/dieuHuong.ts`); PM thấy đủ mọi mục.
+    const nhanCuaPM = mucDieuHuong('PM').map((m) => m.nhan)
     for (const nhan of ['Dự án của tôi', 'Việc của tôi', 'Chờ tôi duyệt', 'Tất cả Dự án', 'Hồ sơ', 'Người dùng']) {
-      expect(khung, `ứng dụng không có mục ${nhan}`).toContain(`label="${nhan}"`)
+      expect(nhanCuaPM, `ứng dụng không có mục ${nhan}`).toContain(nhan)
       expect(muc, `README thiếu màn ${nhan}`).toContain(nhan)
     }
     for (const tu of ['Đăng ký', 'Đăng nhập', 'Chi tiết Dự án', 'Chi tiết Task', 'Kanban', 'Trang tổng quan', 'Tiến độ', 'Trễ hạn']) {
@@ -341,6 +344,113 @@ describe('Hướng dẫn Supabase: danh sách kiểm tay RLS', () => {
   })
 })
 
+/**
+ * Một gạch đầu dòng in đậm `- **tiêu đề**...` kèm các dòng thụt sâu hơn bên dưới nó (phần tiếp của chính gạch
+ * đó), dừng ở gạch cùng cấp, dòng thụt nông hơn hay dòng trống.
+ */
+function gachDauDong(vanBan: string, tieuDe: string): string {
+  const dong = vanBan.split('\n')
+  const i = dong.findIndex((d) => /^\s*- \*\*/.test(d) && d.includes(`**${tieuDe}**`))
+  if (i < 0) throw new Error(`Không thấy gạch đầu dòng **${tieuDe}**`)
+  const thut = (d: string) => (d.match(/^\s*/) ?? [''])[0].length
+  const cap = thut(dong[i] ?? '')
+  let j = i + 1
+  while (j < dong.length && (dong[j] ?? '').trim() !== '' && thut(dong[j] ?? '') > cap) j += 1
+  return dong.slice(i, j).join('\n')
+}
+
+describe('Hướng dẫn Supabase: trường mới (ticket truong-moi 11)', () => {
+  const LEN_DU_AN = '20261126000500_truong_du_an'
+  const LEN_TASK_HO_SO = '20261126000600_truong_task_ho_so_nguoi'
+  const nangCap = mucTheoTieuDe(HUONG_DAN, /^### Nâng cấp lên trường mới/)
+  const phanDDuAn = mucTheoTieuDe(HUONG_DAN, /^## Trường mới của Dự án trên Supabase/)
+  const phanDTaskHoSo = mucTheoTieuDe(HUONG_DAN, /^## Task, hồ sơ và Người trong dự án trên Supabase/)
+
+  it('hai migration mới và hai bản xuống có thật, được nêu ở bước migration và ở mục nâng cấp', () => {
+    for (const ten of [LEN_DU_AN, LEN_TASK_HO_SO]) {
+      expect(existsSync(join(GOC, `supabase/migrations/${ten}.sql`)), ten).toBe(true)
+      expect(existsSync(join(GOC, `supabase/down/${ten}.down.sql`)), ten).toBe(true)
+    }
+    const buocMigration = mucTheoTieuDe(HUONG_DAN, /^### Bước 4\./)
+    for (const muc of [buocMigration, nangCap]) {
+      for (const ten of [LEN_DU_AN, LEN_TASK_HO_SO]) {
+        expect(muc, ten).toContain(`migrations/${ten}.sql`)
+        expect(muc, ten).toContain(`down/${ten}.down.sql`)
+      }
+    }
+  })
+
+  it('mục nâng cấp: áp 000500 trước 000600, quay lại bằng bản xuống theo thứ tự ngược', () => {
+    expect(nangCap.indexOf(`migrations/${LEN_DU_AN}.sql`)).toBeLessThan(nangCap.indexOf(`migrations/${LEN_TASK_HO_SO}.sql`))
+    const quayLai = nangCap.slice(nangCap.search(/\*\*Quay lại\*\*/))
+    expect(quayLai.length).toBeLessThan(nangCap.length)
+    expect(quayLai).toMatch(/ngược/)
+    expect(quayLai.indexOf(`down/${LEN_TASK_HO_SO}.down.sql`)).toBeGreaterThanOrEqual(0)
+    expect(quayLai.indexOf(`down/${LEN_TASK_HO_SO}.down.sql`)).toBeLessThan(quayLai.indexOf(`down/${LEN_DU_AN}.down.sql`))
+    // Thứ tự này đúng với chính bản xuống: 000600 phải chạy trước 000500.
+    expect(gon(doc(`supabase/down/${LEN_TASK_HO_SO}.down.sql`))).toMatch(new RegExp(`TRƯỚC bản xuống của ${LEN_DU_AN}`))
+  })
+
+  it('mục nâng cấp có bước sửa mã tạm DA-… thành mã thật, sau bước kiểm tay, khớp với migration', () => {
+    const suaMa = nangCap.search(/\*\*Sửa mã tạm `DA-…` thành mã thật\*\*/)
+    const kiemTay = nangCap.search(/\*\*Kiểm tay bốn mục mới\*\*/)
+    expect(suaMa).toBeGreaterThanOrEqual(0)
+    expect(kiemTay).toBeGreaterThanOrEqual(0)
+    expect(kiemTay).toBeLessThan(suaMa)
+    // Có câu lệnh cụ thể để liệt kê Dự án còn mã tạm.
+    expect(nangCap).toMatch(/`select [^`]*from public\.du_an where ma like 'DA-%'[^`]*`/)
+    // Migration thật sự gán mã tạm dạng DA-.
+    expect(doc(`supabase/migrations/${LEN_DU_AN}.sql`)).toMatch(/set ma = 'DA-'/)
+    // Bước kiểm tay tổng (Phần A) và Phần B trỏ tới mục nâng cấp.
+    expect(mucTheoTieuDe(HUONG_DAN, /^### Bước 13\./)).toMatch(/bốn mục kiểm tay của trường mới/)
+    expect(mucTheoTieuDe(HUONG_DAN, /^## Phần B\./)).toMatch(/Nâng cấp lên trường mới/)
+  })
+
+  // Bốn mục kiểm tay mới của ticket: tiêu đề, phần Phần D chứa cách kiểm chi tiết, và những gì cách kiểm
+  // đó phải nhắc (câu lệnh cụ thể và kết quả mong đợi).
+  const BON_MUC: ReadonlyArray<{ tieuDe: string; phan: () => string; phaiCo: Array<string | RegExp> }> = [
+    {
+      tieuDe: 'Quyền xem Thông tin nhân sự theo từng dòng',
+      phan: () => phanDTaskHoSo,
+      phaiCo: [/select so_dien_thoai from public\.ho_so/, /không cùng Dự án/, /không trả dòng nào/, /Lưu trữ/],
+    },
+    {
+      tieuDe: 'Trùng Mã Dự án khác hoa thường bị từ chối',
+      phan: () => phanDDuAn,
+      phaiCo: [/insert into public\.du_an/, /lower\(/, 'du_an_ma_key', /Lưu trữ/],
+    },
+    {
+      tieuDe: 'Người phụ trách về trống khi bị gỡ',
+      phan: () => phanDDuAn,
+      phaiCo: [/delete from public\.nguoi_trong_du_an/, 'nguoi_phu_trach_id', /null/],
+    },
+    {
+      tieuDe: 'Thành viên không đổi được Mức ưu tiên của Task',
+      phan: () => phanDTaskHoSo,
+      phaiCo: [/update public\.task set muc_uu_tien/, /Người thực hiện/, /Người kiểm tra/, /không đổi dòng nào/],
+    },
+  ]
+
+  it('mục nâng cấp liệt kê đủ bốn mục kiểm tay mới', () => {
+    for (const m of BON_MUC) expect(gachDauDong(nangCap, m.tieuDe), m.tieuDe).toBeTruthy()
+  })
+
+  it.each(BON_MUC)('Phần D có cách kiểm cụ thể cho "$tieuDe"', ({ tieuDe, phan, phaiCo }) => {
+    const muc = gon(gachDauDong(phan(), tieuDe))
+    for (const mau of phaiCo) {
+      if (typeof mau === 'string') expect(muc, `${tieuDe}: thiếu ${mau}`).toContain(mau)
+      else expect(muc, `${tieuDe}: thiếu ${mau}`).toMatch(mau)
+    }
+  })
+
+  it('tên ràng buộc và cột được nhắc trong bốn mục có trong migration', () => {
+    const sql = [LEN_DU_AN, LEN_TASK_HO_SO].map((ten) => doc(`supabase/migrations/${ten}.sql`)).join('\n')
+    expect(sql).toMatch(/create unique index du_an_ma_key on public\.du_an \(upper\(ma\)\)/)
+    for (const cot of ['nguoi_phu_trach_id', 'so_dien_thoai', 'muc_uu_tien']) expect(sql, cot).toContain(`add column ${cot}`)
+    expect(sql).toContain('on delete set null (nguoi_phu_trach_id)')
+  })
+})
+
 describe('Hướng dẫn Supabase: cổng không kiểm được', () => {
   const phanC = mucTheoTieuDe(HUONG_DAN, /^## Phần C\./)
 
@@ -412,6 +522,24 @@ describe('Bảng thuật ngữ khớp spec và GLOSSARY', () => {
     }
   })
 
+  it('GLOSSARY có đủ mười từ mới của spec bố cục và trường mới, nghĩa và "Đừng viết" khớp spec', () => {
+    const TU_MOI = [
+      'Mã Dự án', 'Khách hàng', 'Người phụ trách', 'Mức ưu tiên', 'Quá hạn dự kiến', 'Vai trò trong Dự án',
+      'Thông tin nhân sự', 'Tổng quan', 'Thanh bên', 'Ngăn trượt',
+    ]
+    const specMoi = bangTuVung(SPEC_BO_CUC)
+    // Bảng từ vựng của spec bố cục đúng là mười từ này: thêm từ vào spec thì danh sách ở đây phải theo.
+    expect([...specMoi.keys()].sort()).toEqual([...TU_MOI].sort())
+    for (const tu of TU_MOI) {
+      const g = hangCuaTu(glossary, tu)
+      const s = hangCuaTu(specMoi, tu)
+      expect(g, `GLOSSARY thiếu ${tu}`).toBeDefined()
+      // GLOSSARY được phép nói thêm sau nghĩa của spec (vd. ai xem được Thông tin nhân sự), không được nói khác.
+      expect(chuanHoa(g?.nghia ?? ''), `nghĩa của ${tu}`).toMatch(new RegExp(`^${chuanHoa(s?.nghia ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+      expect(g?.dungViet, `"Đừng viết" của ${tu}`).toBe(s?.dungViet)
+    }
+  })
+
   it('GLOSSARY có các từ kỹ thuật mới của lát tài liệu', () => {
     const muc = mucTheoTieuDe(GLOSSARY, /^## Từ kỹ thuật/)
     for (const tu of ['Kho dữ liệu', 'Bảng ca dùng chung', 'Cổng GitHub', 'Edge Function', 'Danh sách kiểm tay']) {
@@ -442,6 +570,9 @@ describe('Bảng thuật ngữ khớp spec và GLOSSARY', () => {
       // Bỏ ghi chú (không phải chữ hiển thị) trước khi tìm.
       const ma = doc(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
       for (const tu of dungViet) {
+        // Ngoại lệ có chủ đích: tiêu đề nhóm "Công việc" trên Thanh bên (spec bố cục, ticket 01) gom Việc
+        // của tôi và Chờ tôi duyệt; ở đó "công việc" là tên nhóm, không phải cách gọi một Task.
+        if (f === 'src/luat/dieuHuong.ts' && tu === 'công việc') continue
         expect(ma.toLowerCase(), `${f} dùng từ "${tu}", GLOSSARY bảo đừng viết`).not.toMatch(new RegExp(`(^|[^\\p{L}])${tu}([^\\p{L}]|$)`, 'u'))
       }
     }

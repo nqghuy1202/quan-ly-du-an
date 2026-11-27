@@ -80,12 +80,13 @@ describe('tên hiển thị của ứng dụng', () => {
     const dau = await vaoKhungUngDung()
     expect(dau.getByRole('heading', { level: 1 })).toHaveTextContent(TEN_UNG_DUNG)
     expect(screen.getAllByRole('heading', { level: 1, name: TEN_UNG_DUNG })).toHaveLength(1)
-    const dieuHuong = within(dau.getByRole('navigation', { name: 'Điều hướng chính' }))
+    // Điều hướng chính giờ là Thanh bên (ngoài phần đầu); chữ các mục giữ nguyên.
+    const dieuHuong = within(screen.getByRole('navigation', { name: 'Điều hướng chính' }))
     expect(dieuHuong.getAllByRole('button').map((b) => b.textContent)).toEqual([
       'Tổng quan',
-      'Dự án của tôi',
       'Việc của tôi',
       'Chờ tôi duyệt',
+      'Dự án của tôi',
       'Hồ sơ',
       'Đăng xuất',
     ])
@@ -103,9 +104,15 @@ describe('tên và chữ quanh tên dùng đúng bảng thuật ngữ', () => {
     khongCoTuCam(document.body.textContent ?? '')
   })
 
-  it('đầu khung ứng dụng không có từ bị cấm của GLOSSARY', async () => {
+  it('đầu khung ứng dụng và các mục của Thanh bên không có từ bị cấm của GLOSSARY', async () => {
     await vaoKhungUngDung()
-    const vanBan = screen.getByRole('banner').textContent ?? ''
+    khongCoTuCam(screen.getByRole('banner').textContent ?? '')
+    // Chữ của các mục (tiêu đề nhóm "Công việc" là tên nhóm do spec đặt, không phải cách gọi Task).
+    const thanhBen = within(screen.getByRole('navigation', { name: 'Điều hướng chính' }))
+    const vanBan = thanhBen
+      .getAllByRole('button')
+      .map((b) => b.textContent)
+      .join(' | ')
     expect(vanBan).toContain('Dự án của tôi')
     khongCoTuCam(vanBan)
   })

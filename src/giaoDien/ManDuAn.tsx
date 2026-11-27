@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import type { Phien } from '../kho/khoDuLieu'
-import type { TrangThaiDuAn } from '../luat/duAn'
+import { LOC_TAT_CA_DU_AN_BAN_DAU, type LocDuAn } from '../luat/timDuAn'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { ManChiTietDuAn } from './ManChiTietDuAn'
 import { ManDanhSachDuAn } from './ManDanhSachDuAn'
-import { ManTaoDuAn } from './ManTaoDuAn'
 
 interface Props {
   phien: Phien
@@ -15,30 +14,13 @@ interface Props {
   onHetPhien: () => void
 }
 
-type ManCon = { loai: 'danhSach' } | { loai: 'tao' } | { loai: 'chiTiet'; duAnId: string; thongBao: string | null }
+type ManCon = { loai: 'danhSach' } | { loai: 'chiTiet'; duAnId: string }
 
-/** Mục "Tất cả Dự án": danh sách, tạo và chi tiết kèm sửa. */
+/** Mục "Tất cả Dự án": danh sách (tạo Dự án trong Ngăn trượt) và chi tiết. */
 export function ManDuAn({ phien, vai, dongHo, onHetPhien }: Props) {
   const [man, setMan] = useState<ManCon>({ loai: 'danhSach' })
-  // Giữ bộ lọc khi đi vào chi tiết rồi quay lại.
-  const [boLoc, setBoLoc] = useState<TrangThaiDuAn>('HOAT_DONG')
-  const veDanhSach = () => setMan({ loai: 'danhSach' })
-
-  if (man.loai === 'tao') {
-    return (
-      <ManTaoDuAn
-        phien={phien}
-        vai={vai}
-        dongHo={dongHo}
-        onDaTao={(duAn) => {
-          setBoLoc('HOAT_DONG')
-          setMan({ loai: 'chiTiet', duAnId: duAn.id, thongBao: `Đã tạo Dự án ${duAn.ten}.` })
-        }}
-        onQuayLai={veDanhSach}
-        onHetPhien={onHetPhien}
-      />
-    )
-  }
+  // Giữ bộ tìm và lọc khi đi vào chi tiết rồi quay lại.
+  const [loc, setLoc] = useState<LocDuAn>(LOC_TAT_CA_DU_AN_BAN_DAU)
 
   if (man.loai === 'chiTiet') {
     return (
@@ -47,9 +29,8 @@ export function ManDuAn({ phien, vai, dongHo, onHetPhien }: Props) {
         phien={phien}
         vai={vai}
         duAnId={man.duAnId}
-        thongBaoBanDau={man.thongBao}
         dongHo={dongHo}
-        onQuayLai={veDanhSach}
+        onQuayLai={() => setMan({ loai: 'danhSach' })}
         onHetPhien={onHetPhien}
       />
     )
@@ -59,10 +40,10 @@ export function ManDuAn({ phien, vai, dongHo, onHetPhien }: Props) {
     <ManDanhSachDuAn
       phien={phien}
       vai={vai}
-      boLoc={boLoc}
-      onDoiBoLoc={setBoLoc}
-      onTao={() => setMan({ loai: 'tao' })}
-      onMo={(duAnId) => setMan({ loai: 'chiTiet', duAnId, thongBao: null })}
+      dongHo={dongHo}
+      loc={loc}
+      onDoiLoc={setLoc}
+      onMo={(duAnId) => setMan({ loai: 'chiTiet', duAnId })}
       onHetPhien={onHetPhien}
     />
   )

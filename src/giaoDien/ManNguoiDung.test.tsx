@@ -106,6 +106,38 @@ describe('mục Người dùng theo vai', () => {
       expect(vaiDangChon(ten)).toBe(vai)
     }
   })
+
+  it('PM thấy cột Chức danh và Phòng ban (không có cột Số điện thoại); người chưa nhập hiện "Chưa có"', async () => {
+    const kho = taoKho()
+    const binh = await taoNguoi(kho, 'binh@vi-du.vn', 'Bình')
+    await taoNguoi(kho, 'chi@vi-du.vn', 'Chi')
+    const sua = await kho.suaHoSo(await phienCua(kho, 'binh@vi-du.vn'), binh.id, {
+      soDienThoai: '0901234567',
+      chucDanh: 'Kế toán trưởng',
+      phongBan: 'Phòng Tài chính',
+    })
+    if (!sua.ok) throw new Error(sua.loi.thongBao)
+    const { user } = dungApp(kho)
+    await dangNhap(user, PM.email)
+    await moManNguoiDung(user)
+
+    const bang = await screen.findByRole('table', { name: 'Danh sách người dùng' })
+    const tieuDe = within(bang)
+      .getAllByRole('columnheader')
+      .map((o) => o.textContent)
+    expect(tieuDe).toEqual(expect.arrayContaining(['Chức danh', 'Phòng ban']))
+    expect(tieuDe).not.toContain('Số điện thoại')
+
+    const dongBinh = within(bang).getByText('Bình').closest('tr')
+    if (!dongBinh) throw new Error('không thấy dòng của Bình')
+    expect(within(dongBinh).getByText('Kế toán trưởng')).toBeInTheDocument()
+    expect(within(dongBinh).getByText('Phòng Tài chính')).toBeInTheDocument()
+    expect(within(bang).queryByText('0901234567')).not.toBeInTheDocument()
+
+    const dongChi = within(bang).getByText('Chi').closest('tr')
+    if (!dongChi) throw new Error('không thấy dòng của Chi')
+    expect(within(dongChi).getAllByText('Chưa có')).toHaveLength(2)
+  })
 })
 
 describe('đổi vai trên màn Người dùng', () => {
@@ -154,7 +186,8 @@ describe('đổi vai trên màn Người dùng', () => {
     await user.click(vaiTrenBang('An PM').getByRole('radio', { name: 'Support' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Người dùng' })).not.toBeInTheDocument())
     expect(within(screen.getByRole('group', { name: 'Tài khoản đang đăng nhập' })).getByText('Support')).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: 'Dự án của tôi' })).toBeInTheDocument()
+    // Không còn được mở màn Người dùng thì khung về trang đầu (Tổng quan).
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
     expect(await vaiCua(kho, PM.email)).toBe('SUPPORT')
   })
 

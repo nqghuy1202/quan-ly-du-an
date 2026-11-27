@@ -3,7 +3,7 @@
 // của mình, với cùng `BanCaiHopDong`. Chỉ kiểm hành vi nhìn thấy qua giao diện `KhoDuLieu`.
 import { describe, expect, it } from 'vitest'
 import type { KetQua, MaLoi } from './ketQua'
-import type { BanCaiHopDong, TuyChonHopDong } from './hopDong'
+import { taoBoDemMaDuAn, type BanCaiHopDong, type TuyChonHopDong } from './hopDong'
 import type { DuAn, KhoDuLieu, Phien, Task } from './khoDuLieu'
 import { THONG_BAO_LIEN_KET } from '../luat/github'
 import { THONG_BAO_DU_AN } from '../luat/duAn'
@@ -32,6 +32,7 @@ export function chayHopDongLienKet(
   tuyChon: TuyChonHopDong = {},
 ): void {
   const emailMoi = tuyChon.emailMoi ?? ((ten: string) => `${ten}@vi-du.vn`)
+  const maDuAnMoi = tuyChon.maDuAnMoi ?? taoBoDemMaDuAn()
 
   describe(`Link issue hoặc PR trên Task (hợp đồng) — ${tenBanCai}`, () => {
     if (tuyChon.coTask === false) {
@@ -83,7 +84,7 @@ export function chayHopDongLienKet(
     /** Dự án có gắn repo `acme/web`, một Task (thành viên `tv` làm, `kiem` duyệt) và PM `pm`. */
     async function dungBoiCanh(hau: string, cacRepo: string[] = ['acme/web']): Promise<BoiCanh> {
       const pm = await taoPM(`pm-${hau}`)
-      const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC_TAO))
+      const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC_TAO))
       for (const repo of cacRepo) giaTri(await kho.ganRepoVaoDuAn(pm, duAn.id, { repo }))
       const tv = await taoNguoi(pm, duAn, `tv-${hau}`, 'THANH_VIEN', true)
       const kiem = await taoNguoi(pm, duAn, `kiem-${hau}`, 'THANH_VIEN', true)
@@ -158,7 +159,7 @@ export function chayHopDongLienKet(
     it('link thuộc repo chưa gắn vào Dự án trả LINK_REPO_CHUA_GAN, kể cả repo chỉ gắn ở Dự án khác; gắn xong thì dán được', async () => {
       await khoiTao()
       const { pm, task } = await dungBoiCanh('chua-gan')
-      const khac = giaTri(await kho.taoDuAn(pm, { ten: 'Dự án khác' }, LUC_TAO))
+      const khac = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Dự án khác' }, LUC_TAO))
       giaTri(await kho.ganRepoVaoDuAn(pm, khac.id, { repo: 'acme/api' }))
 
       for (const duongDan of ['https://github.com/acme/api/issues/1', 'https://github.com/nguoi-la/repo/pull/2']) {

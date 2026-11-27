@@ -1,8 +1,15 @@
 import { BANG_CA_QUYEN, CAC_HANH_DONG } from './bangCaQuyen'
 import { chayBangCaQuyen, chayBoTestHopDong, type BanCaiHopDong } from './hopDong'
+import { chayHopDongDuAnKemSoLieu } from './hopDongDuAnKemSoLieu'
 import { chayHopDongLienKet } from './hopDongLienKet'
+import { chayHopDongMaDuAn } from './hopDongMaDuAn'
+import { chayHopDongMucUuTienTask } from './hopDongMucUuTienTask'
+import { chayHopDongNgayDuAn } from './hopDongNgayDuAn'
 import { chayHopDongRepo } from './hopDongRepo'
 import { chayHopDongSuaTask } from './hopDongSuaTask'
+import { chayHopDongThongTinNhanSu } from './hopDongThongTinNhanSu'
+import { chayHopDongUuTienPhuTrach } from './hopDongUuTienPhuTrach'
+import { chayHopDongVaiTroTrongDuAn } from './hopDongVaiTroTrongDuAn'
 import { chayHopDongChuyenTrangThai } from './hopDongChuyenTrangThai'
 import { taoKhoBoNho, type ThuMoPhong } from './khoBoNho'
 import { CAC_VAI } from '../luat/taiKhoan'
@@ -42,6 +49,20 @@ chayHopDongSuaTask('bản bộ nhớ', taoBanCai)
 chayHopDongChuyenTrangThai('bản bộ nhớ', taoBanCai)
 
 chayHopDongLienKet('bản bộ nhớ', taoBanCai)
+
+chayHopDongMaDuAn('bản bộ nhớ', taoBanCai)
+
+chayHopDongNgayDuAn('bản bộ nhớ', taoBanCai)
+
+chayHopDongUuTienPhuTrach('bản bộ nhớ', taoBanCai)
+
+chayHopDongMucUuTienTask('bản bộ nhớ', taoBanCai)
+
+chayHopDongThongTinNhanSu('bản bộ nhớ', taoBanCai)
+
+chayHopDongVaiTroTrongDuAn('bản bộ nhớ', taoBanCai)
+
+chayHopDongDuAnKemSoLieu('bản bộ nhớ', taoBanCai)
 
 describe('bảng ca dùng chung cho quyền (dữ liệu)', () => {
   it('mọi hành động có đủ dòng cho từng vai, trong và ngoài Dự án, khi Dự án đang hoạt động', () => {

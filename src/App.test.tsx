@@ -37,6 +37,11 @@ async function dangNhapQuaGiaoDien(user: ReturnType<typeof userEvent.setup>, ema
   await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 }
 
+/** Mở một mục trên Thanh bên (chờ khung tải hồ sơ xong). */
+async function moMuc(user: ReturnType<typeof userEvent.setup>, nhan: string) {
+  await user.click(await screen.findByRole('button', { name: nhan }))
+}
+
 function vungTaiKhoan() {
   return within(screen.getByRole('group', { name: 'Tài khoản đang đăng nhập' }))
 }
@@ -75,6 +80,9 @@ describe('màn đăng nhập và đăng ký', () => {
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
     expect(vungTaiKhoan().getByText('An Nguyễn')).toBeInTheDocument()
     expect(vungTaiKhoan().getByText('Thành viên')).toBeInTheDocument()
+    // Trang đầu là Tổng quan; màn trống của Dự án của tôi mở từ Thanh bên.
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
+    await moMuc(user, 'Dự án của tôi')
     expect(await screen.findByRole('heading', { name: CAU_MAN_TRONG })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
   })
@@ -153,14 +161,15 @@ describe('khung ứng dụng', () => {
     let lanGoi = 0
     const kho: KhoDuLieu = {
       ...goc,
-      danhSachDuAnCuaToi: async (phien) => {
+      danhSachDuAnKemSoLieu: async (phien, phamVi, bayGio) => {
         lanGoi += 1
-        return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnCuaToi(phien)
+        return lanGoi === 1 ? thatBai('KHONG_TIM_THAY') : goc.danhSachDuAnKemSoLieu(phien, phamVi, bayGio)
       },
     }
     const { user, ungDung } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'g@vi-du.vn', 'G')
     await dangNhapQuaGiaoDien(user, 'g@vi-du.vn')
+    await moMuc(user, 'Dự án của tôi')
 
     expect(await ungDung.findByRole('alert')).toHaveTextContent('Không tải được danh sách Dự án.')
     await user.click(screen.getByRole('button', { name: 'Thử lại' }))
@@ -169,19 +178,21 @@ describe('khung ứng dụng', () => {
 
   it('đang tải danh sách Dự án thì hiện trạng thái đang tải', async () => {
     const goc = taoKhoBoNho()
-    const kho: KhoDuLieu = { ...goc, danhSachDuAnCuaToi: () => new Promise(() => {}) }
+    const kho: KhoDuLieu = { ...goc, danhSachDuAnKemSoLieu: () => new Promise(() => {}) }
     const { user } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'h@vi-du.vn', 'H')
     await dangNhapQuaGiaoDien(user, 'h@vi-du.vn')
+    await moMuc(user, 'Dự án của tôi')
     expect(await screen.findByRole('progressbar', { name: 'Đang tải danh sách Dự án…' })).toBeInTheDocument()
   })
 
   it('phiên hết hạn giữa chừng thì quay về màn đăng nhập', async () => {
     const goc = taoKhoBoNho()
-    const kho: KhoDuLieu = { ...goc, danhSachDuAnCuaToi: async () => thatBai('CHUA_DANG_NHAP') }
+    const kho: KhoDuLieu = { ...goc, danhSachDuAnKemSoLieu: async () => thatBai('CHUA_DANG_NHAP') }
     const { user } = dungApp(goc, kho)
     await dangKyDaXacNhan(goc, 'i@vi-du.vn', 'I')
     await dangNhapQuaGiaoDien(user, 'i@vi-du.vn')
+    await moMuc(user, 'Dự án của tôi')
     expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập' })).toBeInTheDocument()
   })
 })
@@ -340,21 +351,25 @@ describe('điều hướng bằng phím', () => {
     await user.keyboard('{Enter}')
     await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 
-    // Khung: Tổng quan → Dự án của tôi → Việc của tôi → Chờ tôi duyệt → Hồ sơ → Đăng xuất.
+    // Khung: liên kết bỏ qua đến nội dung → Thanh bên (Tổng quan → Việc của tôi → Chờ tôi duyệt →
+    // Dự án của tôi) → chân Thanh bên (Hồ sơ → Đăng xuất). Trang đầu là Tổng quan.
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tổng quan' })).toBeInTheDocument()
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Bỏ qua đến nội dung' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Tổng quan' })).toHaveFocus()
-    await user.tab()
-    expect(screen.getByRole('button', { name: 'Dự án của tôi' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Việc của tôi' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Chờ tôi duyệt' })).toHaveFocus()
     await user.tab()
+    expect(screen.getByRole('button', { name: 'Dự án của tôi' })).toHaveFocus()
+    await user.tab()
     expect(screen.getByRole('button', { name: 'Hồ sơ' })).toHaveFocus()
     await user.keyboard('{Enter}')
     await screen.findByRole('heading', { level: 2, name: 'Hồ sơ của tôi' })
 
-    // Màn hồ sơ: tới ô Tên hiển thị, GitHub username và nút Lưu bằng Tab.
+    // Màn hồ sơ: tới ô Tên hiển thị, GitHub username, ba ô Thông tin nhân sự và nút Lưu bằng Tab.
     await user.tab()
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toHaveFocus()
     await user.tab() // Email (chỉ đọc)
@@ -364,6 +379,10 @@ describe('điều hướng bằng phím', () => {
     await user.tab()
     expect(screen.getByLabelText('GitHub username')).toHaveFocus()
     await user.keyboard('khanh-gh')
+    for (const nhan of ['Số điện thoại', 'Chức danh', 'Phòng ban']) {
+      await user.tab()
+      expect(screen.getByLabelText(nhan)).toHaveFocus()
+    }
     await user.tab()
     expect(screen.getByRole('button', { name: 'Lưu hồ sơ' })).toHaveFocus()
     await user.keyboard('{Enter}')

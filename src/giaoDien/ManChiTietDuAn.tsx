@@ -1,61 +1,67 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Banner } from '@astryxdesign/core/Banner'
 import { Button } from '@astryxdesign/core/Button'
-import { FormLayout } from '@astryxdesign/core/FormLayout'
 import { Heading } from '@astryxdesign/core/Heading'
 import { HStack } from '@astryxdesign/core/HStack'
 import { Spinner } from '@astryxdesign/core/Spinner'
+import { Tab, TabList } from '@astryxdesign/core/TabList'
 import { Text } from '@astryxdesign/core/Text'
-import { TextArea } from '@astryxdesign/core/TextArea'
-import { TextInput } from '@astryxdesign/core/TextInput'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
 import type { KetQua, LoiKho } from '../kho/ketQua'
-import type { DuAn, NguoiTrongDuAn, Phien } from '../kho/khoDuLieu'
-import {
-  DO_DAI_TEN_DU_AN_TOI_DA,
-  TEN_TRANG_THAI_DU_AN,
-  dinhDangNgayGio,
-  kiemMoLaiDuAn,
-  lyDoKhongSuaDuAn,
-} from '../luat/duAn'
-import { lyDoKhongGanRepo, lyDoKhongGhiLienKet } from '../luat/github'
+import type { DuAn, NguoiTrongDuAn, Phien, Task } from '../kho/khoDuLieu'
+import { TEN_TRANG_THAI_DU_AN, dinhDangNgayGio, kiemMoLaiDuAn, lyDoKhongSuaDuAn } from '../luat/duAn'
+import { lyDoKhongGanRepo } from '../luat/github'
+import { dinhDangNgay } from '../luat/ngay'
 import { lyDoKhongTaoTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { NHAN_QUA_HAN_DU_KIEN, laDuAnQuaHanDuKien, nhanTienDo, taskTreHan, tinhTienDo } from '../luat/tienDo'
 import { useKho } from './khoContext'
-import { ManChiTietTask } from './ManChiTietTask'
-import { ManTaoTask } from './ManTaoTask'
+import { NganTruotSuaDuAn } from './NganTruotDuAn'
+import { NganTruotTaoTask } from './NganTruotTaoTask'
+import { NganTruotTask, type TaskCanMo } from './NganTruotTask'
+import { NhanMucUuTien } from './NhanMucUuTien'
 import { PhanNguoiTrongDuAn } from './PhanNguoiTrongDuAn'
 import { PhanRepoGitHub } from './PhanRepoGitHub'
 import { PhanTaskCuaDuAn } from './PhanTaskCuaDuAn'
-import { trangThaiO } from './trangThaiO'
 
 interface Props {
   phien: Phien
   vai: VaiHeThong
   duAnId: string
-  /** Thông báo thành công mang sang từ màn trước (vd. vừa tạo xong). */
-  thongBaoBanDau: string | null
   dongHo: () => Date
   onQuayLai: () => void
   onHetPhien: () => void
 }
 
-type Viec = 'luu' | 'luuTru' | 'moLai'
+type Viec = 'luuTru' | 'moLai'
+
+/** Các tab của trang chi tiết Dự án, theo thứ tự hiện; tab Task mở sẵn. */
+const CAC_TAB = ['task', 'nguoi', 'thongTin', 'github'] as const
+type TabDuAn = (typeof CAC_TAB)[number]
+
+const TEN_TAB: Record<TabDuAn, string> = {
+  task: 'Task',
+  nguoi: 'Người trong dự án',
+  thongTin: 'Thông tin',
+  github: 'GitHub',
+}
+
+function laTabDuAn(giaTri: string): giaTri is TabDuAn {
+  return (CAC_TAB as readonly string[]).includes(giaTri)
+}
 
 type ThongBao = { loai: 'thanhCong'; noiDung: string } | { loai: 'loi'; tieuDe: string; loi: LoiKho }
 
-/** Màn con về Task mở từ trang Dự án: biểu mẫu tạo, hoặc chi tiết một Task. */
-type ManTask = { loai: 'tao' } | { loai: 'chiTiet'; taskId: string; thongBao: string | null }
+/** Thông báo sau khi lưu biểu mẫu sửa Dự án trong Ngăn trượt. */
+const DA_LUU_DU_AN = 'Đã lưu thay đổi.'
 
 const TIEU_DE_LOI: Record<Viec, string> = {
-  luu: 'Chưa lưu được thay đổi.',
   luuTru: 'Không Lưu trữ được Dự án.',
   moLai: 'Không mở lại được Dự án.',
 }
 
 const DA_XONG: Record<Viec, string> = {
-  luu: 'Đã lưu thay đổi.',
   luuTru: 'Đã Lưu trữ Dự án. Dự án giờ chỉ xem được.',
   moLai: 'Đã mở lại Dự án. Bạn có thể sửa tiếp.',
 }
@@ -66,8 +72,13 @@ const LY_DO_CHUA_RO_QUYEN = {
   loi: 'Chưa kiểm được quyền của bạn vì không tải được người trong dự án.',
 } as const
 
-/** Chi tiết một Dự án: dấu vết, sửa tên và mô tả, Lưu trữ và mở lại, người trong dự án, Task. */
-export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQuayLai, onHetPhien }: Props) {
+/**
+ * Chi tiết một Dự án: dải tóm tắt cố định (tên, trạng thái, Tiến độ, số Task Trễ hạn) và bốn tab:
+ * Task (Kanban, mở sẵn), Người trong dự án, Thông tin (mô tả, dấu vết, Lưu trữ và mở lại), GitHub
+ * (repo đã gắn). Đổi tab vẫn ở cùng Dự án; chỉ tab đang chọn được vẽ. Xem Task, tạo Task và sửa Dự
+ * án đều mở trong Ngăn trượt đè lên trang, nên đóng ngăn là về đúng tab và bộ lọc Kanban đang đặt.
+ */
+export function ManChiTietDuAn({ phien, vai, duAnId, dongHo, onQuayLai, onHetPhien }: Props) {
   const kho = useKho()
   const [lanTai, setLanTai] = useState(0)
   const [daTai, setDaTai] = useState<{ lan: number; kq: KetQua<DuAn> } | null>(null)
@@ -75,15 +86,19 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
   const [lanTaiNguoi, setLanTaiNguoi] = useState(0)
   const [daTaiNguoi, setDaTaiNguoi] = useState<{ lan: number; kq: KetQua<NguoiTrongDuAn[]> } | null>(null)
   const taiNguoi = daTaiNguoi && daTaiNguoi.lan === lanTaiNguoi ? daTaiNguoi.kq : null
-  const [ten, setTen] = useState('')
-  const [moTa, setMoTa] = useState('')
   const [dangLam, setDangLam] = useState<Viec | null>(null)
-  const [thongBao, setThongBao] = useState<ThongBao | null>(
-    thongBaoBanDau ? { loai: 'thanhCong', noiDung: thongBaoBanDau } : null,
-  )
-  const [manTask, setManTask] = useState<ManTask | null>(null)
-  // Thêm hay gỡ người đổi dấu hiệu "đã rời dự án" trên Task: đọc lại bảng Task.
+  const [thongBao, setThongBao] = useState<ThongBao | null>(null)
+  const [dangTaoTask, setDangTaoTask] = useState(false)
+  const [dangSuaDuAn, setDangSuaDuAn] = useState(false)
+  const [taskDangMo, setTaskDangMo] = useState<TaskCanMo | null>(null)
+  const [tab, setTab] = useState<TabDuAn>('task')
+  const idTab = useId()
+  // Task của Dự án đọc ở đây (không ở tab Task) vì dải tóm tắt cần Tiến độ và số Task Trễ hạn.
+  // Thêm hay gỡ người đổi dấu hiệu "đã rời dự án" trên Task nên đọc lại bảng Task. Task tạo hay đổi
+  // trong Ngăn trượt thì đọc lại ngầm (xem docLaiTaskNgam).
   const [lanTaiTask, setLanTaiTask] = useState(0)
+  const [daTaiTask, setDaTaiTask] = useState<{ lan: number; kq: KetQua<Task[]> } | null>(null)
+  const taiTask = daTaiTask && daTaiTask.lan === lanTaiTask ? daTaiTask.kq : null
 
   useEffect(() => {
     let huy = false
@@ -92,10 +107,6 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') {
         onHetPhien()
         return
-      }
-      if (kq.ok) {
-        setTen(kq.giaTri.ten)
-        setMoTa(kq.giaTri.moTa)
       }
       setDaTai({ lan: lanTai, kq })
     })
@@ -119,14 +130,88 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
     }
   }, [kho, phien, duAnId, lanTaiNguoi, onHetPhien])
 
+  useEffect(() => {
+    let huy = false
+    kho.danhSachTask(phien, duAnId).then((kq) => {
+      if (huy) return
+      if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') {
+        onHetPhien()
+        return
+      }
+      setDaTaiTask({ lan: lanTaiTask, kq })
+    })
+    return () => {
+      huy = true
+    }
+  }, [kho, phien, duAnId, lanTaiTask, onHetPhien])
+
   function taiLaiTatCa() {
     setLanTai((n) => n + 1)
     setLanTaiNguoi((n) => n + 1)
+    setLanTaiTask((n) => n + 1)
+  }
+
+  /** Thay một Task trong bảng đã tải bằng bản mới (vừa đổi trạng thái hoặc vừa đọc lại trên Kanban). */
+  function thayTask(moi: Task) {
+    setDaTaiTask((cu) =>
+      cu && cu.kq.ok
+        ? { lan: cu.lan, kq: { ok: true, giaTri: cu.kq.giaTri.map((task) => (task.id === moi.id ? moi : task)) } }
+        : cu,
+    )
+  }
+
+  /**
+   * Task vừa tạo hay vừa đổi trong Ngăn trượt: đọc lại bảng Task mà không qua trạng thái đang tải, để
+   * Kanban (và bộ lọc đang đặt, nút mở ngăn) ở nguyên phía sau ngăn, chỉ thẻ và dải tóm tắt cập nhật.
+   * Đọc lỗi thì giữ bảng cũ (và thay riêng Task vừa đổi nếu có).
+   */
+  async function docLaiTaskNgam(moi?: Task) {
+    if (moi) thayTask(moi)
+    const kq = await kho.danhSachTask(phien, duAnId)
+    if (!kq.ok) {
+      if (kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
+      return
+    }
+    setDaTaiTask((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq } : cu))
+  }
+
+  /** Mở một Task của Dự án này trong Ngăn trượt (từ Kanban, danh sách Task Trễ hạn hay Task đang giữ). */
+  function moTask(taskId: string) {
+    const daBiet = taiTask?.ok ? taiTask.giaTri.find((task) => task.id === taskId) : undefined
+    setTaskDangMo({ id: taskId, duAnId, tieuDe: daBiet?.tieuDe ?? 'Task' })
   }
 
   function doiDanhSachNguoi(capNhat: (cu: NguoiTrongDuAn[]) => NguoiTrongDuAn[]) {
     setLanTaiTask((n) => n + 1)
     setDaTaiNguoi((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq: { ok: true, giaTri: capNhat(cu.kq.giaTri) } } : cu))
+    // Gỡ Người phụ trách làm ô đó về trống ở Kho: đọc lại Dự án ngầm để dải tóm tắt khớp.
+    void docLaiDuAnNgam()
+  }
+
+  /** Thay một người trong danh sách đã tải (vừa sửa Vai trò trong Dự án): không đụng tới Task hay Dự án. */
+  function thayNguoi(moi: NguoiTrongDuAn) {
+    setDaTaiNguoi((cu) =>
+      cu && cu.kq.ok
+        ? { lan: cu.lan, kq: { ok: true, giaTri: cu.kq.giaTri.map((nguoi) => (nguoi.id === moi.id ? moi : nguoi)) } }
+        : cu,
+    )
+  }
+
+  /**
+   * Đọc lại người trong dự án mà không qua trạng thái đang tải (khi mở tab Người trong dự án), để số Task
+   * đang giữ khớp với Task vừa tạo hay vừa đổi ở tab khác. Đọc lỗi, hay danh sách đang lỗi, thì giữ nguyên.
+   */
+  async function docLaiNguoiNgam() {
+    const kq = await kho.danhSachNguoiTrongDuAn(phien, duAnId)
+    if (kq.ok) setDaTaiNguoi((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq } : cu))
+    else if (kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
+  }
+
+  /** Đọc lại Dự án mà không qua trạng thái đang tải; đọc lỗi thì giữ bản đang hiện. */
+  async function docLaiDuAnNgam() {
+    const kq = await kho.layDuAn(phien, duAnId)
+    if (kq.ok) setDaTai((cu) => (cu && cu.kq.ok ? { lan: cu.lan, kq } : cu))
+    else if (kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
   }
 
   /** Dự án hay quyền đã đổi ở nơi khác: đọc lại Dự án và người trong dự án. */
@@ -137,8 +222,6 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
   }
 
   function hienDuAn(duAn: DuAn) {
-    setTen(duAn.ten)
-    setMoTa(duAn.moTa)
     setDaTai({ lan: lanTai, kq: { ok: true, giaTri: duAn } })
   }
 
@@ -148,11 +231,7 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
     setThongBao(null)
     const bayGio = dongHo()
     const kq =
-      viec === 'luu'
-        ? await kho.suaDuAn(phien, duAnId, { ten, moTa }, bayGio)
-        : viec === 'luuTru'
-          ? await kho.luuTruDuAn(phien, duAnId, bayGio)
-          : await kho.moLaiDuAn(phien, duAnId, bayGio)
+      viec === 'luuTru' ? await kho.luuTruDuAn(phien, duAnId, bayGio) : await kho.moLaiDuAn(phien, duAnId, bayGio)
     setDangLam(null)
     if (kq.ok) {
       hienDuAn(kq.giaTri)
@@ -233,55 +312,17 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
       ? LY_DO_CHUA_RO_QUYEN.dangTai
       : LY_DO_CHUA_RO_QUYEN.loi
 
-  if (manTask?.loai === 'tao') {
-    return (
-      <ManTaoTask
-        phien={phien}
-        vai={vai}
-        duAn={duAn}
-        dongHo={dongHo}
-        onDaTao={(task) => setManTask({ loai: 'chiTiet', taskId: task.id, thongBao: `Đã tạo Task ${task.tieuDe}.` })}
-        onQuayLai={() => setManTask(null)}
-        onHetPhien={onHetPhien}
-      />
-    )
-  }
-
-  if (manTask?.loai === 'chiTiet') {
-    return (
-      <ManChiTietTask
-        key={manTask.taskId}
-        phien={phien}
-        vai={vai}
-        taskId={manTask.taskId}
-        trangThaiDuAn={duAn.trangThai}
-        dongHo={dongHo}
-        tenDuAn={duAn.ten}
-        thongBaoBanDau={manTask.thongBao}
-        // Ai mở được Task thì thấy Dự án nên ở trong Dự án (hoặc là PM): chỉ còn trạng thái Lưu trữ.
-        lyDoKhongGhiLienKet={lyDoKhongGhiLienKet({ ...tinhHuong, laNguoiTrongDuAn: true })}
-        onQuayLai={() => setManTask(null)}
-        onHetPhien={onHetPhien}
-      />
-    )
-  }
-
-  return (
+  const thongTin = (
     <VStack gap={4}>
-      {nutVe}
-      <HStack gap={2} vAlign="center" wrap="wrap">
-        <Heading level={2}>{duAn.ten}</Heading>
-        <Token
-          label={TEN_TRANG_THAI_DU_AN[duAn.trangThai]}
-          color={duAn.trangThai === 'LUU_TRU' ? 'gray' : 'green'}
-        />
-      </HStack>
+      <VStack gap={1} role="group" aria-label="Khách hàng của Dự án">
+        <Heading level={3}>Khách hàng</Heading>
+        <Text>{duAn.khachHang === '' ? 'Chưa ghi Khách hàng.' : duAn.khachHang}</Text>
+      </VStack>
 
-      {thongBao?.loai === 'thanhCong' && <Banner status="success" title={thongBao.noiDung} role="status" />}
-      {thongBao?.loai === 'loi' && (
-        <Banner status="error" title={thongBao.tieuDe} description={thongBao.loi.thongBao} role="alert" />
-      )}
-      {lyDoKhongSua && <Banner status="info" title={lyDoKhongSua} />}
+      <VStack gap={1} role="group" aria-label="Mô tả Dự án">
+        <Heading level={3}>Mô tả</Heading>
+        <Text>{duAn.moTa === '' ? 'Dự án chưa có mô tả.' : duAn.moTa}</Text>
+      </VStack>
 
       <VStack gap={1} role="group" aria-label="Dấu vết">
         <Heading level={3}>Dấu vết</Heading>
@@ -296,33 +337,17 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         <Text>Ngày giờ theo giờ Việt Nam.</Text>
       </VStack>
 
-      <FormLayout>
-        <TextInput
-          label="Tên Dự án"
-          description={`Bắt buộc, tối đa ${DO_DAI_TEN_DU_AN_TOI_DA} ký tự.`}
-          autoComplete="off"
-          value={ten}
-          onChange={setTen}
-          onEnter={lyDoKhongSua ? undefined : () => lam('luu')}
-          isDisabled={lyDoKhongSua !== null}
-          disabledMessage={lyDoKhongSua ?? undefined}
-          status={thongBao?.loai === 'loi' ? trangThaiO(thongBao.loi, 'ten') : undefined}
-        />
-        <TextArea
-          label="Mô tả"
-          description="Tuỳ chọn. Để trống để xoá mô tả."
-          value={moTa}
-          onChange={setMoTa}
-          isDisabled={lyDoKhongSua !== null}
-          disabledMessage={lyDoKhongSua ?? undefined}
-          status={thongBao?.loai === 'loi' ? trangThaiO(thongBao.loi, 'moTa') : undefined}
-        />
-      </FormLayout>
-
       <HStack gap={2} wrap="wrap">
         {lyDoKhongSua === null && (
           <>
-            <Button label="Lưu thay đổi" variant="primary" isLoading={dangLam === 'luu'} onClick={() => lam('luu')} />
+            <Button
+              label="Sửa Dự án"
+              variant="primary"
+              onClick={() => {
+                setThongBao(null)
+                setDangSuaDuAn(true)
+              }}
+            />
             <Button label="Lưu trữ Dự án" variant="secondary" isLoading={dangLam === 'luuTru'} onClick={() => lam('luuTru')} />
           </>
         )}
@@ -330,27 +355,12 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
           <Button label="Mở lại Dự án" variant="primary" isLoading={dangLam === 'moLai'} onClick={() => lam('moLai')} />
         )}
       </HStack>
+    </VStack>
+  )
 
-      <PhanNguoiTrongDuAn
-        phien={phien}
-        duAnId={duAnId}
-        tai={taiNguoi}
-        lyDoKhongGhi={lyDoKhongSua}
-        onThuLai={() => setLanTaiNguoi((n) => n + 1)}
-        onDoiDanhSach={doiDanhSachNguoi}
-        onCanDocLai={docLai}
-        onMoTask={(taskId) => setManTask({ loai: 'chiTiet', taskId, thongBao: null })}
-        onHetPhien={onHetPhien}
-      />
-
-      <PhanRepoGitHub
-        phien={phien}
-        duAnId={duAnId}
-        lyDoKhongGhi={lyDoKhongGanRepoMoi}
-        onCanDocLai={docLai}
-        onHetPhien={onHetPhien}
-      />
-
+  let noiDungTab: ReactNode
+  if (tab === 'task') {
+    noiDungTab = (
       <PhanTaskCuaDuAn
         vai={vai}
         trangThaiDuAn={duAn.trangThai}
@@ -364,12 +374,198 @@ export function ManChiTietDuAn({ phien, vai, duAnId, thongBaoBanDau, dongHo, onQ
         dongHo={dongHo}
         key={lanTaiTask}
         phien={phien}
-        duAnId={duAnId}
+        tai={taiTask}
         lyDoKhongTao={lyDoKhongTaoTaskMoi}
-        onTao={() => setManTask({ loai: 'tao' })}
-        onMo={(taskId) => setManTask({ loai: 'chiTiet', taskId, thongBao: null })}
+        onThuLai={() => setLanTaiTask((n) => n + 1)}
+        onDaDoi={thayTask}
+        onTao={() => {
+          setThongBao(null)
+          setDangTaoTask(true)
+        }}
+        onMo={(taskId) => moTask(taskId)}
         onHetPhien={onHetPhien}
       />
+    )
+  } else if (tab === 'nguoi') {
+    noiDungTab = (
+      <PhanNguoiTrongDuAn
+        phien={phien}
+        duAnId={duAnId}
+        tai={taiNguoi}
+        lyDoKhongGhi={lyDoKhongSua}
+        onThuLai={() => setLanTaiNguoi((n) => n + 1)}
+        onDoiDanhSach={doiDanhSachNguoi}
+        onThayNguoi={thayNguoi}
+        onCanDocLai={docLai}
+        onMoTask={(taskId) => moTask(taskId)}
+        onHetPhien={onHetPhien}
+      />
+    )
+  } else if (tab === 'thongTin') {
+    noiDungTab = thongTin
+  } else {
+    noiDungTab = (
+      <PhanRepoGitHub
+        phien={phien}
+        duAnId={duAnId}
+        lyDoKhongGhi={lyDoKhongGanRepoMoi}
+        onCanDocLai={docLai}
+        onHetPhien={onHetPhien}
+      />
+    )
+  }
+
+  // Một vùng nội dung dùng chung cho cả bốn tab: mọi tab trỏ vào nó, nó mang tên tab đang chọn.
+  const idVung = `${idTab}-vung`
+  const idCuaTab = (t: TabDuAn) => `${idTab}-tab-${t}`
+
+  return (
+    <VStack gap={4}>
+      {nutVe}
+      <DaiTomTat duAn={duAn} taiTask={taiTask} bayGio={dongHo()} />
+
+      {thongBao?.loai === 'thanhCong' && <Banner status="success" title={thongBao.noiDung} role="status" />}
+      {thongBao?.loai === 'loi' && (
+        <Banner status="error" title={thongBao.tieuDe} description={thongBao.loi.thongBao} role="alert" />
+      )}
+      {lyDoKhongSua && <Banner status="info" title={lyDoKhongSua} />}
+
+      <TabList
+        role="tablist"
+        aria-label="Các phần của Dự án"
+        hasDivider
+        value={tab}
+        onChange={(giaTri) => {
+          if (!laTabDuAn(giaTri)) return
+          setTab(giaTri)
+          if (giaTri === 'nguoi' && giaTri !== tab) void docLaiNguoiNgam()
+        }}
+      >
+        {CAC_TAB.map((t) => (
+          <Tab key={t} id={idCuaTab(t)} value={t} label={TEN_TAB[t]} panelId={idVung} />
+        ))}
+      </TabList>
+      <VStack gap={4} id={idVung} role="tabpanel" aria-labelledby={idCuaTab(tab)}>
+        {noiDungTab}
+      </VStack>
+
+      <NganTruotTask
+        phien={phien}
+        vai={vai}
+        dongHo={dongHo}
+        task={taskDangMo}
+        trangThaiDuAn={duAn.trangThai}
+        onDong={() => setTaskDangMo(null)}
+        onDaDoi={docLaiTaskNgam}
+        onHetPhien={onHetPhien}
+      />
+      <NganTruotTaoTask
+        isOpen={dangTaoTask}
+        phien={phien}
+        vai={vai}
+        duAn={duAn}
+        dongHo={dongHo}
+        onDong={() => setDangTaoTask(false)}
+        onDaTao={(task) => {
+          // Ngăn đóng, Kanban phía sau đọc lại ngầm nên Task mới hiện ở cột Mới.
+          setDangTaoTask(false)
+          setThongBao({ loai: 'thanhCong', noiDung: `Đã tạo Task ${task.tieuDe}.` })
+          void docLaiTaskNgam()
+        }}
+        onHetPhien={onHetPhien}
+      />
+      <NganTruotSuaDuAn
+        isOpen={dangSuaDuAn}
+        phien={phien}
+        duAn={duAn}
+        nguoiTrongDuAn={taiNguoi}
+        lyDoKhongSua={lyDoKhongSua}
+        dongHo={dongHo}
+        onDong={() => setDangSuaDuAn(false)}
+        onDaLuu={(moi) => {
+          // Ngăn đóng; dải tóm tắt và tab Thông tin hiện ngay tên, mô tả và dấu vết mới.
+          setDangSuaDuAn(false)
+          hienDuAn(moi)
+          setThongBao({ loai: 'thanhCong', noiDung: DA_LUU_DU_AN })
+        }}
+        onCanDocLai={() => void docLai()}
+        onHetPhien={onHetPhien}
+      />
+    </VStack>
+  )
+}
+
+/**
+ * Dải tóm tắt ở đầu trang chi tiết Dự án: Mã cạnh tên, trạng thái, nhãn Quá hạn dự kiến (nếu có),
+ * Khách hàng, Mức ưu tiên (chữ kèm màu), Người phụ trách, Ngày bắt đầu, Ngày kết thúc dự kiến (ngày/tháng/năm), Tiến độ và số Task Trễ hạn (cùng
+ * luật với Tổng quan). Task chưa tải xong hay tải lỗi thì nói rõ thay vì hiện số sai, và chưa kết luận
+ * Quá hạn dự kiến vì chưa biết Tiến độ.
+ */
+function DaiTomTat({ duAn, taiTask, bayGio }: { duAn: DuAn; taiTask: KetQua<Task[]> | null; bayGio: Date }) {
+  const tienDoDaTinh = taiTask?.ok ? tinhTienDo(taiTask.giaTri) : null
+  const tienDo = taiTask === null ? 'Đang tính…' : tienDoDaTinh ? nhanTienDo(tienDoDaTinh) : 'Chưa tính được'
+  const quaHanDuKien = tienDoDaTinh !== null && laDuAnQuaHanDuKien(duAn, tienDoDaTinh, bayGio)
+  const soTreHan =
+    taiTask === null ? 'Đang tính…' : taiTask.ok ? String(taskTreHan(taiTask.giaTri, bayGio).length) : 'Chưa tính được'
+  return (
+    <VStack gap={2} role="group" aria-label="Tóm tắt Dự án">
+      <HStack gap={2} vAlign="center" wrap="wrap">
+        <Text weight="semibold" color="secondary">
+          {duAn.ma}
+        </Text>
+        <Heading level={2}>{duAn.ten}</Heading>
+        <Token
+          label={TEN_TRANG_THAI_DU_AN[duAn.trangThai]}
+          color={duAn.trangThai === 'LUU_TRU' ? 'gray' : 'green'}
+        />
+        {quaHanDuKien && (
+          <Token
+            label={NHAN_QUA_HAN_DU_KIEN}
+            color="red"
+            description="Đã qua Ngày kết thúc dự kiến mà Tiến độ chưa đủ 100%."
+          />
+        )}
+      </HStack>
+      <HStack gap={6} wrap="wrap">
+        <VStack gap={1} role="group" aria-label="Khách hàng">
+          <Text type="supporting">Khách hàng</Text>
+          <Text weight="semibold">{duAn.khachHang === '' ? 'Chưa ghi' : duAn.khachHang}</Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Mức ưu tiên">
+          <Text type="supporting">Mức ưu tiên</Text>
+          <HStack>
+            <NhanMucUuTien mucUuTien={duAn.mucUuTien} />
+          </HStack>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Người phụ trách">
+          <Text type="supporting">Người phụ trách</Text>
+          <Text weight="semibold">{duAn.nguoiPhuTrach === null ? 'Chưa có' : duAn.nguoiPhuTrach.tenHienThi}</Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Ngày bắt đầu">
+          <Text type="supporting">Ngày bắt đầu</Text>
+          <Text weight="semibold" hasTabularNumbers>
+            {duAn.ngayBatDau === null ? 'Chưa ghi' : dinhDangNgay(duAn.ngayBatDau)}
+          </Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Ngày kết thúc dự kiến">
+          <Text type="supporting">Ngày kết thúc dự kiến</Text>
+          <Text weight="semibold" hasTabularNumbers>
+            {duAn.ngayKetThucDuKien === null ? 'Chưa ghi' : dinhDangNgay(duAn.ngayKetThucDuKien)}
+          </Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Tiến độ của Dự án">
+          <Text type="supporting">Tiến độ</Text>
+          <Text weight="semibold" hasTabularNumbers>
+            {tienDo}
+          </Text>
+        </VStack>
+        <VStack gap={1} role="group" aria-label="Số Task Trễ hạn">
+          <Text type="supporting">Task Trễ hạn</Text>
+          <Text weight="semibold" hasTabularNumbers>
+            {soTreHan}
+          </Text>
+        </VStack>
+      </HStack>
     </VStack>
   )
 }

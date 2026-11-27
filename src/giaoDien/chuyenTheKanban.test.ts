@@ -16,6 +16,7 @@ import { danhGiaTha } from '../luat/keoThaKanban'
 import type { TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { guiDoiTrangThai, tinhHuongCua, type QuyenChuyenKanban } from './chuyenTheKanban'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC_TAO = new Date('2026-06-01T09:00:00+07:00')
@@ -47,7 +48,7 @@ async function dungBoiCanh(tu: TrangThaiTask, luuTru: boolean): Promise<BoiCanh>
     if (vai !== 'THANH_VIEN') giaTri(await kho.doiVai(pm, hoSo.id, { vai }))
     return { phien: giaTri(await kho.dangNhap({ email, matKhau: MAT_KHAU })), vai, email }
   }
-  const duAn = giaTri(await kho.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC_TAO))
+  const duAn = giaTri(await kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC_TAO))
   const an = await taoNguoi('an', 'THANH_VIEN')
   const binh = await taoNguoi('binh', 'THANH_VIEN')
   const chi = await taoNguoi('chi', 'SUPPORT')
@@ -92,7 +93,14 @@ async function chupLai(bc: BoiCanh) {
     soLanTraLai: task.soLanTraLai,
     suaBoi: task.dauVet.suaBoi?.tenHienThi ?? null,
     suaLuc: task.dauVet.suaLuc,
-    lichSu: lichSu.map((d) => ({ nguoi: d.nguoiDoi.tenHienThi, luc: d.luc, tu: d.tu, sang: d.sang, lyDo: d.lyDo })),
+    lichSu: lichSu.map((d) => ({
+      loai: d.loai,
+      nguoi: d.nguoiDoi.tenHienThi,
+      luc: d.luc,
+      tu: d.tu,
+      sang: d.sang,
+      lyDo: d.loai === 'TRANG_THAI' ? d.lyDo : null,
+    })),
   }
 }
 

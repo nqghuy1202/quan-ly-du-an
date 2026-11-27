@@ -27,6 +27,8 @@ import { cacBuocLamDuoc, type BuocChuyen } from '../luat/chuyenTrangThai'
 import { cacCotThaDuoc, moTaDangKeo, theKeoDuoc } from '../luat/keoThaKanban'
 import { TEN_TRANG_THAI_TASK, THONG_BAO_SUA_TASK, dinhDangNgay, type TrangThaiTask } from '../luat/task'
 import { HopNhapLyDo } from './HopNhapLyDo'
+import { LUA_CHON_MUC_UU_TIEN } from './mauMucUuTien'
+import { NhanMucUuTien } from './NhanMucUuTien'
 import { tinhHuongCua, type QuyenChuyenKanban } from './chuyenTheKanban'
 import { useChuyenTheKanban } from './useChuyenTheKanban'
 
@@ -83,7 +85,8 @@ interface TheTaskProps {
 }
 
 /**
- * Một thẻ Task: tiêu đề (mở chi tiết), Người thực hiện, Người kiểm tra, hạn. Kéo được sang cột khác
+ * Một thẻ Task: tiêu đề (mở chi tiết), Mức ưu tiên (chữ kèm màu), Người thực hiện, Người kiểm tra, hạn.
+ * Kéo được sang cột khác
  * (đường tắt) hoặc dùng menu "Chuyển Task sang cột khác" bằng bàn phím.
  */
 function TheTask({ task, onMo, keoDuoc, onBatDauKeo, cacBuoc, onChon, dangKeo }: TheTaskProps) {
@@ -110,6 +113,10 @@ function TheTask({ task, onMo, keoDuoc, onBatDauKeo, cacBuoc, onChon, dangKeo }:
             )}
           </HStack>
           <HStack gap={2} vAlign="center" wrap="wrap">
+            <Text type="supporting">Mức ưu tiên:</Text>
+            <NhanMucUuTien mucUuTien={task.mucUuTien} size="sm" />
+          </HStack>
+          <HStack gap={2} vAlign="center" wrap="wrap">
             <Text type="supporting">{`Người thực hiện: ${task.nguoiThucHien.tenHienThi}`}</Text>
             {task.nguoiThucHien.daRoiDuAn && <Token label={THONG_BAO_SUA_TASK.daRoiDuAn} color="orange" />}
           </HStack>
@@ -125,8 +132,9 @@ function TheTask({ task, onMo, keoDuoc, onBatDauKeo, cacBuoc, onChon, dangKeo }:
 }
 
 /**
- * Bảng Kanban của một Dự án: bảy cột trạng thái, mỗi Task đúng một cột; bộ lọc theo Người thực
- * hiện, Người kiểm tra và trạng thái (kết hợp được). Khi biết quyền của người gọi (`quyen`), kéo một
+ * Bảng Kanban của một Dự án: bảy cột trạng thái, mỗi Task đúng một cột, trong cột xếp theo Mức ưu tiên
+ * rồi hạn (`nhomTheoCot`); bộ lọc theo Người thực hiện, Người kiểm tra, trạng thái và Mức ưu tiên (kết
+ * hợp được). Khi biết quyền của người gọi (`quyen`), kéo một
  * thẻ sang cột khác hoặc dùng menu trên thẻ để đổi trạng thái, qua đúng lệnh Kho như nút ở chi tiết
  * Task; không có `quyen` thì chỉ để xem.
  */
@@ -236,6 +244,13 @@ export function BangKanbanTask({ tasks, onMo, quyen = null, onDaDoi, onHetPhien 
             luaChonTatCa('Tất cả trạng thái'),
             ...CAC_COT_KANBAN.map((trangThai) => ({ value: trangThai, label: TEN_TRANG_THAI_TASK[trangThai] })),
           ]}
+        />
+        <Selector
+          label="Mức ưu tiên"
+          width={220}
+          value={loc.mucUuTien ?? TAT_CA}
+          onChange={(giaTri) => doiLoc('mucUuTien', giaTri)}
+          options={[luaChonTatCa('Tất cả Mức ưu tiên'), ...LUA_CHON_MUC_UU_TIEN]}
         />
         {dangLocLuc && <Button label="Bỏ lọc" variant="secondary" onClick={() => setLoc(LOC_TASK_TRONG)} />}
       </HStack>

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { kiemTra, type VaiHeThong } from './taiKhoan'
 import type { TrangThaiDuAn } from './duAn'
 import { CAC_TRANG_THAI_TASK, TEN_TRANG_THAI_TASK, laTaskDaChot, type TrangThaiTask } from './task'
+import { TEN_MUC_UU_TIEN, type MucUuTien } from './mucUuTien'
 
 /** Người gọi đứng ở vai nào trên một Task (một người có thể giữ nhiều vai). */
 export type VaiTrenTask = 'NGUOI_THUC_HIEN' | 'NGUOI_KIEM_TRA' | 'SUPPORT' | 'PM'
@@ -241,10 +242,12 @@ export function soLanTraLaiSau(soLanHienTai: number, buoc: BuocChuyen): number {
 }
 
 /**
- * Một dòng lịch sử trạng thái: ai đổi, lúc nào, từ đâu sang đâu, lý do (null khi bước không cần và
- * người đổi không nhập). `Nguoi` là id (nơi lưu) hoặc người kèm tên hiển thị (khi đọc ra).
+ * Một dòng lịch sử trạng thái (`loai: 'TRANG_THAI'`): ai đổi, lúc nào, từ đâu sang đâu, lý do (null
+ * khi bước không cần và người đổi không nhập). `Nguoi` là id (nơi lưu) hoặc người kèm tên hiển thị
+ * (khi đọc ra).
  */
 export interface DongLichSu<Nguoi> {
+  loai: 'TRANG_THAI'
   nguoiDoi: Nguoi
   luc: Date
   tu: TrangThaiTask
@@ -252,14 +255,62 @@ export interface DongLichSu<Nguoi> {
   lyDo: string | null
 }
 
-/** Dòng lịch sử cho một lần đổi; giờ là bản sao của giờ truyền vào. */
+/**
+ * Một dòng lịch sử đổi Mức ưu tiên (`loai: 'MUC_UU_TIEN'`): ai đổi, lúc nào, từ mức nào sang mức nào.
+ * Nằm cùng dòng thời gian với dòng trạng thái; không có lý do.
+ */
+export interface DongDoiMucUuTien<Nguoi> {
+  loai: 'MUC_UU_TIEN'
+  nguoiDoi: Nguoi
+  luc: Date
+  tu: MucUuTien
+  sang: MucUuTien
+}
+
+/**
+ * Một dòng bất kỳ trong lịch sử Task: đổi trạng thái hoặc đổi Mức ưu tiên, phân biệt bằng `loai`.
+ * Chỗ nào chỉ cần dòng trạng thái thì lọc bằng `laDongTrangThai`.
+ */
+export type DongLichSuBatKy<Nguoi> = DongLichSu<Nguoi> | DongDoiMucUuTien<Nguoi>
+
+/** Dòng lịch sử có phải dòng đổi trạng thái (không phải đổi Mức ưu tiên) không. */
+export function laDongTrangThai<Nguoi>(dong: DongLichSuBatKy<Nguoi>): dong is DongLichSu<Nguoi> {
+  return dong.loai === 'TRANG_THAI'
+}
+
+/** Dòng lịch sử cho một lần đổi trạng thái; giờ là bản sao của giờ truyền vào. */
 export function dongLichSuMoi<Nguoi>(
   nguoiDoi: Nguoi,
   bayGio: Date,
   buoc: Pick<BuocChuyen, 'tu' | 'sang'>,
   lyDo: string | null,
 ): DongLichSu<Nguoi> {
-  return { nguoiDoi, luc: new Date(bayGio.getTime()), tu: buoc.tu, sang: buoc.sang, lyDo }
+  return { loai: 'TRANG_THAI', nguoiDoi, luc: new Date(bayGio.getTime()), tu: buoc.tu, sang: buoc.sang, lyDo }
+}
+
+/**
+ * Dòng lịch sử cho một lần đổi Mức ưu tiên từ `tu` sang `sang`; null khi hai mức như nhau (đổi sang
+ * đúng mức đang có thì không ghi lịch sử). Giờ là bản sao của giờ truyền vào.
+ */
+export function dongDoiMucUuTienMoi<Nguoi>(
+  nguoiDoi: Nguoi,
+  bayGio: Date,
+  tu: MucUuTien,
+  sang: MucUuTien,
+): DongDoiMucUuTien<Nguoi> | null {
+  if (tu === sang) return null
+  return { loai: 'MUC_UU_TIEN', nguoiDoi, luc: new Date(bayGio.getTime()), tu, sang }
+}
+
+/**
+ * Câu tóm tắt một dòng lịch sử để hiện: "Mới sang Đang làm" cho dòng trạng thái, "Mức ưu tiên:
+ * Trung bình sang Cao" cho dòng đổi Mức ưu tiên.
+ */
+export function tomTatDongLichSu(dong: DongLichSuBatKy<unknown>): string {
+  if (dong.loai === 'MUC_UU_TIEN') {
+    return `Mức ưu tiên: ${TEN_MUC_UU_TIEN[dong.tu]} sang ${TEN_MUC_UU_TIEN[dong.sang]}`
+  }
+  return `${TEN_TRANG_THAI_TASK[dong.tu]} sang ${TEN_TRANG_THAI_TASK[dong.sang]}`
 }
 
 /** Xếp lịch sử theo thứ tự thời gian tăng dần; cùng lúc thì giữ thứ tự ghi (sắp xếp ổn định). */

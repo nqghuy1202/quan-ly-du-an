@@ -7,6 +7,8 @@ import type { DuAn, KhoDuLieu, Phien, Task } from '../kho/khoDuLieu'
 import { taoKhoBoNho, type KhoBoNho } from '../kho/khoBoNho'
 import { CAC_TRANG_THAI_TASK, TEN_TRANG_THAI_TASK, type TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { choNganTruot, choTongQuanTaiXong, dongNganTruot } from '../test/khungUngDung'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -47,7 +49,7 @@ interface BoiCanh {
 /** Dự án "Cửa hàng" với ba Thành viên trong đó: An, Bình, Chi. */
 async function dungBoiCanh(goc: KhoBoNho = taoKhoBoNho({ pmBanDau: PM })): Promise<BoiCanh> {
   const pm = await phienCua(goc, PM.email)
-  const duAn = giaTri(await goc.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await goc.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const an = await taoNguoi(goc, 'an@vi-du.vn', 'An')
   const binh = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình')
   const chi = await taoNguoi(goc, 'chi@vi-du.vn', 'Chi')
@@ -182,15 +184,16 @@ describe('Bảng Kanban của Dự án', () => {
     expect(screen.queryByRole('group', { name: 'Bảng Kanban' })).not.toBeInTheDocument()
   })
 
-  it('bấm tiêu đề thẻ mở chi tiết Task, quay lại thì về bảng', async () => {
+  it('bấm tiêu đề thẻ mở chi tiết Task trong Ngăn trượt, đóng ngăn thì về bảng', async () => {
     const bc = await dungBoiCanh()
     await taoTask(bc.kho, bc.duAn.id, 'Viết tài liệu', bc.an, bc.binh, 'CHO_DUYET')
     const { user } = dungApp(bc.kho)
     await dangNhap(user, 'binh@vi-du.vn')
     await moDuAn(user, 'Cửa hàng')
     await user.click(cot(await bang(), 'CHO_DUYET').getByRole('button', { name: 'Viết tài liệu' }))
-    expect(await screen.findByRole('heading', { level: 2, name: 'Viết tài liệu' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Về Dự án Cửa hàng' }))
+    const ngan = await choNganTruot('Viết tài liệu')
+    expect(within(ngan).getByRole('heading', { level: 2, name: 'Viết tài liệu' })).toBeInTheDocument()
+    await dongNganTruot(user)
     expect(cot(await bang(), 'CHO_DUYET').getByRole('button', { name: 'Viết tài liệu' })).toBeInTheDocument()
   })
 
@@ -313,6 +316,8 @@ describe('Bảng Kanban của Dự án', () => {
       giaTri(await bc.kho.luuTruDuAn(await phienCua(bc.kho, PM.email), bc.duAn.id, LUC))
       const { user } = dungApp(bc.kho)
       await dangNhap(user, 'an@vi-du.vn')
+      // Tổng quan (trang đầu) không còn liệt kê Dự án Lưu trữ; mở từ mục Dự án của tôi.
+      await user.click(screen.getByRole('button', { name: 'Dự án của tôi' }))
       await moDuAn(user, 'Cửa hàng')
       const b = await bang()
       expect(cot(b, 'DANG_LAM').getByRole('button', { name: 'Việc cũ' })).toBeInTheDocument()
@@ -328,6 +333,8 @@ describe('Bảng Kanban của Dự án', () => {
       const kho: KhoDuLieu = { ...goc, danhSachTask: async () => thatBai('KHONG_TIM_THAY') }
       const { user, ungDung } = dungApp(goc, kho)
       await dangNhap(user, 'an@vi-du.vn')
+      // Trang đầu (Tổng quan) cũng đọc Task nên báo lỗi; mở Dự án từ mục Dự án của tôi.
+      await user.click(screen.getByRole('button', { name: 'Dự án của tôi' }))
       await moDuAn(user, bc.duAn.ten)
       expect(await ungDung.findByText('Không tải được Task của Dự án.')).toBeInTheDocument()
       expect(screen.queryByRole('group', { name: 'Bảng Kanban' })).not.toBeInTheDocument()
@@ -341,9 +348,12 @@ describe('Bảng Kanban của Dự án', () => {
       await taoTask(goc, bc.duAn.id, 'Việc', bc.an, bc.binh, 'MOI')
       let lanGoi = 0
       let tiepTuc: (() => void) | null = null
+      // Chỉ đếm sau khi trang đầu (Tổng quan, cũng đọc Task) đã tải xong.
+      let batDauDem = false
       const kho: KhoDuLieu = {
         ...goc,
         danhSachTask: async (phien, id) => {
+          if (!batDauDem) return goc.danhSachTask(phien, id)
           lanGoi += 1
           if (lanGoi === 1) await new Promise<void>((xong) => (tiepTuc = xong))
           return lanGoi === 1 ? thatBai('LOI_HE_THONG') : goc.danhSachTask(phien, id)
@@ -351,6 +361,8 @@ describe('Bảng Kanban của Dự án', () => {
       }
       const { user, ungDung } = dungApp(goc, kho)
       await dangNhap(user, 'an@vi-du.vn')
+      await choTongQuanTaiXong()
+      batDauDem = true
       await moDuAn(user, 'Cửa hàng')
       expect(await ungDung.findByText('Đang tải Task…')).toBeInTheDocument()
       ;(tiepTuc as (() => void) | null)?.()
@@ -370,7 +382,7 @@ describe('"Việc của tôi" và "Chờ tôi duyệt"', () => {
   async function dungHaiDuAn() {
     const bc = await dungBoiCanh()
     const pm = await phienCua(bc.kho, PM.email)
-    const khoHang = giaTri(await bc.kho.taoDuAn(pm, { ten: 'Kho hàng' }, LUC))
+    const khoHang = giaTri(await bc.kho.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Kho hàng' }, LUC))
     for (const email of ['an@vi-du.vn', 'binh@vi-du.vn']) {
       giaTri(await bc.kho.themNguoiVaoDuAn(pm, khoHang.id, { email }))
     }
@@ -451,15 +463,16 @@ describe('"Việc của tôi" và "Chờ tôi duyệt"', () => {
     expect(await screen.findByRole('heading', { name: 'Bạn không có việc nào đang làm.' })).toBeInTheDocument()
   })
 
-  it('mở Task từ danh sách rồi quay lại danh sách', async () => {
+  it('mở Task từ danh sách trong Ngăn trượt rồi đóng ngăn về danh sách', async () => {
     const { bc } = await dungHaiDuAn()
     await taoTask(bc.kho, bc.duAn.id, 'Việc để mở', bc.an, bc.binh, 'DANG_LAM')
     const { user } = dungApp(bc.kho)
     await dangNhap(user, 'an@vi-du.vn')
     await moMuc(user, 'Việc của tôi')
     await user.click(await screen.findByRole('button', { name: 'Việc để mở' }))
-    expect(await screen.findByRole('heading', { level: 2, name: 'Việc để mở' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Về Việc của tôi' }))
+    const ngan = await choNganTruot('Việc để mở')
+    expect(within(ngan).getByRole('heading', { level: 2, name: 'Việc để mở' })).toBeInTheDocument()
+    await dongNganTruot(user)
     expect(await screen.findByRole('button', { name: 'Việc để mở' })).toBeInTheDocument()
   })
 
@@ -504,9 +517,11 @@ describe('"Việc của tôi" và "Chờ tôi duyệt"', () => {
     await dangNhap(user, 'an@vi-du.vn')
     await moMuc(user, 'Việc của tôi')
     const nut = await screen.findByRole('button', { name: 'Việc bàn phím' })
-    for (let i = 0; i < 10 && document.activeElement !== nut; i++) await user.tab()
+    // Trước bảng còn ô tìm và các chip lọc (mỗi chip một lần Tab).
+    for (let i = 0; i < 30 && document.activeElement !== nut; i++) await user.tab()
     expect(document.activeElement).toBe(nut)
     await user.keyboard('{Enter}')
-    expect(await screen.findByRole('heading', { level: 2, name: 'Việc bàn phím' })).toBeInTheDocument()
+    const ngan = await choNganTruot('Việc bàn phím')
+    expect(within(ngan).getByRole('heading', { level: 2, name: 'Việc bàn phím' })).toBeInTheDocument()
   })
 })

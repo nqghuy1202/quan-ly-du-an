@@ -4,9 +4,11 @@ import {
   demTaskTheoTrangThai,
   duAnTreHan,
   homNayGioVietNam,
+  laDuAnQuaHanDuKien,
   laTaskTreHan,
   nhanTienDo,
   taskTreHan,
+  tinhSoLieuDuAn,
   tinhTienDo,
   tomTatTienDoDuAn,
   xepTaskTreHan,
@@ -141,5 +143,81 @@ describe('Trễ hạn', () => {
     // An: Task Mới (thực hiện) và Chờ duyệt (kiểm tra); Hoàn thành và Huỷ không tính.
     expect(tomTat.soTaskChuaChotCuaToi).toBe(2)
     expect(tomTat.soTaskTheoTrangThai.CHO_DUYET).toBe(1)
+  })
+})
+
+describe('Quá hạn dự kiến của Dự án', () => {
+  /** Hôm nay là 26/11/2026 theo giờ Việt Nam. */
+  const BAY_GIO = new Date('2026-11-26T10:00:00+07:00')
+  const duAn = (ngayKetThucDuKien: string | null, trangThai: 'HOAT_DONG' | 'LUU_TRU' = 'HOAT_DONG') => ({
+    trangThai,
+    ngayKetThucDuKien,
+  })
+  const tienDo50 = tinhTienDo(tt('HOAN_THANH', 'MOI'))
+  const tienDo100 = tinhTienDo(tt('HOAN_THANH', 'HOAN_THANH', 'HUY'))
+  const chuaCoTask = tinhTienDo([])
+
+  it.each([
+    { ca: 'kết thúc hôm qua, Tiến độ 50%: quá hạn', da: duAn('2026-11-25'), tienDo: tienDo50, mong: true },
+    { ca: 'kết thúc từ lâu, Tiến độ 50%: quá hạn', da: duAn('2025-01-01'), tienDo: tienDo50, mong: true },
+    { ca: 'kết thúc hôm nay: chưa', da: duAn('2026-11-26'), tienDo: tienDo50, mong: false },
+    { ca: 'kết thúc ngày mai: chưa', da: duAn('2026-11-27'), tienDo: tienDo50, mong: false },
+    { ca: 'Tiến độ 100% dù đã qua ngày: không', da: duAn('2026-11-25'), tienDo: tienDo100, mong: false },
+    { ca: 'Dự án Lưu trữ dù đã qua ngày: không', da: duAn('2026-11-25', 'LUU_TRU'), tienDo: tienDo50, mong: false },
+    { ca: 'không có Ngày kết thúc dự kiến: không', da: duAn(null), tienDo: tienDo50, mong: false },
+    { ca: '"chưa có task" mà đã qua ngày: có', da: duAn('2026-11-25'), tienDo: chuaCoTask, mong: true },
+    { ca: '"chưa có task", kết thúc hôm nay: chưa', da: duAn('2026-11-26'), tienDo: chuaCoTask, mong: false },
+  ])('$ca', ({ da, tienDo, mong }) => {
+    expect(laDuAnQuaHanDuKien(da, tienDo, BAY_GIO)).toBe(mong)
+  })
+
+  it('Tiến độ 99% (làm tròn xuống) vẫn là chưa đủ', () => {
+    const ds = [...lap('HOAN_THANH', 99), ...lap('DANG_LAM', 1)]
+    expect(laDuAnQuaHanDuKien(duAn('2026-11-25'), tinhTienDo(ds), BAY_GIO)).toBe(true)
+  })
+
+  it('mốc theo giờ Việt Nam: kết thúc 25/11, lúc 23:59 ngày 25/11 chưa quá hạn, lúc 00:00 ngày 26/11 đã quá hạn', () => {
+    const ketThuc2511 = duAn('2026-11-25')
+    expect(laDuAnQuaHanDuKien(ketThuc2511, tienDo50, new Date('2026-11-25T23:59:00+07:00'))).toBe(false)
+    expect(laDuAnQuaHanDuKien(ketThuc2511, tienDo50, new Date('2026-11-25T23:59:59.999+07:00'))).toBe(false)
+    expect(laDuAnQuaHanDuKien(ketThuc2511, tienDo50, new Date('2026-11-26T00:00:00+07:00'))).toBe(true)
+    // Cùng hai thời điểm viết theo UTC: 16:59 và 17:00 ngày 25/11.
+    expect(laDuAnQuaHanDuKien(ketThuc2511, tienDo50, new Date('2026-11-25T16:59:00Z'))).toBe(false)
+    expect(laDuAnQuaHanDuKien(ketThuc2511, tienDo50, new Date('2026-11-25T17:00:00Z'))).toBe(true)
+  })
+})
+
+describe('số liệu của một Dự án cho bảng Dự án', () => {
+  const HOM_NAY = new Date('2026-11-26T09:00:00+07:00')
+
+  it('gom Tiến độ, số Task Trễ hạn và cờ Quá hạn dự kiến theo ngày hôm nay truyền vào', () => {
+    const task = [
+      { trangThai: 'HOAN_THANH' as const, han: '2026-11-01' },
+      { trangThai: 'DANG_LAM' as const, han: '2026-11-25' },
+      { trangThai: 'CHO_DUYET' as const, han: '2026-11-20' },
+      { trangThai: 'MOI' as const, han: '2026-11-26' },
+      { trangThai: 'HUY' as const, han: '2026-11-01' },
+    ]
+    expect(tinhSoLieuDuAn({ trangThai: 'HOAT_DONG', ngayKetThucDuKien: '2026-11-25' }, task, HOM_NAY)).toEqual({
+      tienDo: { chuaCoTask: false, phanTram: 25 },
+      soTaskTreHan: 2,
+      quaHanDuKien: true,
+    })
+    // Cùng Task, sáu ngày trước: chưa Task nào qua hạn (hạn bằng hôm nay chưa trễ), Dự án chưa qua Ngày kết thúc dự kiến.
+    expect(
+      tinhSoLieuDuAn({ trangThai: 'HOAT_DONG', ngayKetThucDuKien: '2026-11-25' }, task, new Date('2026-11-20T09:00:00+07:00')),
+    ).toEqual({ tienDo: { chuaCoTask: false, phanTram: 25 }, soTaskTreHan: 0, quaHanDuKien: false })
+  })
+
+  it('Dự án đã Lưu trữ, không có Ngày kết thúc dự kiến hay Tiến độ 100% thì không Quá hạn dự kiến; chưa có task vẫn Quá hạn', () => {
+    const xong = [{ trangThai: 'HOAN_THANH' as const, han: null }]
+    expect(tinhSoLieuDuAn({ trangThai: 'LUU_TRU', ngayKetThucDuKien: '2026-01-01' }, [], HOM_NAY).quaHanDuKien).toBe(false)
+    expect(tinhSoLieuDuAn({ trangThai: 'HOAT_DONG', ngayKetThucDuKien: null }, [], HOM_NAY).quaHanDuKien).toBe(false)
+    expect(tinhSoLieuDuAn({ trangThai: 'HOAT_DONG', ngayKetThucDuKien: '2026-01-01' }, xong, HOM_NAY).quaHanDuKien).toBe(false)
+    expect(tinhSoLieuDuAn({ trangThai: 'HOAT_DONG', ngayKetThucDuKien: '2026-01-01' }, [], HOM_NAY)).toEqual({
+      tienDo: { chuaCoTask: true },
+      soTaskTreHan: 0,
+      quaHanDuKien: true,
+    })
   })
 })

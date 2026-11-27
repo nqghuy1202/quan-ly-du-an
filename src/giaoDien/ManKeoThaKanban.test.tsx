@@ -9,6 +9,7 @@ import { BANG_CA_CHUYEN_TRANG_THAI, type CaChuyenTrangThai, type LoaiNguoiGoi } 
 import { THONG_BAO_CHUYEN_TRANG_THAI, timBuoc } from '../luat/chuyenTrangThai'
 import { TEN_TRANG_THAI_TASK, type TrangThaiTask } from '../luat/task'
 import type { VaiHeThong } from '../luat/taiKhoan'
+import { maDuAnMoi } from '../test/maDuAn'
 
 const MAT_KHAU = 'matkhau-123'
 const LUC = new Date('2026-03-01T08:00:00+07:00')
@@ -48,7 +49,7 @@ interface BoiCanh {
 /** Dự án "Cửa hàng": An (làm), Bình (duyệt), Em (Thành viên khác), Chi (Support) trong Dự án. */
 async function dungBoiCanh(goc: KhoBoNho = taoKhoBoNho({ pmBanDau: PM })): Promise<BoiCanh> {
   const pm = await phienCua(goc, PM.email)
-  const duAn = giaTri(await goc.taoDuAn(pm, { ten: 'Cửa hàng' }, LUC))
+  const duAn = giaTri(await goc.taoDuAn(pm, { ma: maDuAnMoi(), ten: 'Cửa hàng' }, LUC))
   const an = await taoNguoi(goc, 'an@vi-du.vn', 'An')
   const binh = await taoNguoi(goc, 'binh@vi-du.vn', 'Bình')
   await taoNguoi(goc, 'em@vi-du.vn', 'Em')
@@ -79,10 +80,13 @@ async function dangNhap(user: User, email: string) {
   await screen.findByRole('group', { name: 'Tài khoản đang đăng nhập' })
 }
 
-/** Đăng nhập rồi mở Dự án Cửa hàng; chờ tới khi bảng đã biết quyền (menu hoặc kéo thả dùng được). */
+/**
+ * Đăng nhập rồi mở Dự án Cửa hàng; chờ tới khi bảng đã biết quyền (menu hoặc kéo thả dùng được).
+ * PM mở từ Tất cả Dự án, người khác từ Dự án của tôi (Tổng quan không liệt kê Dự án Lưu trữ).
+ */
 async function moBang(user: User, email: string, laPM = false) {
   await dangNhap(user, email)
-  if (laPM) await user.click(screen.getByRole('button', { name: 'Tất cả Dự án' }))
+  await user.click(screen.getByRole('button', { name: laPM ? 'Tất cả Dự án' : 'Dự án của tôi' }))
   await user.click(await screen.findByRole('button', { name: 'Cửa hàng' }))
   await screen.findByRole('heading', { level: 2, name: 'Cửa hàng' })
   await bang()
@@ -137,7 +141,13 @@ async function chup(kho: KhoBoNho, id: string) {
     trangThai: t.trangThai,
     soLanTraLai: t.soLanTraLai,
     suaBoi: t.dauVet.suaBoi?.tenHienThi ?? null,
-    lichSu: (await lichSu(kho, id)).map((d) => ({ nguoi: d.nguoiDoi.tenHienThi, tu: d.tu, sang: d.sang, lyDo: d.lyDo })),
+    lichSu: (await lichSu(kho, id)).map((d) => ({
+      loai: d.loai,
+      nguoi: d.nguoiDoi.tenHienThi,
+      tu: d.tu,
+      sang: d.sang,
+      lyDo: d.loai === 'TRANG_THAI' ? d.lyDo : null,
+    })),
   }
 }
 
@@ -537,7 +547,7 @@ describe('kéo thả Kanban: chưa biết quyền', () => {
   })
 })
 
-describe('kéo thả và nút ở chi tiết Task cho cùng kết quả (bảng ca dùng chung của ticket 11)', () => {
+describe('kéo thả và nút ở Ngăn trượt của Task cho cùng kết quả (bảng ca dùng chung của ticket 11)', () => {
   // Những loại người gọi đăng nhập và thấy bảng được; hai đường đi qua giao diện thật.
   const EMAIL: Partial<Record<LoaiNguoiGoi, string>> = {
     NGUOI_THUC_HIEN: 'an@vi-du.vn',
@@ -568,7 +578,7 @@ describe('kéo thả và nút ở chi tiết Task cho cùng kết quả (bảng 
       keo('Làm trang chủ', tieuDeCot(ca.sang))
     } else {
       await user.click(screen.getByRole('button', { name: 'Làm trang chủ' }))
-      await screen.findByRole('heading', { level: 2, name: 'Làm trang chủ' })
+      await screen.findByRole('dialog', { name: 'Làm trang chủ' })
       await waitFor(() =>
         expect(screen.queryByRole('progressbar', { name: 'Đang kiểm các bước làm được…' })).not.toBeInTheDocument(),
       )
@@ -576,7 +586,8 @@ describe('kéo thả và nút ở chi tiết Task cho cùng kết quả (bảng 
       if (nut) await user.click(nut)
     }
     if (ca.ketQua === 'DUOC' && buoc.canLyDo) {
-      const hop = within(await screen.findByRole('dialog'))
+      // Hộp nhập lý do; với đường "nút" nó mở đè lên Ngăn trượt của Task.
+      const hop = within(await screen.findByRole('dialog', { name: `${buoc.nhan}: nhập lý do` }))
       await user.type(hop.getByRole('textbox', { name: /^Lý do/ }), LY_DO)
       await user.click(hop.getByRole('button', { name: buoc.nhan }))
     }

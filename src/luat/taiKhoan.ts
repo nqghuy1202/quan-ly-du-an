@@ -1,6 +1,7 @@
 // Luật thuần về tài khoản và hồ sơ: không I/O, không đọc đồng hồ.
 // Kho dữ liệu và giao diện cùng dùng các hàm ở đây.
 import { z } from 'zod'
+import { chucDanhSchema, phongBanSchema, soDienThoaiSchema } from './thongTinNhanSu'
 
 /** Ba vai hệ thống, theo thứ tự hiện trên giao diện. */
 export const CAC_VAI = ['PM', 'SUPPORT', 'THANH_VIEN'] as const
@@ -72,10 +73,16 @@ export const dangNhapSchema = z.object({
   matKhau: chuoi(THONG_BAO.matKhauTrong),
 })
 
-/** Sửa hồ sơ: mỗi ô tuỳ chọn; GitHub username để trống nghĩa là xoá. */
+/**
+ * Sửa hồ sơ: mỗi ô tuỳ chọn (ô không gửi thì giữ nguyên). GitHub username và ba ô Thông tin nhân sự
+ * (Số điện thoại, Chức danh, Phòng ban) để trống nghĩa là xoá; Số điện thoại lưu dạng đã chuẩn hoá.
+ */
 export const suaHoSoSchema = z.object({
   tenHienThi: tenHienThi.optional(),
   githubUsername: githubUsername.optional(),
+  soDienThoai: soDienThoaiSchema.optional(),
+  chucDanh: chucDanhSchema.optional(),
+  phongBan: phongBanSchema.optional(),
 })
 
 /** Gửi lại thư xác nhận và yêu cầu đặt lại mật khẩu: chỉ cần email đúng định dạng. */

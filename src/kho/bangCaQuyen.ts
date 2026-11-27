@@ -42,6 +42,17 @@ export const MO_TA_HANH_DONG = {
   SUA_TASK: 'Sửa tiêu đề Task có sẵn, trạng thái Mới (suaTask).',
   DOI_NGUOI_TASK: 'Đổi chỗ Người thực hiện và Người kiểm tra của Task có sẵn, đều ở trong Dự án (doiNguoiTask).',
   XEM_TASK_NGUOI_DANG_GIU: 'Xem Task chưa chốt mà người cũ đang giữ (danhSachTaskNguoiDangGiu).',
+  // Ticket truong-moi 03: Người phụ trách.
+  DAT_NGUOI_PHU_TRACH: 'Đặt người cũ (đang ở trong Dự án) làm Người phụ trách (suaDuAn với nguoiPhuTrachId).',
+  // Ticket truong-moi 04: Mức ưu tiên của Task.
+  DOI_MUC_UU_TIEN_TASK: 'Đổi Mức ưu tiên của Task có sẵn (Trung bình) sang Cao (suaTask với mucUuTien).',
+  // Ticket truong-moi 05: quyền xem Thông tin nhân sự.
+  XEM_THONG_TIN_NHAN_SU:
+    'Thông tin nhân sự của người cũ (đã tự nhập trước khi Lưu trữ) qua mọi lệnh đọc người gọi có: danhSachNguoiDung, ' +
+    'danhSachNguoiTrongDuAn của mọi Dự án người gọi thấy. THAY: thấy đủ ba trường; KHONG_THAY: không lệnh nào đưa ra ' +
+    'ba trường (không thấy người cũ, hoặc thấy với ba trường trống và tên, email không đổi).',
+  // Ticket truong-moi 06: Vai trò trong Dự án.
+  SUA_VAI_TRO_TRONG_DU_AN: 'Sửa Vai trò trong Dự án của người cũ (đang trống) thành "Trưởng nhóm" (suaVaiTroTrongDuAn).',
 } as const
 
 export type HanhDong = keyof typeof MO_TA_HANH_DONG
@@ -55,6 +66,7 @@ const HANH_DONG_TASK: readonly HanhDong[] = [
   'SUA_TASK',
   'DOI_NGUOI_TASK',
   'XEM_TASK_NGUOI_DANG_GIU',
+  'DOI_MUC_UU_TIEN_TASK',
 ]
 
 /** Hành động về Task: cần dựng thêm người kiểm và một Task có sẵn. */
@@ -64,7 +76,8 @@ export function laHanhDongTask(hanhDong: HanhDong): boolean {
 
 /**
  * Kết quả mong đợi: `DUOC` (lệnh thành công), một mã lỗi của Kho, hoặc với hành động dạng danh
- * sách: `THAY` / `KHONG_THAY` (Dự án có hay không có trong danh sách trả về).
+ * sách: `THAY` / `KHONG_THAY` (Dự án có hay không có trong danh sách trả về; với
+ * `XEM_THONG_TIN_NHAN_SU`: ba trường Thông tin nhân sự có hay không hiện ra).
  */
 export type KetQuaMongDoi = 'DUOC' | 'THAY' | 'KHONG_THAY' | MaLoi
 
@@ -301,6 +314,70 @@ const DONG: readonly Dong[] = [
   ['SUPPORT',     false,       LT,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
   ['THANH_VIEN',  true,        LT,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
   ['THANH_VIEN',  false,       LT,    'XEM_TASK_NGUOI_DANG_GIU',  'KHONG_CO_QUYEN'],
+
+  // --- Ticket truong-moi 03: đặt Người phụ trách như quyền sửa Dự án (PM ở mọi Dự án, Support của Dự án);
+  // Support ngoài Dự án và Thành viên bị từ chối. Dự án Lưu trữ: DU_AN_DA_LUU_TRU sau khi kiểm quyền.
+  ['PM',          true,        HD,    'DAT_NGUOI_PHU_TRACH',      'DUOC'],
+  ['PM',          false,       HD,    'DAT_NGUOI_PHU_TRACH',      'DUOC'],
+  ['SUPPORT',     true,        HD,    'DAT_NGUOI_PHU_TRACH',      'DUOC'],
+  ['SUPPORT',     false,       HD,    'DAT_NGUOI_PHU_TRACH',      'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'DAT_NGUOI_PHU_TRACH',      'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'DAT_NGUOI_PHU_TRACH',      'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'DAT_NGUOI_PHU_TRACH',      'DU_AN_DA_LUU_TRU'],
+  ['PM',          false,       LT,    'DAT_NGUOI_PHU_TRACH',      'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     true,        LT,    'DAT_NGUOI_PHU_TRACH',      'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     false,       LT,    'DAT_NGUOI_PHU_TRACH',      'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'DAT_NGUOI_PHU_TRACH',      'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'DAT_NGUOI_PHU_TRACH',      'KHONG_CO_QUYEN'],
+
+  // --- Ticket truong-moi 04: đổi Mức ưu tiên của Task theo đúng quyền sửa Task (PM ở mọi Dự án, Support của
+  // Dự án); Thành viên (kể cả trong Dự án) và Support ngoài Dự án bị từ chối. Dự án Lưu trữ: DU_AN_DA_LUU_TRU
+  // sau khi kiểm quyền. Người thực hiện, Người kiểm tra và Task đã chốt: bộ test hopDongMucUuTienTask.ts.
+  ['PM',          true,        HD,    'DOI_MUC_UU_TIEN_TASK',     'DUOC'],
+  ['PM',          false,       HD,    'DOI_MUC_UU_TIEN_TASK',     'DUOC'],
+  ['SUPPORT',     true,        HD,    'DOI_MUC_UU_TIEN_TASK',     'DUOC'],
+  ['SUPPORT',     false,       HD,    'DOI_MUC_UU_TIEN_TASK',     'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'DOI_MUC_UU_TIEN_TASK',     'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'DOI_MUC_UU_TIEN_TASK',     'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'DOI_MUC_UU_TIEN_TASK',     'DU_AN_DA_LUU_TRU'],
+  ['PM',          false,       LT,    'DOI_MUC_UU_TIEN_TASK',     'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     true,        LT,    'DOI_MUC_UU_TIEN_TASK',     'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     false,       LT,    'DOI_MUC_UU_TIEN_TASK',     'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'DOI_MUC_UU_TIEN_TASK',     'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'DOI_MUC_UU_TIEN_TASK',     'KHONG_CO_QUYEN'],
+
+  // --- Ticket truong-moi 05: quyền xem Thông tin nhân sự (luat/thongTinNhanSu.ts: duocXemThongTinNhanSu). PM thấy
+  // ở mọi nơi; người cùng Dự án (kể cả Dự án đã Lưu trữ) thấy. Thành viên không cùng Dự án nào không thấy. Support
+  // thấy Thông tin nhân sự của mọi tài khoản Support đã xem được tên và email theo quyền hiện có; Support ngoài Dự án
+  // không xem được người cũ nên cũng không thấy ba trường. Chính chủ: bộ test hopDongThongTinNhanSu.ts.
+  ['PM',          true,        HD,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['PM',          false,       HD,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['SUPPORT',     true,        HD,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['SUPPORT',     false,       HD,    'XEM_THONG_TIN_NHAN_SU',    'KHONG_THAY'],
+  ['THANH_VIEN',  true,        HD,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['THANH_VIEN',  false,       HD,    'XEM_THONG_TIN_NHAN_SU',    'KHONG_THAY'],
+  ['PM',          true,        LT,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['PM',          false,       LT,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['SUPPORT',     true,        LT,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['SUPPORT',     false,       LT,    'XEM_THONG_TIN_NHAN_SU',    'KHONG_THAY'],
+  ['THANH_VIEN',  true,        LT,    'XEM_THONG_TIN_NHAN_SU',    'THAY'],
+  ['THANH_VIEN',  false,       LT,    'XEM_THONG_TIN_NHAN_SU',    'KHONG_THAY'],
+
+  // --- Ticket truong-moi 06: sửa Vai trò trong Dự án như quyền ghi Dự án (PM ở mọi Dự án, Support của Dự án);
+  // Thành viên (kể cả trong Dự án) và Support ngoài Dự án bị từ chối. Dự án Lưu trữ: DU_AN_DA_LUU_TRU sau khi
+  // kiểm quyền. Vai trò không kéo theo quyền: bộ test hopDongVaiTroTrongDuAn.ts.
+  ['PM',          true,        HD,    'SUA_VAI_TRO_TRONG_DU_AN',  'DUOC'],
+  ['PM',          false,       HD,    'SUA_VAI_TRO_TRONG_DU_AN',  'DUOC'],
+  ['SUPPORT',     true,        HD,    'SUA_VAI_TRO_TRONG_DU_AN',  'DUOC'],
+  ['SUPPORT',     false,       HD,    'SUA_VAI_TRO_TRONG_DU_AN',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        HD,    'SUA_VAI_TRO_TRONG_DU_AN',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       HD,    'SUA_VAI_TRO_TRONG_DU_AN',  'KHONG_CO_QUYEN'],
+  ['PM',          true,        LT,    'SUA_VAI_TRO_TRONG_DU_AN',  'DU_AN_DA_LUU_TRU'],
+  ['PM',          false,       LT,    'SUA_VAI_TRO_TRONG_DU_AN',  'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     true,        LT,    'SUA_VAI_TRO_TRONG_DU_AN',  'DU_AN_DA_LUU_TRU'],
+  ['SUPPORT',     false,       LT,    'SUA_VAI_TRO_TRONG_DU_AN',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  true,        LT,    'SUA_VAI_TRO_TRONG_DU_AN',  'KHONG_CO_QUYEN'],
+  ['THANH_VIEN',  false,       LT,    'SUA_VAI_TRO_TRONG_DU_AN',  'KHONG_CO_QUYEN'],
 ]
 
 /** Bảng ca dùng chung cho quyền: mỗi phần tử là một dòng. */

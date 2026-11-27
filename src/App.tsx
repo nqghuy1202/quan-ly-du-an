@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react'
+import { InternationalizationProvider } from '@astryxdesign/core/i18n'
+import viVN from '@astryxdesign/core/locales/vi-VN.generated.js'
 import { Theme } from '@astryxdesign/core/theme'
 import { themes, defaultThemeSlug } from './astryx-themes'
 import type { KhoDuLieu, Phien } from './kho/khoDuLieu'
@@ -37,6 +39,17 @@ interface Props {
 
 const gioCuaMay = () => new Date()
 
+/**
+ * Chữ có sẵn của khung ứng dụng Astryx (liên kết bỏ qua đến nội dung, nút mở trình đơn ở màn hẹp,
+ * tên vùng điều hướng...) lấy bản tiếng Việt của chính Astryx. Chỉ lấy nhóm chữ của khung: nạp cả bộ
+ * tiếng Việt thì nút X của hộp thoại cũng thành "Đóng", trùng tên với nút Đóng của các hộp hiện có.
+ */
+const CHU_KHUNG_TIENG_VIET = {
+  'vi-VN': Object.fromEntries(
+    Object.entries(viVN).filter(([khoa]) => /^@astryx\.(appShell|mobileNav|sideNav|sideNavCollapseButton|sideNavItem|topNav)\./.test(khoa)),
+  ),
+}
+
 /** Chưa cấu hình cổng nào: mọi link báo GitHub không khả dụng thay vì làm hỏng trang. */
 const CONG_CHUA_CAU_HINH: CongGitHub = taoCongKhongKhaDung()
 
@@ -56,15 +69,17 @@ export function App({
 
   return (
     <Theme theme={themes[defaultThemeSlug]} mode="light">
-      <KhoContext value={kho}>
-        <CongGitHubContext value={congGitHub}>
-          {phien ? (
-            <KhungUngDung key={phien.maPhien} phien={phien} onHetPhien={hetPhien} dongHo={dongHo} />
-          ) : (
-            <ManXacThuc onDaDangNhap={setPhien} moPhong={moPhong} dongHo={dongHo} />
-          )}
-        </CongGitHubContext>
-      </KhoContext>
+      <InternationalizationProvider locale="vi-VN" overrides={CHU_KHUNG_TIENG_VIET}>
+        <KhoContext value={kho}>
+          <CongGitHubContext value={congGitHub}>
+            {phien ? (
+              <KhungUngDung key={phien.maPhien} phien={phien} onHetPhien={hetPhien} dongHo={dongHo} />
+            ) : (
+              <ManXacThuc onDaDangNhap={setPhien} moPhong={moPhong} dongHo={dongHo} />
+            )}
+          </CongGitHubContext>
+        </KhoContext>
+      </InternationalizationProvider>
     </Theme>
   )
 }

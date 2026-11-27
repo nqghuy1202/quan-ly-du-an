@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { VaiHeThong } from './taiKhoan'
+import { THONG_BAO_MUC_UU_TIEN } from './mucUuTien'
 import {
   DO_DAI_TIEU_DE_TASK_TOI_DA,
   THONG_BAO_TASK,
@@ -11,7 +12,9 @@ import {
   kiemTraTask,
   laNgayHopLe,
   lyDoKhongTaoTask,
+  soTaskDangGiu,
   xepTask,
+  type TrangThaiTask,
 } from './task'
 
 describe('hạn của Task: một ngày, không có giờ', () => {
@@ -36,7 +39,7 @@ describe('kiểm dữ liệu tạo Task', () => {
     const kt = kiemTraTask.tao({ tieuDe: '  Việc  ', moTa: '  ', han: ' ', nguoiThucHienId: ' a ', nguoiKiemTraId: '' })
     expect(kt).toEqual({
       ok: true,
-      giaTri: { tieuDe: 'Việc', moTa: '', han: null, nguoiThucHienId: 'a', nguoiKiemTraId: null },
+      giaTri: { tieuDe: 'Việc', moTa: '', han: null, mucUuTien: 'TRUNG_BINH', nguoiThucHienId: 'a', nguoiKiemTraId: null },
     })
   })
 
@@ -47,6 +50,15 @@ describe('kiểm dữ liệu tạo Task', () => {
       loiTheoO: { tieuDe: THONG_BAO_TASK.tieuDeQuaDai },
     })
     expect(kiemTraTask.tao({ tieuDe: '   ' })).toEqual({ ok: false, loiTheoO: { tieuDe: THONG_BAO_TASK.tieuDeTrong } })
+  })
+
+  it('Mức ưu tiên: không gửi là Trung bình, gửi mức hợp lệ thì giữ, mức lạ báo ở ô mucUuTien', () => {
+    const kt = kiemTraTask.tao({ tieuDe: 'X', mucUuTien: 'CAO' })
+    expect(kt.ok && kt.giaTri.mucUuTien).toBe('CAO')
+    expect(kiemTraTask.tao({ tieuDe: 'X', mucUuTien: 'KHAN_CAP' })).toEqual({
+      ok: false,
+      loiTheoO: { mucUuTien: THONG_BAO_MUC_UU_TIEN.sai },
+    })
   })
 
   it('hạn sai báo ở ô hạn', () => {
@@ -127,5 +139,29 @@ describe('xếp Task', () => {
       { tieuDe: 'A', dauVet: luc(1) },
     ]
     expect(xepTask(ds).map((t) => t.tieuDe)).toEqual(['C', 'A', 'B'])
+  })
+})
+
+describe('số Task đang giữ', () => {
+  const task = (trangThai: TrangThaiTask, nguoiThucHienId: string) => ({ trangThai, nguoiThucHienId })
+
+  it('chỉ đếm Task chưa Hoàn thành, chưa Huỷ mà người đó là Người thực hiện', () => {
+    const danhSach = [
+      task('MOI', 'an'),
+      task('DANG_LAM', 'an'),
+      task('CHO_DUYET', 'an'),
+      task('TRA_LAI', 'an'),
+      task('BI_LOI', 'an'),
+      task('HOAN_THANH', 'an'),
+      task('HUY', 'an'),
+      task('DANG_LAM', 'binh'),
+    ]
+    expect(soTaskDangGiu(danhSach, 'an')).toBe(5)
+    expect(soTaskDangGiu(danhSach, 'binh')).toBe(1)
+  })
+
+  it('không giữ Task nào (hoặc chỉ là Người kiểm tra, vốn không có trong ô Người thực hiện) thì là 0', () => {
+    expect(soTaskDangGiu([], 'an')).toBe(0)
+    expect(soTaskDangGiu([task('DANG_LAM', 'binh'), task('HOAN_THANH', 'an')], 'an')).toBe(0)
   })
 })
