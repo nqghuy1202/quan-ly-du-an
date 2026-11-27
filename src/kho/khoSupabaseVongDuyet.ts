@@ -10,6 +10,9 @@
 //   lỗi, đúng thông báo và đúng thứ tự như bản bộ nhớ; ở cơ sở dữ liệu bằng hàm security definer,
 //   hàng rào thật vì trình duyệt không đáng tin. Hàm lấy người gọi từ phiên đăng nhập (auth.uid()),
 //   không nhận người gọi qua tham số. Lỗi mà cơ sở dữ liệu ném ra mang mã lỗi của Kho.
+// - Đổi trạng thái gọi hàm TRƯỚC, không đọc trước (ticket toi-uu-hieu-nang 06; hàm kiểm cùng bảy bước, cùng thứ tự
+//   với luật thuần): bị từ chối vì luật thì mới đọc Task và chạy luật thuần để trả đúng mã, thông báo và lỗi theo ô.
+//   Dữ liệu biểu mẫu chắc chắn sai thì đọc Task và để luật thuần từ chối, không gửi lệnh ghi nào.
 // - Client không bao giờ ghi thẳng cột trạng thái, số lần Trả lại hay bảng lịch sử: chỉ gọi hàm.
 // - Giờ do máy chủ đặt: tham số `bayGio` bị bỏ qua (thời điểm của dòng lịch sử, ngày chỉnh sửa).
 // - Tiến độ và Trễ hạn KHÔNG có truy vấn riêng ở đây: chúng tính bằng hàm thuần của ticket 13 trên
@@ -19,12 +22,19 @@
 //
 // CỔNG CHƯA KIỂM: các lệnh cần mạng chỉ chạy được với Supabase thật (lệnh riêng, xem
 // src/kho/khoSupabase.test.ts). Cổng kiểm các nhánh với một `fetch` giả (src/kho/khoSupabaseVongDuyet.test.ts).
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { thanhCong, thatBai, type KetQua, type MaLoi } from './ketQua'
-import type { DongLichSuTask, HoSo, KhoDuLieu, Phien } from './khoDuLieu'
-import { THONG_BAO_CHUYEN_TRANG_THAI, kiemChuyenTrangThai, xepLichSuTask } from '../luat/chuyenTrangThai'
+import type { DongLichSuTask, KhoDuLieu, Phien, Task } from './khoDuLieu'
+import type { NguCanhDuAn as NguCanhDuAnChung, NguoiGoi } from './khoSupabaseNguoiGoi'
+import {
+  MA_TRAN_CHUYEN_TRANG_THAI,
+  THONG_BAO_CHUYEN_TRANG_THAI,
+  doiTrangThaiSchema,
+  kiemChuyenTrangThai,
+  xepLichSuTask,
+} from '../luat/chuyenTrangThai'
+import { kiemTra } from '../luat/taiKhoan'
 import { CAC_TRANG_THAI_TASK, type TrangThaiTask } from '../luat/task'
-import type { NguoiGoiDuAn, TrangThaiDuAn } from '../luat/duAn'
+import type { TrangThaiDuAn } from '../luat/duAn'
 import { MUC_UU_TIEN_MAC_DINH, laMucUuTien, type MucUuTien } from '../luat/mucUuTien'
 
 /** Lỗi trả về từ PostgREST (bảng, RPC). */
@@ -33,22 +43,19 @@ interface LoiCsdl {
   message?: string
 }
 
-interface NguoiGoiTask {
-  db: SupabaseClient
-  hoSo: HoSo
-}
+type NguCanhDuAn = NguCanhDuAnChung<{ id: string; trang_thai: string }>
 
-interface NguCanhDuAn {
-  nguoiGoi: NguoiGoiTask
-  duAn: { id: string; trang_thai: string }
-  nhin: NguoiGoiDuAn
-}
-
-/** Các hàm dùng chung mà khoSupabase.ts đưa vào (xác thực, đọc Dự án theo đúng luật xem). */
+/** Các hàm dùng chung mà khoSupabase.ts đưa vào (xác thực, đọc Task kèm Dự án theo đúng luật xem). */
 export interface PhuThuocLenhVongDuyet {
-  xacThuc(phien: Phien | null): Promise<KetQua<NguoiGoiTask>>
-  /** Như `layDuAn`: không tồn tại và không thấy được cùng trả `KHONG_TIM_THAY`. */
-  xemDuAn(phien: Phien | null, duAnId: string): Promise<KetQua<NguCanhDuAn>>
+  xacThuc(phien: Phien | null): Promise<KetQua<NguoiGoi>>
+  /**
+   * Một Task kèm Dự án và Người trong dự án trong MỘT lượt đọc, không dùng chung khi đang bay
+   * (khoSupabaseNguoiGoi.ts). Task không tồn tại, không thấy được hay id sai dạng: `KHONG_TIM_THAY`.
+   */
+  xemTaskDeGhi(
+    phien: Phien | null,
+    taskId: string,
+  ): Promise<KetQua<NguCanhDuAn & { nguoiTrong: readonly { nguoi_dung_id: string }[]; task: DongTaskChuyen }>>
   /** `layTask` của bản cài này: đọc lại Task đầy đủ sau khi đổi trạng thái. */
   layTask: KhoDuLieu['layTask']
   laUuid(id: string): boolean
@@ -58,8 +65,6 @@ export interface PhuThuocLenhVongDuyet {
 export type LenhVongDuyetSupabase = Pick<KhoDuLieu, 'doiTrangThaiTask' | 'lichSuTask'>
 
 /** Cột của Task mà luật chuyển trạng thái cần. */
-const COT_TASK_CHUYEN = 'id, du_an_id, nguoi_thuc_hien_id, nguoi_kiem_tra_id, trang_thai'
-
 interface DongTaskChuyen {
   id: string
   du_an_id: string
@@ -93,6 +98,18 @@ function mucUuTienTuDong(giaTri: string): MucUuTien {
 /** Các mã lỗi của vòng duyệt mà hàm cơ sở dữ liệu ném thêm so với `MA_TU_CSDL` của khoSupabase.ts. */
 const MA_VONG_DUYET: readonly MaLoi[] = ['TASK_DA_CHOT', 'KHONG_HOP_LE', 'BUOC_KHONG_HOP_LE', 'LY_DO_BAT_BUOC']
 
+/** Mã lỗi mà hàm `doi_trang_thai_task` ném vì luật (không phải phiên hay lỗi hệ thống): đọc Task để chọn đúng lỗi. */
+const MA_TU_CHOI_VI_LUAT: readonly MaLoi[] = ['KHONG_CO_QUYEN', 'KHONG_TIM_THAY', 'DU_AN_DA_LUU_TRU', ...MA_VONG_DUYET]
+
+/**
+ * Thiếu lý do chắc chắn bị luật từ chối (bước 7 của `kiemChuyenTrangThai`, không phụ thuộc Task): mọi bước sang
+ * trạng thái đích đều cần lý do (Trả lại, Bị lỗi, Huỷ) mà không có lý do.
+ */
+function chacChanThieuLyDo(sang: TrangThaiTask, lyDo: string | null): boolean {
+  const buocSang = MA_TRAN_CHUYEN_TRANG_THAI.filter((b) => b.sang === sang)
+  return lyDo === null && buocSang.length > 0 && buocSang.every((b) => b.canLyDo)
+}
+
 /** Trạng thái Dự án đọc từ cơ sở dữ liệu; giá trị lạ coi như Lưu trữ, trạng thái chặn mọi lệnh ghi. */
 function trangThaiDuAnTuDong(giaTri: string): TrangThaiDuAn {
   return giaTri === 'HOAT_DONG' ? 'HOAT_DONG' : 'LUU_TRU'
@@ -104,7 +121,7 @@ function trangThaiTaskTuDong(giaTri: string): TrangThaiTask {
 }
 
 export function taoLenhVongDuyetSupabase(phuThuoc: PhuThuocLenhVongDuyet): LenhVongDuyetSupabase {
-  const { xacThuc, xemDuAn, layTask, laUuid } = phuThuoc
+  const { xacThuc, xemTaskDeGhi, layTask, laUuid } = phuThuoc
 
   /**
    * Lỗi do hàm cơ sở dữ liệu ném: bốn mã của vòng duyệt đọc ở đây (cùng thông báo với luật thuần);
@@ -122,6 +139,51 @@ export function taoLenhVongDuyetSupabase(phuThuoc: PhuThuocLenhVongDuyet): LenhV
     return phuThuoc.loiTuCsdl<T>(loi)
   }
 
+  /**
+   * Lỗi của một lần đổi trạng thái theo đúng luật thuần (mã, thông báo, lỗi theo ô, thứ tự từ chối): đọc Task kèm Dự
+   * án trong một lượt rồi chạy `kiemChuyenTrangThai`. Task không thấy được: PM nhận KHONG_TIM_THAY, người khác
+   * KHONG_CO_QUYEN (phân quyền từng dòng giấu Task của Dự án người gọi không thấy). Luật thuần cho qua mà cơ sở dữ
+   * liệu đã từ chối (`daTuChoi`: đua với người khác, hay vai vừa đổi) thì trả lỗi của cơ sở dữ liệu. Luật thuần cho
+   * qua và chưa gọi hàm (`daTuChoi` null) thì gọi hàm rồi đọc lại như đường thành công.
+   */
+  async function tuChoiTheoLuat(
+    phien: Phien | null,
+    taskId: string,
+    dauVao: unknown,
+    daTuChoi: KetQua<never> | null,
+  ): Promise<KetQua<Task>> {
+    const xt = await xacThuc(phien)
+    if (!xt.ok) return xt
+    const { db, hoSo } = xt.giaTri
+    const doc = await xemTaskDeGhi(phien, taskId)
+    if (!doc.ok) {
+      if (doc.loi.ma !== 'KHONG_TIM_THAY') return daTuChoi && doc.loi.ma !== 'CHUA_DANG_NHAP' ? daTuChoi : doc
+      return thatBai(hoSo.vai === 'PM' ? 'KHONG_TIM_THAY' : 'KHONG_CO_QUYEN')
+    }
+    const { duAn, nhin, task } = doc.giaTri
+    // Luật thuần quyết định chuyển hay từ chối, theo đúng thứ tự và mã lỗi của bản bộ nhớ.
+    const kq = kiemChuyenTrangThai(
+      {
+        ...nhin,
+        nguoiGoiId: hoSo.id.toLowerCase(),
+        nguoiThucHienId: task.nguoi_thuc_hien_id.toLowerCase(),
+        nguoiKiemTraId: task.nguoi_kiem_tra_id.toLowerCase(),
+        trangThaiDuAn: trangThaiDuAnTuDong(duAn.trang_thai),
+        trangThaiTask: trangThaiTaskTuDong(task.trang_thai),
+      },
+      dauVao,
+    )
+    if (!kq.ok) return thatBai(kq.ma, kq.thongBao, kq.loiTheoO)
+    if (daTuChoi) return daTuChoi
+    const { error: loiHam } = await db.rpc('doi_trang_thai_task', {
+      p_task_id: taskId,
+      p_sang: kq.buoc.sang,
+      p_ly_do: kq.lyDo,
+    })
+    if (loiHam) return loiVongDuyet(loiHam)
+    return layTask(phien, taskId)
+  }
+
   return {
     async doiTrangThaiTask(phien: Phien | null, taskId: string, dauVao) {
       // `bayGio` bị bỏ qua: thời điểm của dòng lịch sử và ngày chỉnh sửa do cơ sở dữ liệu đặt.
@@ -129,43 +191,28 @@ export function taoLenhVongDuyetSupabase(phuThuoc: PhuThuocLenhVongDuyet): LenhV
       if (!xt.ok) return xt
       const { db, hoSo } = xt.giaTri
       // Task không tồn tại: người không phải PM nhận KHONG_CO_QUYEN (không lộ gì), PM nhận KHONG_TIM_THAY.
-      // Phân quyền từng dòng giấu Task của Dự án người gọi không thấy, nên với họ Task như không tồn tại.
-      const khongCoTask = (): KetQua<never> =>
-        hoSo.vai === 'PM' ? thatBai('KHONG_TIM_THAY') : thatBai('KHONG_CO_QUYEN')
-      if (!laUuid(taskId)) return khongCoTask()
-      const { data, error } = await db.from('task').select(COT_TASK_CHUYEN).eq('id', taskId).maybeSingle()
-      if (error) return loiVongDuyet(error)
-      const task = data as unknown as DongTaskChuyen | null
-      if (!task) return khongCoTask()
+      if (!laUuid(taskId)) return thatBai(hoSo.vai === 'PM' ? 'KHONG_TIM_THAY' : 'KHONG_CO_QUYEN')
 
-      const ctx = await xemDuAn(phien, task.du_an_id)
-      if (!ctx.ok) return ctx.loi.ma === 'KHONG_TIM_THAY' ? thatBai('KHONG_CO_QUYEN') : ctx
-      const { duAn, nhin } = ctx.giaTri
+      // Dữ liệu biểu mẫu chắc chắn sai (trạng thái đích hay lý do sai dạng, thiếu lý do bắt buộc): đọc Task rồi để
+      // luật thuần từ chối đúng thứ tự (quyền, Lưu trữ, Task đã chốt trước lỗi dữ liệu); không gửi lệnh ghi nào.
+      const kt = kiemTra(doiTrangThaiSchema, dauVao)
+      const lyDo = kt.ok && (kt.giaTri.lyDo ?? '') !== '' ? (kt.giaTri.lyDo ?? null) : null
+      if (!kt.ok || chacChanThieuLyDo(kt.giaTri.sang, lyDo)) return tuChoiTheoLuat(phien, taskId, dauVao, null)
 
-      // Luật thuần quyết định chuyển hay từ chối, theo đúng thứ tự và mã lỗi của bản bộ nhớ.
-      const kq = kiemChuyenTrangThai(
-        {
-          ...nhin,
-          nguoiGoiId: hoSo.id.toLowerCase(),
-          nguoiThucHienId: task.nguoi_thuc_hien_id.toLowerCase(),
-          nguoiKiemTraId: task.nguoi_kiem_tra_id.toLowerCase(),
-          trangThaiDuAn: trangThaiDuAnTuDong(duAn.trang_thai),
-          trangThaiTask: trangThaiTaskTuDong(task.trang_thai),
-        },
-        dauVao,
-      )
-      if (!kq.ok) return thatBai(kq.ma, kq.thongBao, kq.loiTheoO)
-
-      // Hàm của cơ sở dữ liệu kiểm lại cùng luật (người gọi lấy từ phiên, không từ tham số) rồi mới ghi:
-      // đổi trạng thái, bộ đếm Trả lại, dấu vết chỉnh sửa và một dòng lịch sử trong một giao dịch.
-      // Lý do gửi đi là bản đã cắt khoảng trắng; null khi không có.
+      // Gọi hàm trước, không đọc trước (ticket toi-uu-hieu-nang 06): hàm `doi_trang_thai_task` tự kiểm đủ bảy bước
+      // của `kiemChuyenTrangThai`, đúng thứ tự (người gọi lấy từ phiên, không từ tham số), rồi mới ghi trạng thái, bộ
+      // đếm Trả lại, dấu vết chỉnh sửa và một dòng lịch sử trong một giao dịch. Lý do gửi đi là bản đã cắt khoảng
+      // trắng; null khi không có. Ba lượt: gọi hàm, đọc lại Task (`layTask`: Task kèm Dự án, rồi tên người).
       const { error: loiHam } = await db.rpc('doi_trang_thai_task', {
         p_task_id: taskId,
-        p_sang: kq.buoc.sang,
-        p_ly_do: kq.lyDo,
+        p_sang: kt.giaTri.sang,
+        p_ly_do: lyDo,
       })
-      if (loiHam) return loiVongDuyet(loiHam)
-      return layTask(phien, taskId)
+      if (!loiHam) return layTask(phien, taskId)
+      const loi = loiVongDuyet<never>(loiHam)
+      if (loi.ok || !MA_TU_CHOI_VI_LUAT.includes(loi.loi.ma)) return loi
+      // Bị từ chối vì luật: đọc Task để trả đúng mã, thông báo và lỗi theo ô của luật thuần, như khi kiểm trước.
+      return tuChoiTheoLuat(phien, taskId, dauVao, loi)
     },
 
     async lichSuTask(phien: Phien | null, taskId: string) {

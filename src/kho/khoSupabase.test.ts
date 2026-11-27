@@ -50,8 +50,8 @@ switch (ketQua.trangThai) {
     // Vai trò trong Dự án và số Task đang giữ (truong-moi 06): cần cột vai_tro của bảng nguoi_trong_du_an và quyền
     // ghi cột đó của ticket truong-moi 10.
     chayHopDongVaiTroTrongDuAn('bản Supabase', taoBanCai, tuyChon)
-    // Dự án kèm Tiến độ, số Trễ hạn, cờ Quá hạn dự kiến (truong-moi 07): bản Supabase ghép từ các lệnh đọc có sẵn
-    // và tính phía client (duAnKemSoLieu.ts); cần migration trường mới của ticket truong-moi 09 và 10.
+    // Dự án kèm Tiến độ, số Trễ hạn, cờ Quá hạn dự kiến (truong-moi 07): bản Supabase đọc theo lô và tính phía
+    // client (khoSupabaseDocLo.ts, toi-uu-hieu-nang 02); cần migration trường mới của ticket truong-moi 09 và 10.
     chayHopDongDuAnKemSoLieu('bản Supabase', taoBanCai, tuyChon)
     break
   }

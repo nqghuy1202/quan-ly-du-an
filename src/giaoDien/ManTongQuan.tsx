@@ -13,7 +13,7 @@ import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table'
 import { Text } from '@astryxdesign/core/Text'
 import { Token } from '@astryxdesign/core/Token'
 import { VStack } from '@astryxdesign/core/VStack'
-import type { KetQua } from '../kho/ketQua'
+import { thanhCong, type KetQua } from '../kho/ketQua'
 import type { Phien } from '../kho/khoDuLieu'
 import { docTongQuan, type DongTongQuan, type TaskCuaTongQuan, type TongQuan } from '../kho/tongQuan'
 import { duocTaoDuAn } from '../luat/duAn'
@@ -21,8 +21,9 @@ import { CAC_TRANG_THAI_TASK, TEN_TRANG_THAI_TASK, dinhDangNgay, type TrangThaiT
 import type { VaiHeThong } from '../luat/taiKhoan'
 import { NHAN_QUA_HAN_DU_KIEN, nhanTienDo } from '../luat/tienDo'
 import { SO_NGAY_TOI_HAN, type OSoTongQuan } from '../luat/tongQuan'
+import { useBoGiuDuLieu, useGiuKetQua } from './boGiuDuLieu'
 import { useKho } from './khoContext'
-import { ManChiTietDuAn } from './ManChiTietDuAn'
+import { ManChiTietDuAnTaiLuoi } from './cacManTaiLuoi'
 import { BIEN_THE_THANH_TRANG_THAI_TASK } from './mauTrangThaiTask'
 import { NganTruotTaoDuAn } from './NganTruotDuAn'
 import { NganTruotTask } from './NganTruotTask'
@@ -48,6 +49,9 @@ const RONG_O_SO = 176
 
 /** Số dòng đầu một vùng Task ở Tổng quan hiện khi chưa bấm "Xem tất cả". */
 const SO_DONG_TASK_GON = 5
+
+/** Khoá của Tổng quan trong bộ giữ dữ liệu lần trước của phiên. */
+const KHOA_GIU = 'tongQuan'
 
 type ManCon = { loai: 'tongQuan' } | { loai: 'duAn'; duAnId: string }
 
@@ -265,12 +269,20 @@ function PhanBoTheoTrangThai({ phanBo }: { phanBo: Record<TrangThaiTask, number>
  * tính). Các vùng xếp dọc một cột, mỗi vùng chiếm hết chiều ngang: hàng ô số (bấm Chờ tôi duyệt, Việc
  * của tôi để tới trang đó); Task Trễ hạn; Task tới hạn trong 7 ngày; bảng Dự án đang hoạt động; phân bố
  * Task theo trạng thái. Mỗi vùng Task hiện tối đa 5 dòng đầu, nhiều hơn thì có nút "Xem tất cả (N)"; trạng
- * thái mở hết nằm trong vùng nên về 5 dòng khi rời Tổng quan rồi quay lại. Có trạng thái trống, đang tải và lỗi. Mọi số liệu do `luat/tongQuan.ts` tính; màn này chỉ hiển thị. Bấm một Task
+ * thái mở hết nằm trong vùng nên về 5 dòng khi rời Tổng quan rồi quay lại. Có trạng thái trống, đang tải
+ * (lần đầu trong phiên và khi Thử lại; các lần sau hiện số liệu lần trước trong lúc đọc lại ngầm) và lỗi.
+ * Mọi số liệu do `luat/tongQuan.ts` tính; màn này chỉ hiển thị. Bấm một Task
  * thì mở Task trong Ngăn trượt, Tổng quan ở nguyên phía sau và đọc lại khi Task đổi trong ngăn.
  */
 export function ManTongQuan({ phien, vai, dongHo, onMoTrang, onHetPhien }: Props) {
   const kho = useKho()
-  const [tai, setTai] = useState<KetQua<TongQuan> | null>(null)
+  const boGiu = useBoGiuDuLieu()
+  // Đã xem Tổng quan trong phiên này thì hiện ngay số liệu lần trước, rồi đọc lại ngầm và thay.
+  const [tai, setTai] = useState<KetQua<TongQuan> | null>(() => {
+    const daGiu = boGiu.lay<TongQuan>(KHOA_GIU)
+    return daGiu ? thanhCong(daGiu) : null
+  })
+  useGiuKetQua(KHOA_GIU, tai)
   const [lanTai, setLanTai] = useState(0)
   const [man, setMan] = useState<ManCon>({ loai: 'tongQuan' })
   const [taskDangMo, setTaskDangMo] = useState<TaskCuaTongQuan | null>(null)
@@ -286,7 +298,8 @@ export function ManTongQuan({ phien, vai, dongHo, onMoTrang, onHetPhien }: Props
     docTongQuan(kho, phien, dongHo()).then((kq) => {
       if (huy) return
       if (!kq.ok && kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
-      else setTai(kq)
+      // Đọc lại ngầm (đang hiện số liệu) mà lỗi thì giữ số liệu đang hiện.
+      else setTai((cu) => (!kq.ok && cu?.ok ? cu : kq))
     })
     return () => {
       huy = true
@@ -305,16 +318,18 @@ export function ManTongQuan({ phien, vai, dongHo, onMoTrang, onHetPhien }: Props
     else if (kq.loi.ma === 'CHUA_DANG_NHAP') onHetPhien()
   }
 
-  /** Quay về Tổng quan thì đọc lại: Task có thể đã đổi trạng thái, hạn, hay Dự án đã đổi. */
+  /**
+   * Quay về Tổng quan thì hiện ngay số liệu lần trước và đọc lại ngầm: Task có thể đã đổi trạng thái,
+   * hạn, hay Dự án đã đổi.
+   */
   function veTongQuan() {
-    setTai(null)
     setDaTaoDuAn(null)
     setMan({ loai: 'tongQuan' })
   }
 
   if (man.loai === 'duAn') {
     return (
-      <ManChiTietDuAn
+      <ManChiTietDuAnTaiLuoi
         key={man.duAnId}
         phien={phien}
         vai={vai}

@@ -213,7 +213,18 @@ function taoFetchGia(du: DuLieuGia): typeof fetch {
     const bang = url.pathname.slice('/rest/v1/'.length)
     if (phuongThuc === 'GET') {
       if (bang === 'ho_so') return tra(200, loc(du.hoSo, url.searchParams))
-      if (bang === 'du_an') return tra(200, loc(du.duAn.filter((d) => duAnThay(d.id)), url.searchParams))
+      if (bang === 'du_an') {
+        const dong = loc(du.duAn.filter((d) => duAnThay(d.id)), url.searchParams)
+        // Nhúng id Người trong dự án (lượt kiểm quản lý Dự án, ticket toi-uu-hieu-nang 05).
+        if (!(url.searchParams.get('select') ?? '').includes('nguoi_trong_du_an!nguoi_trong_du_an_du_an_id_fkey(nguoi_dung_id)')) {
+          return tra(200, dong)
+        }
+        const nhung = dong.map((d) => ({
+          ...d,
+          nguoi_trong_du_an: du.thanhVien.filter((t) => t.du_an_id === d.id).map((t) => ({ nguoi_dung_id: t.nguoi_dung_id })),
+        }))
+        return tra(200, motDoiTuong ? (nhung[0] ?? null) : nhung)
+      }
       if (bang === 'nguoi_trong_du_an') {
         const dong = loc(du.thanhVien.filter((t) => duAnThay(t.du_an_id)), url.searchParams)
         // Nhúng Dự án (danhSachDuAnCuaToi): `select=du_an(id,ma,ten,trang_thai)`.

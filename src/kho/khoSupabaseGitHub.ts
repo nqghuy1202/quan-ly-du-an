@@ -91,7 +91,7 @@ function lienKetTuDong(dong: DongLienKet): LienKetTask | null {
 }
 
 export function taoLenhGitHubSupabase(phuThuoc: PhuThuocLenhTask): LenhGitHubSupabase {
-  const { xacThuc, xemDuAn, quanLyDuAn, laUuid } = phuThuoc
+  const { xemDuAn, xemTaskKemDuAn, xemTaskDeGhi, quanLyDuAn } = phuThuoc
 
   /**
    * Mã GitHub do cơ sở dữ liệu ném (kèm lỗi theo ô như bản bộ nhớ); các mã còn lại (không có quyền,
@@ -114,24 +114,13 @@ export function taoLenhGitHubSupabase(phuThuoc: PhuThuocLenhTask): LenhGitHubSup
   }
 
   /**
-   * Task mà người gọi thấy, kèm Dự án của nó: Task không tồn tại, id không phải uuid và Task của Dự
-   * án người gọi không thấy đều trả cùng `KHONG_TIM_THAY` (không lộ gì). Phân quyền từng dòng đã giấu
-   * Task của Dự án không thấy; luật thuần (`xemDuAn`) kiểm lại lần nữa.
+   * Task mà người gọi thấy, kèm Dự án của nó, trong MỘT lượt đọc (`xemTaskDeGhi`, ticket toi-uu-hieu-nang 06): Task
+   * không tồn tại, id không phải uuid và Task của Dự án người gọi không thấy đều trả cùng `KHONG_TIM_THAY` (không lộ
+   * gì); rồi kiểm có được thêm hay gỡ link không (Dự án chưa Lưu trữ), như `kiemGhiLienKet`. Quyền và Lưu trữ phải
+   * báo trước lỗi dữ liệu của link, nên lượt đọc này đi trước lệnh ghi.
    */
-  async function xemTask(phien: Phien | null, taskId: string) {
-    const xt = await xacThuc(phien)
-    if (!xt.ok) return xt
-    if (!laUuid(taskId)) return thatBai('KHONG_TIM_THAY')
-    const { data, error } = await xt.giaTri.db.from('task').select('du_an_id').eq('id', taskId).maybeSingle()
-    if (error) return loiGitHub(error)
-    const dong = data as { du_an_id: string } | null
-    if (!dong) return thatBai('KHONG_TIM_THAY')
-    return xemDuAn(phien, dong.du_an_id)
-  }
-
-  /** `xemTask` rồi kiểm có được thêm hay gỡ link không (Dự án chưa Lưu trữ), như `kiemGhiLienKet`. */
   async function ghiTask(phien: Phien | null, taskId: string) {
-    const xt = await xemTask(phien, taskId)
+    const xt = await xemTaskDeGhi(phien, taskId)
     if (!xt.ok) return xt
     const { duAn, nhin } = xt.giaTri
     const lyDo = kiemGhiLienKet({ ...nhin, trangThai: trangThaiDuAnTuDong(duAn.trang_thai) })
@@ -239,17 +228,12 @@ export function taoLenhGitHubSupabase(phuThuoc: PhuThuocLenhTask): LenhGitHubSup
     },
 
     async danhSachLienKetCuaTask(phien: Phien | null, taskId: string) {
-      const xt = await xemTask(phien, taskId)
+      // Link nhúng trong lượt đọc Task theo id dùng chung với `layTask` gọi cùng lúc (Ngăn trượt Task, ticket
+      // toi-uu-hieu-nang 04): cùng luật xem và mã lỗi như `xemTask`, theo thứ tự thêm, tối đa 1000 link.
+      const xt = await xemTaskKemDuAn(phien, taskId)
       if (!xt.ok) return xt
-      const { data, error } = await xt.giaTri.nguoiGoi.db
-        .from('lien_ket_task')
-        .select('repo, loai, so')
-        .eq('task_id', taskId)
-        .order('thu_tu')
-        .limit(1000)
-      if (error) return loiGitHub(error)
       const ketQua: LienKetTask[] = []
-      for (const dong of (data ?? []) as unknown as DongLienKet[]) {
+      for (const dong of xt.giaTri.task.lien_ket_task ?? []) {
         const lienKet = lienKetTuDong(dong)
         if (lienKet) ketQua.push(lienKet)
       }

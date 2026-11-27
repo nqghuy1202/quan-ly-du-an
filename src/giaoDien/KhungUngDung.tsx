@@ -15,14 +15,18 @@ import { thanhCong, type KetQua } from '../kho/ketQua'
 import type { HoSo, Phien } from '../kho/khoDuLieu'
 import { TEN_VAI, type VaiHeThong } from '../luat/taiKhoan'
 import { TRANG_MO_DAU, nhomDieuHuong, trangHienThi, type Trang } from '../luat/dieuHuong'
+import {
+  ChoToiDuyetTaiLuoi,
+  ManDuAnTaiLuoi,
+  ManHoSoTaiLuoi,
+  ManNguoiDungTaiLuoi,
+  ManTongQuanTaiLuoi,
+  TrangDuAnCuaToiTaiLuoi,
+  ViecCuaToiTaiLuoi,
+} from './cacManTaiLuoi'
+import { BoGiuDuLieuContext, taoBoGiuDuLieu } from './boGiuDuLieu'
 import { useKho } from './khoContext'
-import { ManDuAn } from './ManDuAn'
-import { ManHoSo } from './ManHoSo'
-import { ManNguoiDung } from './ManNguoiDung'
-import { ManTongQuan } from './ManTongQuan'
-import { TrangDuAnCuaToi } from './TrangDuAnCuaToi'
 import { ThuongHieu } from './ThuongHieu'
-import { TrangViecCaNhan } from './TrangViecCaNhan'
 
 interface Props {
   phien: Phien
@@ -42,6 +46,9 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   const [tai, setTai] = useState<KetQua<HoSo> | null>(null)
   const [lanTai, setLanTai] = useState(0)
   const [trang, setTrang] = useState<Trang>(TRANG_MO_DAU)
+  // Dữ liệu lần trước của các màn, chỉ của phiên này: khung được dựng lại theo từng phiên (`key` ở App),
+  // nên đăng xuất hay hết phiên là bỏ cả bộ giữ.
+  const [boGiu] = useState(taoBoGiuDuLieu)
 
   useEffect(() => {
     let huy = false
@@ -99,23 +106,25 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
     setTai(thanhCong({ ...hoSo, vai }))
   }
 
+  // Mỗi màn là một phần mã tải lười (`cacManTaiLuoi`): đang tải hay tải lỗi thì hiện ngay trong vùng nội dung.
   let noiDung: ReactNode
   if (trangHien === 'tongQuan') {
     noiDung = (
-      <ManTongQuan phien={phien} vai={hoSo.vai} dongHo={dongHo} onMoTrang={setTrang} onHetPhien={onHetPhien} />
+      <ManTongQuanTaiLuoi phien={phien} vai={hoSo.vai} dongHo={dongHo} onMoTrang={setTrang} onHetPhien={onHetPhien} />
     )
   } else if (trangHien === 'duAn') {
-    noiDung = <TrangDuAnCuaToi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
+    noiDung = <TrangDuAnCuaToiTaiLuoi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'viecCuaToi' || trangHien === 'choToiDuyet') {
+    const TrangViecCaNhan = trangHien === 'viecCuaToi' ? ViecCuaToiTaiLuoi : ChoToiDuyetTaiLuoi
     noiDung = <TrangViecCaNhan key={trangHien} loai={trangHien} phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'tatCaDuAn') {
-    noiDung = <ManDuAn phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
+    noiDung = <ManDuAnTaiLuoi phien={phien} vai={hoSo.vai} dongHo={dongHo} onHetPhien={onHetPhien} />
   } else if (trangHien === 'hoSo') {
     noiDung = (
-      <ManHoSo phien={phien} hoSo={hoSo} onDaLuu={(moi) => setTai(thanhCong(moi))} onHetPhien={onHetPhien} />
+      <ManHoSoTaiLuoi phien={phien} hoSo={hoSo} onDaLuu={(moi) => setTai(thanhCong(moi))} onHetPhien={onHetPhien} />
     )
   } else {
-    noiDung = <ManNguoiDung phien={phien} onHetPhien={onHetPhien} onVaiCuaToiDoi={khiVaiCuaToiDoi} />
+    noiDung = <ManNguoiDungTaiLuoi phien={phien} onHetPhien={onHetPhien} onVaiCuaToiDoi={khiVaiCuaToiDoi} />
   }
 
   const nhomMuc = nhomDieuHuong(hoSo.vai)
@@ -161,10 +170,12 @@ export function KhungUngDung({ phien, onHetPhien, dongHo }: Props) {
   )
 
   return (
-    <AppShell
-      topNav={<TopNav label="Đầu trang" heading={<ThuongHieu laTieuDeTrang />} />}
-      sideNav={thanhBen}>
-      <Layout height="auto" content={<LayoutContent>{noiDung}</LayoutContent>} />
-    </AppShell>
+    <BoGiuDuLieuContext value={boGiu}>
+      <AppShell
+        topNav={<TopNav label="Đầu trang" heading={<ThuongHieu laTieuDeTrang />} />}
+        sideNav={thanhBen}>
+        <Layout height="auto" content={<LayoutContent>{noiDung}</LayoutContent>} />
+      </AppShell>
+    </BoGiuDuLieuContext>
   )
 }

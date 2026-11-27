@@ -1,7 +1,8 @@
 // Danh sách Dự án kèm số liệu ghép từ các lệnh đọc có sẵn của Kho dữ liệu (`danhSachDuAn`,
 // `danhSachDuAnCuaToi`, `danhSachTask`, đã áp quyền xem), rồi tính Tiến độ, số Trễ hạn, cờ Quá hạn dự
-// kiến bằng luật thuần `tinhSoLieuDuAn`. Bản Supabase dùng hàm này (tính phía client, chưa có hàm cơ sở
-// dữ liệu riêng); bản bộ nhớ tự tính trên dữ liệu của nó. "Bây giờ" truyền vào, không đọc đồng hồ.
+// kiến bằng luật thuần `tinhSoLieuDuAn`. Đây là cách ghép tham chiếu (một lượt `danhSachTask` mỗi Dự án): bản
+// Supabase đọc theo lô cùng dữ liệu đó (khoSupabaseDocLo.ts, ticket toi-uu-hieu-nang 02) và test của nó đối chiếu
+// kết quả với hàm này; bản bộ nhớ tự tính trên dữ liệu của nó. "Bây giờ" truyền vào, không đọc đồng hồ.
 import { laPhamViDanhSachDuAn } from '../luat/duAn'
 import { tinhSoLieuDuAn } from '../luat/tienDo'
 import { thanhCong, thatBai, type KetQua } from './ketQua'

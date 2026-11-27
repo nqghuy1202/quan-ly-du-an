@@ -4,9 +4,11 @@
 // ràng buộc thật: những thứ đó chỉ kiểm tay (supabase/README.md) bằng bộ test hợp đồng và bảng ca
 // dùng chung trên Supabase thật. Ở đây chỉ có:
 //   1. Hành vi của bản cài Supabase nhìn từ giao diện Kho khi máy chủ là một `fetch` giả trong bộ
-//      nhớ (không có mạng): luật thuần từ chối trước khi gọi hàm cơ sở dữ liệu (không ghi gì), lý do
-//      được cắt khoảng trắng, lỗi do hàm ném được đổi về đúng mã của Kho, lịch sử được đọc và xếp.
-//      `fetch` giả này KHÔNG mô phỏng SQL: nó chỉ trả những gì test dặn, nên không thay cho bước 2.
+//      nhớ (không có mạng): bị từ chối thì đúng mã của luật thuần và không ghi gì (dữ liệu biểu mẫu sai thì
+//      không gọi hàm cơ sở dữ liệu), lý do được cắt khoảng trắng, lỗi do hàm ném được đổi về đúng mã của
+//      Kho, lịch sử được đọc và xếp. `fetch` giả này KHÔNG chạy SQL: hàm chuyển trạng thái của nó chỉ bắt
+//      chước thô bảy bước kiểm của SQL (ticket toi-uu-hieu-nang 06: Kho gọi hàm trước, đọc Task khi bị từ
+//      chối) hoặc trả lỗi test dặn, nên không thay cho bước 2.
 //   2. Cấu trúc file migration lát 3 (đọc chữ, không chạy SQL): ma trận trong SQL giống ma trận của
 //      luật thuần, mã lỗi hàm ném là mã của Kho, bảng lịch sử không ghi trực tiếp được, hàm là
 //      security definer và bật cờ giao dịch SAU khi kiểm xong, bản xuống bỏ đủ đối tượng.
@@ -15,6 +17,7 @@ import { THONG_BAO_MAC_DINH, type KetQua, type MaLoi } from './ketQua'
 import { taoKhoSupabase } from './khoSupabase'
 import type { KhoDuLieu, Phien } from './khoDuLieu'
 import { MA_TRAN_CHUYEN_TRANG_THAI, THONG_BAO_CHUYEN_TRANG_THAI } from '../luat/chuyenTrangThai'
+import { CAC_TRANG_THAI_TASK } from '../luat/task'
 import migrationLen from '../../supabase/migrations/20261125000300_lat_3_vong_duyet.sql?raw'
 import migrationXuong from '../../supabase/down/20261125000300_lat_3_vong_duyet.down.sql?raw'
 
@@ -142,8 +145,8 @@ function loc(dong: readonly Dong[], thamSo: URLSearchParams): Dong[] {
 /**
  * `fetch` giả đóng vai Supabase: Auth (đăng nhập), PostgREST (các bảng, hàm) trên dữ liệu trong bộ
  * nhớ. Mô phỏng phân quyền từng dòng ở mức thô (PM thấy mọi Dự án, người khác Dự án mình ở trong) để
- * có "Task của Dự án không thấy được". Không mô phỏng SQL của hàm chuyển trạng thái: `doi_trang_thai_task`
- * chỉ ghi lại lần gọi, rồi (nếu không có lỗi dặn trước) đổi trạng thái đúng như tham số.
+ * có "Task của Dự án không thấy được". `doi_trang_thai_task` ghi lại lần gọi, trả lỗi dặn trước nếu có,
+ * không thì bắt chước thô bảy bước kiểm của hàm SQL (cùng thứ tự, cùng mã) rồi đổi trạng thái.
  */
 function taoFetchGia(du: DuLieuGia): typeof fetch {
   return async (input, init) => {
@@ -187,11 +190,29 @@ function taoFetchGia(du: DuLieuGia): typeof fetch {
       if (ham === 'doi_trang_thai_task') {
         du.lanDoi.push(than)
         if (du.loiDoi) return tra(400, { code: du.loiDoi.code, message: du.loiDoi.message, details: null, hint: null })
+        const tuChoi = (ma: string) => tra(400, { code: 'P0001', message: ma, details: null, hint: null })
         const task = du.task.find((t) => t.id === than.p_task_id)
-        if (task) {
-          task.trang_thai = than.p_sang
-          if (than.p_sang === 'TRA_LAI') task.so_lan_tra_lai = Number(task.so_lan_tra_lai) + 1
-        }
+        // Bảy bước của hàm SQL (migration lát 3), đúng thứ tự.
+        if (!task) return tuChoi(laPM ? 'KHONG_TIM_THAY' : 'KHONG_CO_QUYEN')
+        if (!duAnThay(task.du_an_id)) return tuChoi('KHONG_CO_QUYEN')
+        const trong = du.thanhVien.some((t) => t.du_an_id === task.du_an_id && t.nguoi_dung_id === nguoiGoi?.id)
+        const vai: string[] = []
+        if (trong && nguoiGoi?.id === task.nguoi_thuc_hien_id) vai.push('NGUOI_THUC_HIEN')
+        if (trong && nguoiGoi?.id === task.nguoi_kiem_tra_id) vai.push('NGUOI_KIEM_TRA')
+        if (trong && nguoiGoi?.vai === 'SUPPORT') vai.push('SUPPORT')
+        if (laPM) vai.push('PM')
+        if (vai.length === 0) return tuChoi('KHONG_CO_QUYEN')
+        if (du.duAn.find((d) => d.id === task.du_an_id)?.trang_thai === 'LUU_TRU') return tuChoi('DU_AN_DA_LUU_TRU')
+        if (task.trang_thai === 'HOAN_THANH' || task.trang_thai === 'HUY') return tuChoi('TASK_DA_CHOT')
+        if (!(CAC_TRANG_THAI_TASK as readonly unknown[]).includes(than.p_sang)) return tuChoi('KHONG_HOP_LE')
+        const lyDo = typeof than.p_ly_do === 'string' && than.p_ly_do.trim() !== '' ? than.p_ly_do.trim() : null
+        if (lyDo !== null && lyDo.length > 1000) return tuChoi('KHONG_HOP_LE')
+        const buoc = MA_TRAN_CHUYEN_TRANG_THAI.find((b) => b.tu === task.trang_thai && b.sang === than.p_sang)
+        if (!buoc) return tuChoi('BUOC_KHONG_HOP_LE')
+        if (!vai.some((v) => (buoc.nguoiLam as readonly string[]).includes(v))) return tuChoi('KHONG_CO_QUYEN')
+        if (buoc.canLyDo && lyDo === null) return tuChoi('LY_DO_BAT_BUOC')
+        task.trang_thai = than.p_sang
+        if (than.p_sang === 'TRA_LAI') task.so_lan_tra_lai = Number(task.so_lan_tra_lai) + 1
         return tra(204)
       }
       if (ham === 'lich_su_task') {
@@ -219,6 +240,18 @@ function taoFetchGia(du: DuLieuGia): typeof fetch {
         task: du.task.filter((t) => duAnThay(t.du_an_id)),
       }
       if (!(bang in goc)) return tra(404, { code: 'PGRST205', message: `Không có bảng ${bang}` })
+      // Lượt đọc Task theo id nhúng link và Dự án kèm Người trong dự án (ticket toi-uu-hieu-nang 04); nhúng theo cùng
+      // phân quyền từng dòng. Bản giả không có link.
+      if (bang === 'task' && (url.searchParams.get('select') ?? '').includes('du_an!task_du_an_id_fkey(')) {
+        return tra(
+          200,
+          loc(goc.task, url.searchParams).map((t) => {
+            const duAn = goc.du_an.find((d) => d.id === t.du_an_id)
+            const nguoiTrong = goc.nguoi_trong_du_an.filter((n) => n.du_an_id === t.du_an_id)
+            return { ...t, lien_ket_task: [], du_an: duAn ? { ...duAn, nguoi_trong_du_an: nguoiTrong } : null }
+          }),
+        )
+      }
       return tra(200, loc(goc[bang], url.searchParams))
     }
     return tra(404, { code: 'PGRST000', message: `Yêu cầu không mong đợi: ${phuongThuc} ${url.pathname}` })
@@ -321,13 +354,16 @@ describe('đổi trạng thái Task trên bản Supabase, máy chủ là fetch g
     { ten: 'lý do quá dài', nguoi: 'binh', tu: 'CHO_DUYET', dauVao: { sang: 'TRA_LAI', lyDo: 'a'.repeat(1001) }, ma: 'KHONG_HOP_LE' },
   ]
 
-  it.each(CAC_CA_TU_CHOI)('luật thuần từ chối trước khi gọi hàm cơ sở dữ liệu: $ten → $ma, không ghi gì', async (ca) => {
+  it.each(CAC_CA_TU_CHOI)('bị từ chối đúng mã của luật thuần: $ten → $ma, không ghi gì', async (ca) => {
     const { du, kho, phien } = await dungBoiCanh()
     const maTask = ca.task ?? ID.task
     datTrangThaiTask(du, maTask, ca.tu)
     const kq = await kho.doiTrangThaiTask(phien[ca.nguoi], maTask, ca.dauVao, LUC)
     expect(maLoi(kq)).toBe(ca.ma)
-    expect(du.lanDoi).toEqual([])
+    // Dữ liệu biểu mẫu sai: không gọi hàm cơ sở dữ liệu. Lỗi khác: hàm được gọi trước (ticket toi-uu-hieu-nang 06)
+    // và tự từ chối, không ghi gì.
+    if (ca.ma === 'KHONG_HOP_LE' || ca.ma === 'LY_DO_BAT_BUOC') expect(du.lanDoi).toEqual([])
+    else expect(du.lanDoi.length).toBeLessThanOrEqual(1)
     expect(trangThaiCua(du, maTask)).toBe(ca.tu)
     expect(du.lichSu).toEqual([])
     if (!kq.ok && ca.ma === 'LY_DO_BAT_BUOC') {
@@ -349,12 +385,15 @@ describe('đổi trạng thái Task trên bản Supabase, máy chủ là fetch g
 
   it('Task không tồn tại hay mã không phải uuid: PM nhận KHONG_TIM_THAY, người khác nhận KHONG_CO_QUYEN (không lộ gì)', async () => {
     const { du, kho, phien } = await dungBoiCanh()
+    const truoc = JSON.stringify(du.task)
     for (const maTask of [id(999), `${ID.task}-khong-ton-tai`, '']) {
       expect(maLoi(await kho.doiTrangThaiTask(phien.pm, maTask, { sang: 'DANG_LAM' }, LUC))).toBe('KHONG_TIM_THAY')
       expect(maLoi(await kho.doiTrangThaiTask(phien.an, maTask, { sang: 'DANG_LAM' }, LUC))).toBe('KHONG_CO_QUYEN')
       expect(maLoi(await kho.doiTrangThaiTask(phien.ngoai, maTask, { sang: 'DANG_LAM' }, LUC))).toBe('KHONG_CO_QUYEN')
     }
-    expect(du.lanDoi).toEqual([])
+    // Id sai dạng không gửi đi; id đúng dạng thì hàm tự từ chối (ticket toi-uu-hieu-nang 06), không ghi gì.
+    expect(du.lanDoi.map((l) => l.p_task_id)).toEqual([id(999), id(999), id(999)])
+    expect(JSON.stringify(du.task)).toBe(truoc)
   })
 
   it.each<{ ten: string; loi: LoiRpc; ma: MaLoi }>([
